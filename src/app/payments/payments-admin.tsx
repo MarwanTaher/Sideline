@@ -1,0 +1,248 @@
+"use client";
+
+import { useEffect, useState, useActionState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  resetUnpaidAction,
+  saveDetailsAction,
+  saveTotalAction,
+  togglePaidAction,
+  type PaymentActionState,
+} from "./actions";
+import type {
+  MatchOption,
+  PaymentMeta,
+  PaymentRow,
+  PaymentSummary,
+} from "@/lib/payments";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { DataTable } from "@/components/ui/data-table";
+import { FeedbackMessage } from "@/components/ui/banner";
+
+const INITIAL: PaymentActionState = { ok: false, message: "" };
+
+const inputCls =
+  "mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-neutral-900";
+
+function useRefreshOnOk(state: PaymentActionState) {
+  const router = useRouter();
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+}
+
+function TotalForm({ matchId, total }: { matchId: number; total: number }) {
+  const [state, action, pending] = useActionState(saveTotalAction, INITIAL);
+  useRefreshOnOk(state);
+  return (
+    <form action={action} className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+      <input type="hidden" name="matchId" value={matchId} />
+      <label className="block text-sm">
+        <span className="font-medium">Total payment value for this match day</span>
+        <input type="number" name="total" min={0} step={1} defaultValue={total} className={inputCls} />
+      </label>
+      <Button type="submit" className="mt-3" pending={pending} pendingLabel="Saving…">
+        Save total
+      </Button>
+      <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+    </form>
+  );
+}
+
+function DetailsForm({ matchId, meta }: { matchId: number; meta: PaymentMeta }) {
+  const [state, action, pending] = useActionState(saveDetailsAction, INITIAL);
+  useRefreshOnOk(state);
+  return (
+    <form action={action} className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+      <input type="hidden" name="matchId" value={matchId} />
+      <p className="text-sm font-medium">Payment details</p>
+      <p className="mt-0.5 text-xs text-neutral-500">Shown to players so they know where to send money.</p>
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm">
+          <span className="font-medium">Recipient name</span>
+          <input type="text" name="name" defaultValue={meta.paymentName} className={inputCls} />
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium">Mobile number</span>
+          <input type="text" name="mobile" defaultValue={meta.paymentMobile} className={inputCls} />
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium">Payment method (Blik, Revolut, PayPal…)</span>
+          <input type="text" name="method" defaultValue={meta.paymentMethod} className={inputCls} />
+        </label>
+        <label className="block text-sm">
+          <span className="font-medium">Additional note (optional)</span>
+          <input type="text" name="note" defaultValue={meta.paymentNote} className={inputCls} />
+        </label>
+      </div>
+      <Button type="submit" className="mt-3" pending={pending} pendingLabel="Saving…">
+        Save payment details
+      </Button>
+      <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+    </form>
+  );
+}
+
+function PaidToggle({
+  matchId,
+  playerId,
+  paid,
+}: {
+  matchId: number;
+  playerId: number;
+  paid: boolean;
+}) {
+  const [state, action, pending] = useActionState(togglePaidAction, INITIAL);
+  useRefreshOnOk(state);
+  return (
+    <form action={action}>
+      <input type="hidden" name="matchId" value={matchId} />
+      <input type="hidden" name="playerId" value={playerId} />
+      <input type="hidden" name="paid" value={paid ? "0" : "1"} />
+      <Button
+        type="submit"
+        size="sm"
+        variant={paid ? "success" : "secondary"}
+        className="min-h-9"
+        pending={pending}
+        pendingLabel="Saving…"
+      >
+        {paid ? "Paid" : "Mark paid"}
+      </Button>
+    </form>
+  );
+}
+
+function ResetForm({ matchId }: { matchId: number }) {
+  const [state, action, pending] = useActionState(resetUnpaidAction, INITIAL);
+  const [confirm, setConfirm] = useState("");
+  useRefreshOnOk(state);
+  const confirmed = confirm.trim().toUpperCase() === "RESET";
+  return (
+    <form action={action} className="rounded-xl border border-red-500/30 p-4">
+      <input type="hidden" name="matchId" value={matchId} />
+      <p className="text-sm font-medium text-red-700 dark:text-red-300">
+        Reset all payments to unpaid
+      </p>
+      <p className="mt-0.5 text-xs text-neutral-500">
+        This clears every player&apos;s paid status for this match day. Type{" "}
+        <span className="font-mono font-semibold">RESET</span> to confirm.
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input
+          type="text"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          placeholder="RESET"
+          autoComplete="off"
+          className="rounded-lg border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-neutral-900"
+        />
+        <Button
+          type="submit"
+          variant="danger"
+          disabled={!confirmed}
+          pending={pending}
+          pendingLabel="Resetting…"
+        >
+          Reset all to unpaid
+        </Button>
+      </div>
+      <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+    </form>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="text-xs text-neutral-500">{label}</div>
+      <div className="text-lg font-semibold">{value}</div>
+    </div>
+  );
+}
+
+export function PaymentsAdmin({
+  matches,
+  selectedMatchId,
+  meta,
+  rows,
+  summary,
+}: {
+  matches: MatchOption[];
+  selectedMatchId: number;
+  meta: PaymentMeta;
+  rows: PaymentRow[];
+  summary: PaymentSummary;
+}) {
+  const router = useRouter();
+  return (
+    <div className="mt-6 space-y-6">
+      <label className="block max-w-xs text-sm">
+        <span className="font-medium">Select match day</span>
+        <select
+          value={selectedMatchId}
+          onChange={(e) => router.push(`/payments?match=${e.target.value}`)}
+          className={inputCls}
+        >
+          {matches.map((m) => (
+            <option key={m.id} value={m.id}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <TotalForm matchId={selectedMatchId} total={meta.totalPayment} />
+      <DetailsForm matchId={selectedMatchId} meta={meta} />
+
+      {rows.length === 0 ? (
+        <p className="text-sm text-neutral-500">No players in this match.</p>
+      ) : (
+        <div>
+          <div className="flex flex-wrap gap-6">
+            <Metric label="Total" value={summary.totalPlayers} />
+            <Metric label="Paid" value={summary.paidCount} />
+            <Metric label="Unpaid" value={summary.unpaidCount} />
+            <Metric label="Per player share" value={summary.sharePerPlayer} />
+            <Metric label="Remaining" value={summary.remaining} />
+          </div>
+
+          <DataTable className="mt-4">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs text-neutral-500">
+                <tr>
+                  <th scope="col" className="py-2 pr-4">Player</th>
+                  <th scope="col" className="py-2 pr-4">Team</th>
+                  <th scope="col" className="py-2 pr-4">Share</th>
+                  <th scope="col" className="py-2 pr-4">Paid</th>
+                  <th scope="col" className="py-2 pr-4">Last update</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr key={r.playerId} className="border-t border-black/5 dark:border-white/5">
+                    <td className="py-2 pr-4">{r.name}</td>
+                    <td className="py-2 pr-4">{r.teamNo}</td>
+                    <td className="py-2 pr-4">{summary.sharePerPlayer}</td>
+                    <td className="py-2 pr-4">
+                      <PaidToggle matchId={selectedMatchId} playerId={r.playerId} paid={r.paid} />
+                    </td>
+                    <td className="py-2 pr-4 text-xs text-neutral-500">{r.updatedAt ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </DataTable>
+
+          <p className="mt-3 text-xs text-neutral-500">
+            Collected so far: {summary.collected} / {Math.trunc(meta.totalPayment)}
+          </p>
+          <div className="mt-3">
+            <ResetForm matchId={selectedMatchId} />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
