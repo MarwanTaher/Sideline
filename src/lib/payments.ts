@@ -108,6 +108,12 @@ export async function getPaymentRows(matchId: number): Promise<PaymentRow[]> {
   }));
 }
 
+/** Player IDs in a match who have not paid yet. */
+export async function getUnpaidPlayerIds(matchId: number): Promise<number[]> {
+  const rows = await getPaymentRows(matchId);
+  return rows.filter((r) => !r.paid).map((r) => r.playerId);
+}
+
 /** Mirrors the Streamlit share math: share = ceil(total / players). */
 export function computeSummary(rows: PaymentRow[], totalPayment: number): PaymentSummary {
   const totalPlayers = rows.length;

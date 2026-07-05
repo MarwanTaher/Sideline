@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useActionState } from "react";
+import { useEffect, useState, useActionState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   resetUnpaidAction,
@@ -9,6 +9,7 @@ import {
   togglePaidAction,
   type PaymentActionState,
 } from "./actions";
+import { sendPaymentReminderAction } from "@/app/actions/push";
 import type {
   MatchOption,
   PaymentMeta,
@@ -162,6 +163,39 @@ function Metric({ label, value }: { label: string; value: number }) {
   );
 }
 
+function ReminderButton({
+  matchId,
+  unpaidCount,
+}: {
+  matchId: number;
+  unpaidCount: number;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [message, setMessage] = useState("");
+
+  return (
+    <div className="flex items-center gap-3">
+      <Button
+        type="button"
+        variant="secondary"
+        disabled={pending || unpaidCount === 0}
+        onClick={() => {
+          setMessage("");
+          startTransition(async () => {
+            const res = await sendPaymentReminderAction(matchId);
+            setMessage(res.message);
+          });
+        }}
+      >
+        {pending ? "Sending…" : "Send payment reminder"}
+      </Button>
+      {message ? (
+        <span className="text-sm text-neutral-500">{message}</span>
+      ) : null}
+    </div>
+  );
+}
+
 export function PaymentsAdmin({
   matches,
   selectedMatchId,
@@ -206,6 +240,13 @@ export function PaymentsAdmin({
             <Metric label="Unpaid" value={summary.unpaidCount} />
             <Metric label="Per player share" value={summary.sharePerPlayer} />
             <Metric label="Remaining" value={summary.remaining} />
+          </div>
+
+          <div className="mt-4">
+            <ReminderButton
+              matchId={selectedMatchId}
+              unpaidCount={summary.unpaidCount}
+            />
           </div>
 
           <DataTable className="mt-4">

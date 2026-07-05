@@ -54,6 +54,7 @@ export default function MainNav({
     { href: "/stats", label: "Stats review" },
     { href: "/scoring", label: "Scoring" },
     { href: "/diagnostics", label: "Diagnostics" },
+    { href: "/notifications", label: "Notifications" },
     ...(isSuper ? [{ href: "/admin/accounts", label: "Accounts" }] : []),
   ];
 
