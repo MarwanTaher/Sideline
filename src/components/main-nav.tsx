@@ -58,7 +58,7 @@ export default function MainNav({
   ];
 
   return (
-    <div className="flex items-center gap-4 text-sm">
+    <div className="flex flex-col items-start gap-3 text-sm md:flex-row md:items-center md:gap-4">
       {primary
         .filter((i) => i.show)
         .map((item) => (
@@ -110,8 +110,13 @@ function AdminMenu({
     };
   }, [open]);
 
+  // Collapse the submenu whenever the route changes.
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
+
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="w-full md:relative md:w-auto">
       <button
         type="button"
         aria-haspopup="menu"
@@ -141,7 +146,7 @@ function AdminMenu({
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-20 mt-2 min-w-40 rounded-lg border border-black/10 bg-white p-1 shadow-lg dark:border-white/10 dark:bg-neutral-900"
+          className="mt-2 w-full rounded-lg border border-black/10 bg-white p-1 dark:border-white/10 dark:bg-neutral-900 md:absolute md:right-0 md:z-20 md:w-auto md:min-w-40 md:shadow-lg"
         >
           {items.map((item) => {
             const active = isActive(pathname, item);

@@ -2,6 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import MainNav from "@/components/main-nav";
+import MobileNav from "@/components/mobile-nav";
 import { getViewMode } from "@/lib/view-mode";
 import { setViewModeAction } from "@/app/actions/view-mode";
 
@@ -16,7 +17,7 @@ export default async function SiteHeader() {
   const adminView = Boolean(isAdmin && mode === "admin");
 
   return (
-    <header className="sticky top-0 z-10 border-b border-black/10 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-neutral-950/80">
+    <header className="sticky top-0 z-10 border-b border-black/10 bg-white/80 backdrop-blur relative dark:border-white/10 dark:bg-neutral-950/80">
       <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 py-3">
         <Link
           href="/"
@@ -34,7 +35,7 @@ export default async function SiteHeader() {
           </span>
         </Link>
 
-        <nav className="flex items-center gap-4 text-sm">
+        <MobileNav>
           {user ? <MainNav adminView={adminView} isSuper={isSuper} /> : null}
 
           {canToggle ? (
@@ -100,7 +101,7 @@ export default async function SiteHeader() {
               Sign in
             </Link>
           )}
-        </nav>
+        </MobileNav>
       </div>
     </header>
   );
