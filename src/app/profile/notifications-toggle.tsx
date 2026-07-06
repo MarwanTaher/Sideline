@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { unsubscribePushAction } from "@/app/actions/push";
 import {
-  subscribePushAction,
-  unsubscribePushAction,
-} from "@/app/actions/push";
+  pushSupported,
+  getExistingSubscription,
+  subscribeThisDevice,
+} from "@/lib/push-client";
 
 type Status =
   | "loading"
@@ -13,37 +15,12 @@ type Status =
   | "subscribed"
   | "unsubscribed";
 
-/** Convert a base64url VAPID key to the Uint8Array the PushManager expects. */
-function urlBase64ToUint8Array(base64String: string): Uint8Array {
-  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
-  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
-  const raw = atob(base64);
-  const output = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i += 1) output[i] = raw.charCodeAt(i);
-  return output;
-}
-
-function toSaved(sub: PushSubscription) {
-  const json = sub.toJSON();
-  return {
-    endpoint: sub.endpoint,
-    keys: {
-      p256dh: json.keys?.p256dh ?? "",
-      auth: json.keys?.auth ?? "",
-    },
-  };
-}
-
 export default function NotificationsToggle() {
   const [status, setStatus] = useState<Status>("loading");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (
-      typeof window === "undefined" ||
-      !("serviceWorker" in navigator) ||
-      !("PushManager" in window)
-    ) {
+    if (!pushSupported()) {
       setStatus("unsupported");
       return;
     }
@@ -51,7 +28,10 @@ export default function NotificationsToggle() {
       setStatus("denied");
       return;
     }
-    navigator.serviceWorker.ready
+    // Register the SW up front; `serviceWorker.ready` never resolves until a
+    // worker exists, so we must not depend on it for the initial state.
+    navigator.serviceWorker
+      .register("/sw.js")
       .then((reg) => reg.pushManager.getSubscription())
       .then((sub) => setStatus(sub ? "subscribed" : "unsubscribed"))
       .catch(() => setStatus("unsubscribed"));
@@ -60,30 +40,11 @@ export default function NotificationsToggle() {
   async function enable() {
     setBusy(true);
     try {
-      const reg = await navigator.serviceWorker.register("/sw.js");
-      await navigator.serviceWorker.ready;
-
-      const permission = await Notification.requestPermission();
-      if (permission !== "granted") {
-        setStatus(permission === "denied" ? "denied" : "unsubscribed");
-        return;
-      }
-
-      const key = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-      if (!key) {
-        setStatus("unsupported");
-        return;
-      }
-
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(key) as BufferSource,
-      });
-
-      const res = await subscribePushAction(toSaved(sub));
-      setStatus(res.ok ? "subscribed" : "unsubscribed");
-    } catch {
-      setStatus("unsubscribed");
+      const result = await subscribeThisDevice();
+      if (result === "subscribed") setStatus("subscribed");
+      else if (result === "denied") setStatus("denied");
+      else if (result === "unsupported") setStatus("unsupported");
+      else setStatus("unsubscribed");
     } finally {
       setBusy(false);
     }
@@ -92,8 +53,7 @@ export default function NotificationsToggle() {
   async function disable() {
     setBusy(true);
     try {
-      const reg = await navigator.serviceWorker.ready;
-      const sub = await reg.pushManager.getSubscription();
+      const sub = await getExistingSubscription();
       if (sub) {
         await unsubscribePushAction(sub.endpoint);
         await sub.unsubscribe();

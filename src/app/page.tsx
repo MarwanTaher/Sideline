@@ -9,6 +9,7 @@ import { getPlayersAdminData } from "@/lib/players-admin";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SectionIcon } from "@/components/section-icon";
+import NotificationPrompt from "@/components/notification-prompt";
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +69,8 @@ export default async function Home() {
       <p className="mt-1 text-sm capitalize text-neutral-500">
           {isAdmin ? role : "Player"}
       </p>
+
+      <NotificationPrompt />
 
       {adminInfo &&
       (adminInfo.pendingReviews > 0 || adminInfo.resetRequests > 0) ? (
