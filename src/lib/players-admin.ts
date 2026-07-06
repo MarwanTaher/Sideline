@@ -115,6 +115,48 @@ export async function createPlayer(name: string, position: string): Promise<void
   );
 }
 
+/** Error thrown when a chosen name is already taken (case-insensitive). */
+export class DuplicateNameError extends Error {
+  constructor() {
+    super("That name is already taken.");
+    this.name = "DuplicateNameError";
+  }
+}
+
+/**
+ * Insert a new self-registered player (instantly active) and return its id.
+ * Names must be unique case-insensitively; throws {@link DuplicateNameError}
+ * when the name already exists.
+ */
+export async function createSelfRegisteredPlayer(
+  name: string,
+  position: string,
+): Promise<number> {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Player name is required.");
+  const pos = isValidPosition(position) ? position : "MID";
+
+  const existing = (await sqlClient.query(
+    "SELECT 1 FROM players WHERE LOWER(name) = LOWER($1) LIMIT 1",
+    [trimmed],
+  )) as unknown as Array<unknown>;
+  if (existing.length > 0) throw new DuplicateNameError();
+
+  try {
+    const rows = (await sqlClient.query(
+      "INSERT INTO players (name, preferred_position, active) VALUES ($1, $2, 1) RETURNING id",
+      [trimmed, pos],
+    )) as unknown as Array<{ id: number }>;
+    return Number(rows[0].id);
+  } catch (err) {
+    // Guard against a race between the check above and the insert.
+    const msg = err instanceof Error ? err.message : "";
+    if (/unique|duplicate/i.test(msg)) throw new DuplicateNameError();
+    throw err;
+  }
+}
+
+
 /** Update a player's preferred position and active flag. */
 export async function updatePlayer(
   playerId: number,

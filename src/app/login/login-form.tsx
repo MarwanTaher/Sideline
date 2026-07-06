@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import Link from "next/link";
 import { signIn } from "next-auth/react";
 import { requestResetAction } from "./actions";
 
@@ -108,6 +109,13 @@ export default function LoginForm({ players }: { players: PlayerOption[] }) {
           {loading ? "Signing in…" : "Sign in"}
         </button>
       </form>
+
+      <p className="mt-4 text-sm text-neutral-500">
+        New player?{" "}
+        <Link href="/register" className="font-medium underline">
+          Create an account
+        </Link>
+      </p>
 
       {players.length > 0 && <ForgotPassword playerId={playerId} />}
     </div>

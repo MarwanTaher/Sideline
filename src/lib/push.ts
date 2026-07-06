@@ -117,6 +117,20 @@ export async function sendPushToAll(payload: PushPayload): Promise<void> {
   await dispatch(await rowsToSubscriptions(raw), payload);
 }
 
+/** Send a notification to every active admin (players linked in `admins`). */
+export async function sendPushToAdmins(payload: PushPayload): Promise<void> {
+  if (!ensureConfigured()) return;
+  if (!(await isPushEnabled())) return;
+
+  const raw = (await sqlClient.query(
+    `SELECT s.endpoint, s.p256dh, s.auth
+       FROM push_subscriptions s
+       JOIN admins a ON a.player_id = s.player_id AND a.active = 1`,
+  )) as Row[];
+
+  await dispatch(await rowsToSubscriptions(raw), payload);
+}
+
 async function dispatch(
   subs: { endpoint: string; keys: { p256dh: string; auth: string } }[],
   payload: PushPayload,
