@@ -371,6 +371,78 @@ export async function deletePlayerDevice(
   );
 }
 
+// ---------------------------------------------------------------------------
+// Admin per-user overview
+// ---------------------------------------------------------------------------
+
+export type PlayerNotificationRow = {
+  playerId: number;
+  name: string;
+  devices: PlayerDevice[];
+  /** Per-type enabled state (only present for types with an explicit row). */
+  prefs: Record<string, boolean>;
+};
+
+/**
+ * Admin view: every active player with their subscribed devices and per-type
+ * notification preferences. Types without a stored row default to enabled.
+ */
+export async function getPlayersNotificationMatrix(): Promise<
+  PlayerNotificationRow[]
+> {
+  const playerRows = (await sqlClient.query(
+    `SELECT id, name FROM players WHERE active = 1 ORDER BY name`,
+  )) as Array<{ id: number; name: string }>;
+
+  const prefRows = (await sqlClient.query(
+    `SELECT player_id, type_key, enabled FROM push_preferences`,
+  )) as Array<{ player_id: number; type_key: string; enabled: number }>;
+
+  const deviceRows = (await sqlClient.query(
+    `SELECT id, player_id, user_agent, created_at, endpoint
+       FROM push_subscriptions
+      WHERE player_id IS NOT NULL
+      ORDER BY created_at DESC`,
+  )) as Array<{
+    id: number;
+    player_id: number;
+    user_agent: string;
+    created_at: string;
+    endpoint: string;
+  }>;
+
+  const prefsByPlayer = new Map<number, Record<string, boolean>>();
+  for (const r of prefRows) {
+    const pid = Number(r.player_id);
+    const m = prefsByPlayer.get(pid) ?? {};
+    m[r.type_key] = r.enabled !== 0;
+    prefsByPlayer.set(pid, m);
+  }
+
+  const devicesByPlayer = new Map<number, PlayerDevice[]>();
+  for (const r of deviceRows) {
+    const pid = Number(r.player_id);
+    const arr = devicesByPlayer.get(pid) ?? [];
+    arr.push({
+      id: r.id,
+      userAgent: r.user_agent,
+      createdAt: String(r.created_at),
+      endpoint: r.endpoint,
+    });
+    devicesByPlayer.set(pid, arr);
+  }
+
+  return playerRows.map((p) => {
+    const pid = Number(p.id);
+    return {
+      playerId: pid,
+      name: p.name,
+      devices: devicesByPlayer.get(pid) ?? [],
+      prefs: prefsByPlayer.get(pid) ?? {},
+    };
+  });
+}
+
 async function dispatch(
   subs: { endpoint: string; keys: { p256dh: string; auth: string } }[],
   payload: PushPayload,

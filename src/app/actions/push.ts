@@ -133,14 +133,14 @@ export async function setNotificationTypeAudienceAction(
   revalidatePath("/notifications");
 }
 
-/** User: opt in/out of a notification type for their own account. */
-export async function setMyNotificationPreferenceAction(
+/** Admin: enable/disable a notification type for a specific player. */
+export async function setPlayerNotificationTypeAction(
   formData: FormData,
 ): Promise<void> {
-  const session = await auth();
-  const playerId =
-    session?.user?.playerId != null ? Number(session.user.playerId) : null;
-  if (playerId == null) return;
+  if (!(await requireAdmin())) return;
+
+  const playerId = Number(formData.get("playerId"));
+  if (!Number.isFinite(playerId)) return;
 
   const key = String(formData.get("key") ?? "");
   if (!isNotificationTypeKey(key)) return;
@@ -149,7 +149,18 @@ export async function setMyNotificationPreferenceAction(
 
   const enabled = formData.get("enabled") === "1";
   await setPlayerPreference(playerId, key, enabled);
-  revalidatePath("/profile");
+  revalidatePath("/notifications/users");
+}
+
+/** Admin: remove any device by its endpoint. */
+export async function adminRemoveDeviceAction(
+  formData: FormData,
+): Promise<void> {
+  if (!(await requireAdmin())) return;
+  const endpoint = String(formData.get("endpoint") ?? "");
+  if (!endpoint) return;
+  await deleteSubscription(endpoint);
+  revalidatePath("/notifications/users");
 }
 
 /** User: remove one of their own push devices. */

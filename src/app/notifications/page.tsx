@@ -67,6 +67,24 @@ export default async function NotificationsAdminPage() {
 
       <NotificationTypesSection globalEnabled={enabled} />
 
+      <section className="mt-8 rounded-xl border border-black/10 p-4 dark:border-white/10">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-sm font-medium">Per-user control</h2>
+            <p className="text-sm text-neutral-500">
+              Enable or disable each notification type per player, and manage
+              their devices.
+            </p>
+          </div>
+          <a
+            href="/notifications/users"
+            className="shrink-0 rounded-lg border border-black/10 px-3 py-1.5 text-sm font-medium transition hover:bg-neutral-50 dark:border-white/15 dark:hover:bg-neutral-800"
+          >
+            Manage
+          </a>
+        </div>
+      </section>
+
       <section className="mt-8">
         <h2 className="text-lg font-semibold tracking-tight">Send announcement</h2>
         <p className="mt-1 text-sm text-neutral-500">

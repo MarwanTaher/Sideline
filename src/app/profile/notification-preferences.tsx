@@ -1,12 +1,5 @@
-import {
-  getPlayerPreferences,
-  getPlayerDevices,
-} from "@/lib/push";
-import { USER_CONFIGURABLE_TYPES } from "@/lib/notification-types";
-import {
-  setMyNotificationPreferenceAction,
-  removeMyDeviceAction,
-} from "@/app/actions/push";
+import { getPlayerDevices } from "@/lib/push";
+import { removeMyDeviceAction } from "@/app/actions/push";
 
 /** Derive a short, friendly label from a user-agent string. */
 function deviceLabel(ua: string): string {
@@ -45,66 +38,21 @@ function formatDate(value: string): string {
       });
 }
 
-/** Per-user notification preferences and device management. */
+/** The player's own subscribed devices, with a remove action per device. */
 export default async function NotificationPreferences({
   playerId,
 }: {
   playerId: number;
 }) {
-  const [prefs, devices] = await Promise.all([
-    getPlayerPreferences(playerId),
-    getPlayerDevices(playerId),
-  ]);
+  const devices = await getPlayerDevices(playerId);
 
   return (
-    <div className="mt-4 space-y-6">
-      <div>
-        <h3 className="text-sm font-medium">What to notify me about</h3>
-        <p className="text-sm text-neutral-500">
-          Turn off any you don&apos;t want on your devices.
-        </p>
-        <div className="mt-3 divide-y divide-black/10 rounded-lg border border-black/10 dark:divide-white/10 dark:border-white/10">
-          {USER_CONFIGURABLE_TYPES.map((t) => {
-            const enabled = prefs[t.key] ?? true;
-            return (
-              <div
-                key={t.key}
-                className="flex items-center justify-between gap-4 p-3"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium">{t.label}</p>
-                  <p className="text-sm text-neutral-500">{t.description}</p>
-                </div>
-                <form
-                  action={setMyNotificationPreferenceAction}
-                  className="shrink-0"
-                >
-                  <input type="hidden" name="key" value={t.key} />
-                  <input
-                    type="hidden"
-                    name="enabled"
-                    value={enabled ? "0" : "1"}
-                  />
-                  <button
-                    type="submit"
-                    className={
-                      "rounded-lg px-3 py-1.5 text-sm font-medium transition " +
-                      (enabled
-                        ? "bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
-                        : "border border-black/10 hover:bg-neutral-50 dark:border-white/15 dark:hover:bg-neutral-800")
-                    }
-                  >
-                    {enabled ? "On" : "Off"}
-                  </button>
-                </form>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
+    <div className="mt-4">
       <div>
         <h3 className="text-sm font-medium">My devices</h3>
+        <p className="text-sm text-neutral-500">
+          Which notification types you receive is managed by the admins.
+        </p>
         {devices.length === 0 ? (
           <p className="mt-1 text-sm text-neutral-500">
             No devices are subscribed yet. Enable notifications above to add
