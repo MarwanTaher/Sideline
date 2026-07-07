@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
+import { availabilityOpen } from "@/lib/availability";
 import { getLeaderboard } from "@/lib/leaderboard";
 import { getStatsReviewCounts } from "@/lib/stats";
 import { getPlayersAdminData } from "@/lib/players-admin";
@@ -71,6 +72,31 @@ export default async function Home() {
       </p>
 
       <NotificationPrompt />
+
+      {playerId != null &&
+      nextMatch &&
+      availabilityOpen(nextMatch.matchdayStatus) ? (
+        <Link
+          href={`/matches/${nextMatch.id}/availability`}
+          className="mt-6 block"
+        >
+          <Card className="flex items-center justify-between gap-3 border-emerald-500/40 bg-emerald-50/60 transition hover:border-emerald-500/70 dark:bg-emerald-950/20">
+            <div className="flex items-center gap-3">
+              <SectionIcon name="availability" className="h-8 w-8" />
+              <div>
+                <p className="text-sm font-semibold">Set your availability</p>
+                <p className="text-sm text-neutral-500">
+                  Mark yourself in or out for {fmtDate(nextMatch.playedOn)} at{" "}
+                  {fmtMatchTime(nextMatch.matchTime)}.
+                </p>
+              </div>
+            </div>
+            <span aria-hidden className="text-lg text-emerald-600 dark:text-emerald-400">
+              &rarr;
+            </span>
+          </Card>
+        </Link>
+      ) : null}
 
       {adminInfo &&
       (adminInfo.pendingReviews > 0 || adminInfo.resetRequests > 0) ? (

@@ -9,7 +9,13 @@ import { requestResetAction } from "./actions";
 
 type PlayerOption = { id: number; name: string };
 
-export default function LoginForm({ players }: { players: PlayerOption[] }) {
+export default function LoginForm({
+  players,
+  callbackUrl = "/",
+}: {
+  players: PlayerOption[];
+  callbackUrl?: string;
+}) {
   const router = useRouter();
   const [playerId, setPlayerId] = useState<string>(
     players[0]?.id.toString() ?? "",
@@ -37,7 +43,7 @@ export default function LoginForm({ players }: { players: PlayerOption[] }) {
       return;
     }
 
-    router.push("/");
+    router.push(callbackUrl);
     router.refresh();
   }
 
