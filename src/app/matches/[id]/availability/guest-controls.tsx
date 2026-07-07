@@ -7,7 +7,7 @@ import {
   removeGuestAction,
   type GuestActionState,
 } from "@/app/actions/guests";
-import { SKILL_LEVELS, MAX_GUESTS_PER_HOST, type Guest } from "@/lib/guests";
+import { SKILL_LEVELS, MAX_GUESTS_PER_HOST, type Guest } from "@/lib/guests-shared";
 import { POSITIONS } from "@/lib/positions";
 import { Button } from "@/components/ui/button";
 import { FeedbackMessage } from "@/components/ui/banner";

@@ -17,7 +17,7 @@ import type {
   PaymentRow,
   PaymentSummary,
 } from "@/lib/payments";
-import type { Guest } from "@/lib/guests";
+import type { Guest } from "@/lib/guests-shared";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
