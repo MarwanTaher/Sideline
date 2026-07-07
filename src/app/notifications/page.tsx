@@ -6,6 +6,7 @@ import { isPushEnabled } from "@/lib/push";
 import { setPushEnabledAction } from "@/app/actions/push";
 import { SectionIcon } from "@/components/section-icon";
 import AnnouncementForm from "./announcement-form";
+import NotificationTypesSection from "./notification-types";
 
 export const metadata = {
   title: "Notifications · Sideline",
@@ -63,6 +64,8 @@ export default async function NotificationsAdminPage() {
           </form>
         </div>
       </section>
+
+      <NotificationTypesSection globalEnabled={enabled} />
 
       <section className="mt-8">
         <h2 className="text-lg font-semibold tracking-tight">Send announcement</h2>

@@ -1,6 +1,15 @@
 import "server-only";
 import webpush from "web-push";
 import { sqlClient } from "./db";
+import {
+  NOTIFICATION_TYPES,
+  getNotificationType,
+  typeEnabledSettingKey,
+  typeAudienceSettingKey,
+  type AudienceMode,
+  type NotificationType,
+  type NotificationTypeKey,
+} from "./notification-types";
 
 let configured = false;
 
@@ -89,6 +98,27 @@ async function rowsToSubscriptions(rows: Row[]): Promise<
   }));
 }
 
+async function queryAllSubs(): Promise<Row[]> {
+  return (await sqlClient.query(
+    `SELECT endpoint, p256dh, auth FROM push_subscriptions`,
+  )) as Row[];
+}
+
+async function queryPlayerSubs(playerIds: number[]): Promise<Row[]> {
+  return (await sqlClient.query(
+    `SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE player_id = ANY($1)`,
+    [playerIds],
+  )) as Row[];
+}
+
+async function queryAdminSubs(): Promise<Row[]> {
+  return (await sqlClient.query(
+    `SELECT s.endpoint, s.p256dh, s.auth
+       FROM push_subscriptions s
+       JOIN admins a ON a.player_id = s.player_id AND a.active = 1`,
+  )) as Row[];
+}
+
 /** Send a notification to every subscription belonging to the given players. */
 export async function sendPushToPlayers(
   playerIds: number[],
@@ -97,12 +127,7 @@ export async function sendPushToPlayers(
   if (!ensureConfigured() || playerIds.length === 0) return;
   if (!(await isPushEnabled())) return;
 
-  const raw = (await sqlClient.query(
-    `SELECT endpoint, p256dh, auth FROM push_subscriptions WHERE player_id = ANY($1)`,
-    [playerIds],
-  )) as Row[];
-
-  await dispatch(await rowsToSubscriptions(raw), payload);
+  await dispatch(await rowsToSubscriptions(await queryPlayerSubs(playerIds)), payload);
 }
 
 /** Send a notification to all stored subscriptions. */
@@ -110,11 +135,7 @@ export async function sendPushToAll(payload: PushPayload): Promise<void> {
   if (!ensureConfigured()) return;
   if (!(await isPushEnabled())) return;
 
-  const raw = (await sqlClient.query(
-    `SELECT endpoint, p256dh, auth FROM push_subscriptions`,
-  )) as Row[];
-
-  await dispatch(await rowsToSubscriptions(raw), payload);
+  await dispatch(await rowsToSubscriptions(await queryAllSubs()), payload);
 }
 
 /** Send a notification to every active admin (players linked in `admins`). */
@@ -122,11 +143,118 @@ export async function sendPushToAdmins(payload: PushPayload): Promise<void> {
   if (!ensureConfigured()) return;
   if (!(await isPushEnabled())) return;
 
-  const raw = (await sqlClient.query(
-    `SELECT s.endpoint, s.p256dh, s.auth
-       FROM push_subscriptions s
-       JOIN admins a ON a.player_id = s.player_id AND a.active = 1`,
-  )) as Row[];
+  await dispatch(await rowsToSubscriptions(await queryAdminSubs()), payload);
+}
+
+// ---------------------------------------------------------------------------
+// Per-type configuration & the notify() dispatcher
+// ---------------------------------------------------------------------------
+
+export type NotificationTypeStatus = NotificationType & {
+  enabled: boolean;
+  audienceMode: AudienceMode;
+};
+
+/** Read the enabled flag + audience mode for every notification type. */
+export async function getNotificationTypeStatuses(): Promise<
+  NotificationTypeStatus[]
+> {
+  const keys: string[] = [];
+  for (const t of NOTIFICATION_TYPES) {
+    keys.push(typeEnabledSettingKey(t.key), typeAudienceSettingKey(t.key));
+  }
+  const rows = (await sqlClient.query(
+    `SELECT key, value FROM app_settings WHERE key = ANY($1)`,
+    [keys],
+  )) as Array<{ key: string; value: string | null }>;
+  const map = new Map(rows.map((r) => [r.key, r.value]));
+
+  return NOTIFICATION_TYPES.map((t) => {
+    const enabledVal = map.get(typeEnabledSettingKey(t.key));
+    const audienceVal = map.get(typeAudienceSettingKey(t.key));
+    return {
+      ...t,
+      enabled: enabledVal == null ? t.defaultEnabled : enabledVal !== "0",
+      audienceMode: audienceVal === "admins" ? "admins" : "default",
+    };
+  });
+}
+
+export async function setNotificationTypeEnabled(
+  key: NotificationTypeKey,
+  enabled: boolean,
+): Promise<void> {
+  await sqlClient.query(
+    `INSERT INTO app_settings(key, value) VALUES ($1, $2)
+     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
+    [typeEnabledSettingKey(key), enabled ? "1" : "0"],
+  );
+}
+
+export async function setNotificationTypeAudience(
+  key: NotificationTypeKey,
+  mode: AudienceMode,
+): Promise<void> {
+  await sqlClient.query(
+    `INSERT INTO app_settings(key, value) VALUES ($1, $2)
+     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
+    [typeAudienceSettingKey(key), mode],
+  );
+}
+
+async function getTypeConfig(
+  key: NotificationTypeKey,
+): Promise<{ enabled: boolean; audienceMode: AudienceMode }> {
+  const type = getNotificationType(key);
+  const rows = (await sqlClient.query(
+    `SELECT key, value FROM app_settings WHERE key = ANY($1)`,
+    [[typeEnabledSettingKey(key), typeAudienceSettingKey(key)]],
+  )) as Array<{ key: string; value: string | null }>;
+  const map = new Map(rows.map((r) => [r.key, r.value]));
+  const enabledVal = map.get(typeEnabledSettingKey(key));
+  const audienceVal = map.get(typeAudienceSettingKey(key));
+  return {
+    enabled:
+      enabledVal == null ? (type?.defaultEnabled ?? true) : enabledVal !== "0",
+    audienceMode: audienceVal === "admins" ? "admins" : "default",
+  };
+}
+
+/**
+ * Send a typed notification. Respects the global push switch, the per-type
+ * enabled flag, and the per-type audience mode (an admin may force a type to
+ * admin devices only). For types whose natural audience is a specific set of
+ * players, pass `opts.playerIds`.
+ */
+export async function notify(
+  typeKey: NotificationTypeKey,
+  payload: PushPayload,
+  opts: { playerIds?: number[] } = {},
+): Promise<void> {
+  if (!ensureConfigured()) return;
+  if (!(await isPushEnabled())) return;
+
+  const type = getNotificationType(typeKey);
+  if (!type) return;
+
+  const cfg = await getTypeConfig(typeKey);
+  if (!cfg.enabled) return;
+
+  const effectiveAudience =
+    type.audienceOverridable && cfg.audienceMode === "admins"
+      ? "admins"
+      : type.audience;
+
+  let raw: Row[];
+  if (effectiveAudience === "admins") {
+    raw = await queryAdminSubs();
+  } else if (effectiveAudience === "all") {
+    raw = await queryAllSubs();
+  } else {
+    const ids = opts.playerIds ?? [];
+    if (ids.length === 0) return;
+    raw = await queryPlayerSubs(ids);
+  }
 
   await dispatch(await rowsToSubscriptions(raw), payload);
 }

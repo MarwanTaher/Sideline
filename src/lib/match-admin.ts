@@ -1,5 +1,5 @@
 import { sqlClient } from "@/lib/db";
-import { sendPushToAll } from "@/lib/push";
+import { notify } from "@/lib/push";
 
 export type MatchdayStatus = "draft" | "active" | "closed";
 export type MatchStatus = "open" | "closed";
@@ -175,7 +175,7 @@ export async function setMatchdayStatus(
     // Notify subscribers that the match is live. Never let a push failure
     // block the status change.
     try {
-      await sendPushToAll({
+      await notify("match_activated", {
         title: "Match is live \u26bd",
         body: `Match ${matchId} is now active \u2014 set your availability and get ready.`,
         url: `/matches/${matchId}`,

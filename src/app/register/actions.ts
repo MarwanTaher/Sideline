@@ -6,7 +6,7 @@ import {
   DuplicateNameError,
 } from "@/lib/players-admin";
 import { setPlayerPassword } from "@/lib/password-reset";
-import { sendPushToAdmins } from "@/lib/push";
+import { notify } from "@/lib/push";
 
 export interface RegisterState {
   ok: boolean;
@@ -61,7 +61,7 @@ export async function registerAction(
 
     // Let admins know a new player has joined (never block registration on this).
     try {
-      await sendPushToAdmins({
+      await notify("new_player", {
         title: "New player joined \u26bd",
         body: `${name} (${position}) just registered.`,
         url: "/players",

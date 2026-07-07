@@ -7,10 +7,15 @@ import {
   saveSubscription,
   deleteSubscription,
   setPushEnabled,
-  sendPushToAll,
-  sendPushToPlayers,
+  setNotificationTypeEnabled,
+  setNotificationTypeAudience,
+  notify,
   type SavedSubscription,
 } from "@/lib/push";
+import {
+  isNotificationTypeKey,
+  type AudienceMode,
+} from "@/lib/notification-types";
 import { getUnpaidPlayerIds } from "@/lib/payments";
 
 async function requireAdmin(): Promise<boolean> {
@@ -69,7 +74,7 @@ export async function sendAnnouncementAction(
   const body = String(formData.get("body") ?? "").trim();
   if (!body) return { ok: false, message: "Message can't be empty." };
 
-  await sendPushToAll({ title, body, url: "/", tag: "announcement" });
+  await notify("announcement", { title, body, url: "/", tag: "announcement" });
   return { ok: true, message: "Announcement sent." };
 }
 
@@ -84,15 +89,44 @@ export async function sendPaymentReminderAction(
     return { ok: true, message: "Everyone has already paid." };
   }
 
-  await sendPushToPlayers(unpaid, {
-    title: "Payment reminder \uD83D\uDCB0",
-    body: `You have an outstanding payment for match ${matchId}. Please settle up.`,
-    url: "/payments",
-    tag: `payment-reminder-${matchId}`,
-  });
+  await notify(
+    "payment_due",
+    {
+      title: "Payment reminder \uD83D\uDCB0",
+      body: `You have an outstanding payment for match ${matchId}. Please settle up.`,
+      url: "/payments",
+      tag: `payment-reminder-${matchId}`,
+    },
+    { playerIds: unpaid },
+  );
   return {
     ok: true,
     message: `Reminder sent to ${unpaid.length} player${unpaid.length === 1 ? "" : "s"}.`,
   };
+}
+
+/** Admin: turn a single notification type on or off. */
+export async function setNotificationTypeEnabledAction(
+  formData: FormData,
+): Promise<void> {
+  if (!(await requireAdmin())) return;
+  const key = String(formData.get("key") ?? "");
+  if (!isNotificationTypeKey(key)) return;
+  const enabled = formData.get("enabled") === "1";
+  await setNotificationTypeEnabled(key, enabled);
+  revalidatePath("/notifications");
+}
+
+/** Admin: set whether a notification type goes to everyone or admins only. */
+export async function setNotificationTypeAudienceAction(
+  formData: FormData,
+): Promise<void> {
+  if (!(await requireAdmin())) return;
+  const key = String(formData.get("key") ?? "");
+  if (!isNotificationTypeKey(key)) return;
+  const mode: AudienceMode =
+    String(formData.get("mode") ?? "") === "admins" ? "admins" : "default";
+  await setNotificationTypeAudience(key, mode);
+  revalidatePath("/notifications");
 }
 
