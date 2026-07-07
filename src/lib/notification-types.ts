@@ -14,6 +14,7 @@ export type NotificationAudience = "all" | "players" | "admins";
 export type AudienceMode = "default" | "admins";
 
 export type NotificationTypeKey =
+  | "match_created"
   | "match_activated"
   | "payment_due"
   | "stats_approved"
@@ -34,6 +35,16 @@ export type NotificationType = {
 };
 
 export const NOTIFICATION_TYPES: NotificationType[] = [
+  {
+    key: "match_created",
+    label: "New match — set availability",
+    description:
+      "Sent to everyone when a new match is created, asking them to mark in or out.",
+    defaultEnabled: true,
+    audience: "all",
+    audienceOverridable: true,
+    userConfigurable: true,
+  },
   {
     key: "match_activated",
     label: "Match is live",

@@ -122,7 +122,22 @@ export async function createMatch(input: CreateMatchInput): Promise<number> {
     ],
   );
   const rows = raw as { id: number }[];
-  return Number(rows[0].id);
+  const matchId = Number(rows[0].id);
+
+  // Ask everyone to mark their availability for the new match. Never let a
+  // push failure block match creation.
+  try {
+    await notify("match_created", {
+      title: "New match \u26bd",
+      body: `New match on ${input.playedOn} at ${normalizeMatchTime(input.matchTime)} \u2014 mark yourself in or out.`,
+      url: `/matches/${matchId}/availability`,
+      tag: `match-${matchId}-created`,
+    });
+  } catch {
+    // ignore push errors
+  }
+
+  return matchId;
 }
 
 export async function updateMatchSettings(
