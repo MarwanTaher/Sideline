@@ -8,6 +8,7 @@ import {
   getAvailabilityMatch,
   availabilityOpen,
 } from "@/lib/availability";
+import { deleteGuestsForHost } from "@/lib/guests";
 
 export interface AvailabilityActionState {
   ok: boolean;
@@ -47,6 +48,10 @@ export async function setAvailabilityAction(
     }
 
     await setPlayerAvailability(matchId, playerId, status);
+    if (status === "out") {
+      // Guests follow their host — if the host is out, so are their guests.
+      await deleteGuestsForHost(matchId, playerId);
+    }
     revalidatePath(`/matches/${matchId}/availability`);
     revalidatePath(`/matches/${matchId}/draft`);
     return {

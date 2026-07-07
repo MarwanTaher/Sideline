@@ -1,5 +1,6 @@
 import { sqlClient } from "@/lib/db";
 import { notify } from "@/lib/push";
+import { deleteGuestsForMatch } from "@/lib/guests";
 
 export type MatchdayStatus = "draft" | "active" | "closed";
 export type MatchStatus = "open" | "closed";
@@ -186,6 +187,11 @@ export async function setMatchdayStatus(
     matchId,
   ]);
 
+  if (status === "closed") {
+    // Guests are temporary — remove them when the matchday is closed.
+    await deleteGuestsForMatch(matchId);
+  }
+
   if (status === "active") {
     // Notify subscribers that the match is live. Never let a push failure
     // block the status change.
@@ -207,6 +213,9 @@ export async function setMatchStatus(
   status: MatchStatus,
 ): Promise<void> {
   await sqlClient.query(`UPDATE matches SET status = $1 WHERE id = $2`, [status, matchId]);
+  if (status === "closed") {
+    await deleteGuestsForMatch(matchId);
+  }
 }
 
 /** Delete a match. All match-scoped data is removed via ON DELETE CASCADE. */

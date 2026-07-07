@@ -18,6 +18,8 @@ export interface MatchTeamPlayer {
   playerId: number;
   name: string;
   position: string;
+  isGuest?: boolean;
+  hostName?: string;
 }
 
 export interface MatchTeam {
@@ -161,6 +163,30 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
       position: String(r.position_played),
     });
   }
+
+  // Add drafted guests (team_no set) to their teams.
+  const guestRows = (await sqlClient.query(
+    `
+    SELECT g.id, g.team_no, g.name, g.position, h.name AS host_name
+    FROM match_guests g
+    JOIN players h ON h.id = g.host_player_id
+    WHERE g.match_id = $1 AND g.team_no IS NOT NULL
+    ORDER BY g.team_no, g.name
+    `,
+    [mid],
+  )) as Array<{ id: number; team_no: number; name: string; position: string; host_name: string }>;
+  for (const r of guestRows) {
+    const teamNo = Number(r.team_no);
+    if (!teamMap.has(teamNo)) teamMap.set(teamNo, []);
+    teamMap.get(teamNo)!.push({
+      playerId: -Number(r.id),
+      name: String(r.name),
+      position: String(r.position),
+      isGuest: true,
+      hostName: String(r.host_name),
+    });
+  }
+
   const teams: MatchTeam[] = [...teamMap.keys()]
     .sort((a, b) => a - b)
     .map((teamNo) => ({ teamNo, players: teamMap.get(teamNo)! }));

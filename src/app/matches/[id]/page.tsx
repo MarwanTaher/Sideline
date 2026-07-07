@@ -109,7 +109,17 @@ export default async function MatchDetailPage({
                 <ul className="mt-2 space-y-1 text-sm">
                   {team.players.map((p) => (
                     <li key={p.playerId} className="flex items-center justify-between">
-                      <span>{p.name}</span>
+                      <span>
+                        {p.isGuest ? (
+                          <span className="mr-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
+                            Guest
+                          </span>
+                        ) : null}
+                        {p.name}
+                        {p.isGuest && p.hostName ? (
+                          <span className="text-xs text-neutral-500"> · of {p.hostName}</span>
+                        ) : null}
+                      </span>
                       <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
                         {p.position}
                       </span>

@@ -13,6 +13,8 @@ import {
   type PlayerAvailability,
 } from "@/lib/availability";
 import { AvailabilityControls } from "./availability-controls";
+import { AddGuestForm, GuestList } from "./guest-controls";
+import { listGuests, MAX_GUESTS_PER_HOST } from "@/lib/guests";
 import { MatchNav } from "../match-nav";
 
 export const metadata = {
@@ -85,6 +87,9 @@ export default async function AvailabilityPage({
   );
   const mine = myPlayerId == null ? null : players.find((p) => p.playerId === myPlayerId);
 
+  const guests = await listGuests(matchId);
+  const myGuests = myPlayerId == null ? [] : guests.filter((g) => g.hostPlayerId === myPlayerId);
+
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
       <Link
@@ -121,6 +126,36 @@ export default async function AvailabilityPage({
           Admin accounts can view responses but cannot set availability.
         </p>
       )}
+
+      {myPlayerId != null ? (
+        <section className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
+          <h2 className="text-sm font-semibold">Bring a guest</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            Add up to {MAX_GUESTS_PER_HOST} guests you are bringing. Guests join the
+            draft and you cover their share of the payment. They are removed when the
+            matchday closes.
+          </p>
+          <div className="mt-3">
+            <GuestList matchId={matchId} guests={myGuests} canRemove={open} />
+          </div>
+          <div className="mt-4">
+            <AddGuestForm
+              matchId={matchId}
+              remaining={MAX_GUESTS_PER_HOST - myGuests.length}
+              open={open}
+            />
+          </div>
+        </section>
+      ) : null}
+
+      {isAdmin && guests.length > 0 ? (
+        <section className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
+          <h2 className="text-sm font-semibold">All guests ({guests.length})</h2>
+          <div className="mt-3">
+            <GuestList matchId={matchId} guests={guests} showHost canRemove />
+          </div>
+        </section>
+      ) : null}
 
       <section className="mt-8">
         <div className="grid grid-cols-3 gap-3">

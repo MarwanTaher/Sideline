@@ -9,6 +9,7 @@ import {
   savePaymentTotal,
   setPaid,
 } from "@/lib/payments";
+import { setGuestPaid } from "@/lib/guests";
 
 export interface PaymentActionState {
   ok: boolean;
@@ -25,6 +26,7 @@ async function requireAdmin(): Promise<void> {
 
 const matchIdSchema = z.coerce.number().int().positive();
 const playerIdSchema = z.coerce.number().int().positive();
+const guestIdSchema = z.coerce.number().int().positive();
 const totalSchema = z.coerce.number().min(0, "Must be 0 or more.");
 
 function fail(err: unknown): PaymentActionState {
@@ -80,6 +82,23 @@ export async function togglePaidAction(
     const playerId = playerIdSchema.parse(formData.get("playerId"));
     const paid = formData.get("paid") === "1";
     await setPaid(matchId, playerId, paid);
+    revalidatePath("/payments");
+    return { ok: true, message: "Updated." };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function toggleGuestPaidAction(
+  _prev: PaymentActionState,
+  formData: FormData,
+): Promise<PaymentActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const guestId = guestIdSchema.parse(formData.get("guestId"));
+    const paid = formData.get("paid") === "1";
+    await setGuestPaid(matchId, guestId, paid);
     revalidatePath("/payments");
     return { ok: true, message: "Updated." };
   } catch (err) {

@@ -30,14 +30,15 @@ const numTeamsSchema = z.coerce.number().int().min(2).max(3);
 const positionSchema = z.enum(POSITIONS as unknown as [Position, ...Position[]]);
 
 const assignmentSchema = z.object({
-  playerId: z.coerce.number().int().positive(),
+  // Positive ids are real players; negative ids are guests.
+  playerId: z.coerce.number().int().refine((n) => n !== 0, "Invalid id."),
   teamNo: z.coerce.number().int().min(1).max(3),
   position: positionSchema,
 });
 
 const savePayloadSchema = z.object({
   assignments: z.array(assignmentSchema),
-  benchPlayerIds: z.array(z.coerce.number().int().positive()),
+  benchPlayerIds: z.array(z.coerce.number().int().refine((n) => n !== 0, "Invalid id.")),
 });
 
 function errorMessage(err: unknown): string {

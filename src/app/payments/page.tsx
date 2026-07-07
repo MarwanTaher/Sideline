@@ -7,6 +7,7 @@ import {
   getPaymentRows,
   listMatchesForPayments,
 } from "@/lib/payments";
+import { listGuests } from "@/lib/guests";
 import { PaymentsAdmin } from "./payments-admin";
 import { SectionIcon } from "@/components/section-icon";
 
@@ -52,6 +53,8 @@ export default async function PaymentsPage({
     getPaymentRows(selectedMatchId),
   ]);
 
+  const guests = await listGuests(selectedMatchId);
+
   const safeMeta = meta ?? {
     id: selectedMatchId,
     playedOn: "",
@@ -77,7 +80,8 @@ export default async function PaymentsPage({
         selectedMatchId={selectedMatchId}
         meta={safeMeta}
         rows={rows}
-        summary={computeSummary(rows, safeMeta.totalPayment)}
+        guests={guests}
+        summary={computeSummary(rows, safeMeta.totalPayment, guests.map((g) => g.paid))}
       />
     </main>
   );

@@ -7,6 +7,7 @@ import {
   saveDetailsAction,
   saveTotalAction,
   togglePaidAction,
+  toggleGuestPaidAction,
   type PaymentActionState,
 } from "./actions";
 import { sendPaymentReminderAction } from "@/app/actions/push";
@@ -16,6 +17,7 @@ import type {
   PaymentRow,
   PaymentSummary,
 } from "@/lib/payments";
+import type { Guest } from "@/lib/guests";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -100,6 +102,36 @@ function PaidToggle({
     <form action={action}>
       <input type="hidden" name="matchId" value={matchId} />
       <input type="hidden" name="playerId" value={playerId} />
+      <input type="hidden" name="paid" value={paid ? "0" : "1"} />
+      <Button
+        type="submit"
+        size="sm"
+        variant={paid ? "success" : "secondary"}
+        className="min-h-9"
+        pending={pending}
+        pendingLabel="Saving…"
+      >
+        {paid ? "Paid" : "Mark paid"}
+      </Button>
+    </form>
+  );
+}
+
+function GuestPaidToggle({
+  matchId,
+  guestId,
+  paid,
+}: {
+  matchId: number;
+  guestId: number;
+  paid: boolean;
+}) {
+  const [state, action, pending] = useActionState(toggleGuestPaidAction, INITIAL);
+  useRefreshOnOk(state);
+  return (
+    <form action={action}>
+      <input type="hidden" name="matchId" value={matchId} />
+      <input type="hidden" name="guestId" value={guestId} />
       <input type="hidden" name="paid" value={paid ? "0" : "1"} />
       <Button
         type="submit"
@@ -201,12 +233,14 @@ export function PaymentsAdmin({
   selectedMatchId,
   meta,
   rows,
+  guests,
   summary,
 }: {
   matches: MatchOption[];
   selectedMatchId: number;
   meta: PaymentMeta;
   rows: PaymentRow[];
+  guests: Guest[];
   summary: PaymentSummary;
 }) {
   const router = useRouter();
@@ -230,7 +264,7 @@ export function PaymentsAdmin({
       <TotalForm matchId={selectedMatchId} total={meta.totalPayment} />
       <DetailsForm matchId={selectedMatchId} meta={meta} />
 
-      {rows.length === 0 ? (
+      {rows.length === 0 && guests.length === 0 ? (
         <p className="text-sm text-neutral-500">No players in this match.</p>
       ) : (
         <div>
@@ -270,6 +304,23 @@ export function PaymentsAdmin({
                       <PaidToggle matchId={selectedMatchId} playerId={r.playerId} paid={r.paid} />
                     </td>
                     <td className="py-2 pr-4 text-xs text-neutral-500">{r.updatedAt ?? "—"}</td>
+                  </tr>
+                ))}
+                {guests.map((g) => (
+                  <tr key={`g-${g.id}`} className="border-t border-black/5 dark:border-white/5">
+                    <td className="py-2 pr-4">
+                      <span className="mr-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
+                        Guest
+                      </span>
+                      {g.name}
+                      <span className="text-xs text-neutral-500"> · of {g.hostName}</span>
+                    </td>
+                    <td className="py-2 pr-4">{g.teamNo ?? "—"}</td>
+                    <td className="py-2 pr-4">{summary.sharePerPlayer}</td>
+                    <td className="py-2 pr-4">
+                      <GuestPaidToggle matchId={selectedMatchId} guestId={g.id} paid={g.paid} />
+                    </td>
+                    <td className="py-2 pr-4 text-xs text-neutral-500">—</td>
                   </tr>
                 ))}
               </tbody>

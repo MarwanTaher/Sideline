@@ -1,5 +1,12 @@
 import { sqlClient } from "@/lib/db";
 import { getPlayerScores } from "@/lib/scoring";
+import {
+  listGuests,
+  updateGuestTeam,
+  updateGuestPosition,
+  clearGuestTeams,
+  deleteGuestsForHost,
+} from "@/lib/guests";
 
 // Allowed on-pitch positions (from the client-safe module).
 import { POSITIONS, type Position } from "@/lib/positions";
@@ -9,6 +16,19 @@ export type AvailabilityStatus = "in" | "out" | "pending";
 export type MatchdayStatus = "draft" | "active" | "closed";
 export type MatchStatus = "open" | "closed";
 
+// Guests are drafted alongside players. To reuse the numeric-id board and snake
+// draft, a guest is represented with a NEGATIVE draft id (=-guest.id). Real
+// players always have positive ids, so the sign disambiguates the two.
+export function guestToDraftId(guestId: number): number {
+  return -guestId;
+}
+export function isGuestDraftId(draftId: number): boolean {
+  return draftId < 0;
+}
+export function draftIdToGuestId(draftId: number): number {
+  return -draftId;
+}
+
 export interface DraftPlayer {
   playerId: number;
   name: string;
@@ -17,6 +37,8 @@ export interface DraftPlayer {
   teamNo: number | null;
   availStatus: AvailabilityStatus;
   score: number;
+  isGuest?: boolean;
+  hostName?: string;
 }
 
 export interface DraftState {
@@ -156,6 +178,22 @@ export async function getDraftState(matchId: number): Promise<DraftState | null>
     score: scores[Number(r.player_id)]?.final ?? 50,
   }));
 
+  // Append guests as draftable entities using negative ids.
+  const guests = await listGuests(matchId);
+  for (const g of guests) {
+    players.push({
+      playerId: guestToDraftId(g.id),
+      name: g.name,
+      preferredPosition: g.position,
+      positionPlayed: g.position,
+      teamNo: g.teamNo,
+      availStatus: "in",
+      score: g.skill,
+      isGuest: true,
+      hostName: g.hostName,
+    });
+  }
+
   return {
     matchId: Number(meta.id),
     numTeams: Number(meta.num_teams ?? 2) || 2,
@@ -248,13 +286,24 @@ export async function autoBalanceDraft(
     }
   }
 
+  // Split real players (positive id) from guests (negative id).
+  const playerAssignments = assignments.filter((a) => a.playerId > 0);
+  const guestAssignments = assignments.filter((a) => a.playerId < 0);
+
   await sqlClient.query(`DELETE FROM match_players WHERE match_id = $1`, [matchId]);
   await sqlClient.query(`DELETE FROM payments WHERE match_id = $1`, [matchId]);
-  await insertMatchPlayers(matchId, assignments);
+  await insertMatchPlayers(matchId, playerAssignments);
   await insertPaymentsIfMissing(
     matchId,
-    assignments.map((a) => a.playerId),
+    playerAssignments.map((a) => a.playerId),
   );
+
+  // Persist guest team assignments (reset all first, then set the drafted ones).
+  await clearGuestTeams(matchId);
+  for (const a of guestAssignments) {
+    await updateGuestTeam(draftIdToGuestId(a.playerId), a.teamNo);
+  }
+
   await sqlClient.query(
     `UPDATE matches SET num_teams = $1, team_size = $2 WHERE id = $3`,
     [numTeams, Math.floor(assignments.length / numTeams), matchId],
@@ -272,21 +321,31 @@ export async function saveDraftAssignments(
   assignments: Assignment[],
   benchPlayerIds: number[],
 ): Promise<void> {
+  // Split real players (positive id) from guests (negative id).
+  const playerAssignments = assignments.filter((a) => a.playerId > 0);
+  const guestAssignments = assignments.filter((a) => a.playerId < 0);
+  const benchedPlayerIds = benchPlayerIds.filter((id) => id > 0);
+  const benchedGuestIds = benchPlayerIds.filter((id) => id < 0).map(draftIdToGuestId);
+
   // Remove benched players from the roster (and their payment rows).
-  if (benchPlayerIds.length > 0) {
-    const placeholders = benchPlayerIds.map((_, i) => `$${i + 2}`).join(", ");
+  if (benchedPlayerIds.length > 0) {
+    const placeholders = benchedPlayerIds.map((_, i) => `$${i + 2}`).join(", ");
     await sqlClient.query(
       `DELETE FROM match_players WHERE match_id = $1 AND player_id IN (${placeholders})`,
-      [matchId, ...benchPlayerIds],
+      [matchId, ...benchedPlayerIds],
     );
     await sqlClient.query(
       `DELETE FROM payments WHERE match_id = $1 AND player_id IN (${placeholders})`,
-      [matchId, ...benchPlayerIds],
+      [matchId, ...benchedPlayerIds],
     );
+    // A benched player leaves the match, so their guests leave too.
+    for (const hostId of benchedPlayerIds) {
+      await deleteGuestsForHost(matchId, hostId);
+    }
   }
 
   // Upsert the assigned players.
-  for (const a of assignments) {
+  for (const a of playerAssignments) {
     await sqlClient.query(
       `INSERT INTO match_players (match_id, player_id, team_no, position_played)
        VALUES ($1, $2, $3, $4)
@@ -297,8 +356,19 @@ export async function saveDraftAssignments(
   }
   await insertPaymentsIfMissing(
     matchId,
-    assignments.map((a) => a.playerId),
+    playerAssignments.map((a) => a.playerId),
   );
+
+  // Bench then (re)assign guests. Benched guests keep existing rows unless their
+  // host was removed above (which already deleted them).
+  for (const guestId of benchedGuestIds) {
+    await updateGuestTeam(guestId, null);
+  }
+  for (const a of guestAssignments) {
+    const guestId = draftIdToGuestId(a.playerId);
+    await updateGuestTeam(guestId, a.teamNo);
+    await updateGuestPosition(guestId, a.position);
+  }
 
   const teamNos = new Set(assignments.map((a) => a.teamNo));
   const numTeams = Math.max(teamNos.size, 1);
@@ -320,5 +390,6 @@ export async function resetDraft(matchId: number): Promise<void> {
   await sqlClient.query(`DELETE FROM player_goals_claims WHERE match_id = $1`, [matchId]);
   await sqlClient.query(`DELETE FROM payments WHERE match_id = $1`, [matchId]);
   await sqlClient.query(`DELETE FROM match_players WHERE match_id = $1`, [matchId]);
+  await clearGuestTeams(matchId);
   await sqlClient.query(`UPDATE matches SET team_size = 0 WHERE id = $1`, [matchId]);
 }

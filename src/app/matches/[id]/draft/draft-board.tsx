@@ -474,7 +474,7 @@ function PlayerCardView({
     <div
       className={`flex items-center gap-2 rounded-lg border bg-white px-2 py-1.5 text-sm shadow-sm dark:bg-neutral-900 ${
         dragging ? "border-neutral-900 dark:border-white" : "border-black/10 dark:border-white/10"
-      }`}
+      } ${player.isGuest ? "ring-1 ring-indigo-300 dark:ring-indigo-700" : ""}`}
     >
       {canEdit ? (
         <button
@@ -486,7 +486,17 @@ function PlayerCardView({
           ⠿
         </button>
       ) : null}
-      <span className="flex-1 truncate font-medium">{player.name}</span>
+      {player.isGuest ? (
+        <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
+          Guest
+        </span>
+      ) : null}
+      <span className="flex-1 truncate font-medium">
+        {player.name}
+        {player.isGuest && player.hostName ? (
+          <span className="font-normal text-neutral-400"> · {player.hostName}</span>
+        ) : null}
+      </span>
       <span className="tabular-nums text-xs text-neutral-400">{player.score.toFixed(1)}</span>
       {canEdit && onPositionChange ? (
         <select

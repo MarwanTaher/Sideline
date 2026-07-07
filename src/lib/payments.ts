@@ -108,16 +108,32 @@ export async function getPaymentRows(matchId: number): Promise<PaymentRow[]> {
   }));
 }
 
-/** Player IDs in a match who have not paid yet. */
+/** Player IDs in a match who have not paid yet, plus hosts owing for unpaid guests. */
 export async function getUnpaidPlayerIds(matchId: number): Promise<number[]> {
   const rows = await getPaymentRows(matchId);
-  return rows.filter((r) => !r.paid).map((r) => r.playerId);
+  const ids = new Set(rows.filter((r) => !r.paid).map((r) => r.playerId));
+  // Hosts are responsible for their guests' share, so remind them too.
+  const hostRows = (await sqlClient.query(
+    `SELECT DISTINCT host_player_id FROM match_guests WHERE match_id = $1 AND paid = 0`,
+    [matchId],
+  )) as unknown as { host_player_id: number }[];
+  for (const h of hostRows) ids.add(h.host_player_id);
+  return [...ids];
 }
 
-/** Mirrors the Streamlit share math: share = ceil(total / players). */
-export function computeSummary(rows: PaymentRow[], totalPayment: number): PaymentSummary {
-  const totalPlayers = rows.length;
-  const paidCount = rows.filter((r) => r.paid).length;
+/**
+ * Mirrors the Streamlit share math, extended for guests: the pot is split across
+ * every head (players + guests), so share = ceil(total / (players + guests)).
+ * Each paid head contributes one share to the collected total.
+ */
+export function computeSummary(
+  rows: PaymentRow[],
+  totalPayment: number,
+  guestPaid: boolean[] = [],
+): PaymentSummary {
+  const totalPlayers = rows.length + guestPaid.length;
+  const paidCount =
+    rows.filter((r) => r.paid).length + guestPaid.filter(Boolean).length;
   const sharePerPlayer = totalPlayers > 0 ? Math.ceil(totalPayment / totalPlayers) : 0;
   const collected = sharePerPlayer * paidCount;
   const remaining = Math.max(Math.trunc(totalPayment) - collected, 0);
