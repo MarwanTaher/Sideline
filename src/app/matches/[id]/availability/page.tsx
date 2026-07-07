@@ -128,12 +128,12 @@ export default async function AvailabilityPage({
       )}
 
       {myPlayerId != null ? (
-        <section className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
-          <h2 className="text-sm font-semibold">Bring a guest</h2>
-          <p className="mt-1 text-xs text-neutral-500">
-            Add up to {MAX_GUESTS_PER_HOST} guests you are bringing. Guests join the
-            draft and you cover their share of the payment. They are removed when the
-            matchday closes.
+        <details className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Do you want to bring a guest?
+          </summary>
+          <p className="mt-2 text-xs text-neutral-500">
+            Add up to {MAX_GUESTS_PER_HOST} guests you are bringing. Guests join the draft.
           </p>
           <div className="mt-3">
             <GuestList matchId={matchId} guests={myGuests} canRemove={open} />
@@ -145,7 +145,7 @@ export default async function AvailabilityPage({
               open={open}
             />
           </div>
-        </section>
+        </details>
       ) : null}
 
       {isAdmin && guests.length > 0 ? (
