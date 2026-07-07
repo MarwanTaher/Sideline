@@ -16,6 +16,7 @@ export type AudienceMode = "default" | "admins";
 export type NotificationTypeKey =
   | "match_activated"
   | "payment_due"
+  | "stats_approved"
   | "new_player"
   | "announcement";
 
@@ -28,6 +29,8 @@ export type NotificationType = {
   audience: NotificationAudience;
   /** Whether an admin may redirect this type to admin devices only. */
   audienceOverridable: boolean;
+  /** Whether individual users may opt out of this type. */
+  userConfigurable: boolean;
 };
 
 export const NOTIFICATION_TYPES: NotificationType[] = [
@@ -38,6 +41,7 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     defaultEnabled: true,
     audience: "all",
     audienceOverridable: true,
+    userConfigurable: true,
   },
   {
     key: "payment_due",
@@ -47,6 +51,17 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     defaultEnabled: true,
     audience: "players",
     audienceOverridable: true,
+    userConfigurable: true,
+  },
+  {
+    key: "stats_approved",
+    label: "Stats approved",
+    description:
+      "Sent to a player when their submitted goals/assists are approved.",
+    defaultEnabled: true,
+    audience: "players",
+    audienceOverridable: true,
+    userConfigurable: true,
   },
   {
     key: "new_player",
@@ -55,6 +70,7 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     defaultEnabled: true,
     audience: "admins",
     audienceOverridable: false,
+    userConfigurable: false,
   },
   {
     key: "announcement",
@@ -63,6 +79,7 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     defaultEnabled: true,
     audience: "all",
     audienceOverridable: true,
+    userConfigurable: false,
   },
 ];
 
@@ -79,6 +96,10 @@ export function getNotificationType(
 export function isNotificationTypeKey(key: string): key is NotificationTypeKey {
   return BY_KEY.has(key as NotificationTypeKey);
 }
+
+/** Types that individual users may opt out of. */
+export const USER_CONFIGURABLE_TYPES: NotificationType[] =
+  NOTIFICATION_TYPES.filter((t) => t.userConfigurable);
 
 /** Settings key holding the on/off flag for a type. */
 export function typeEnabledSettingKey(key: NotificationTypeKey): string {

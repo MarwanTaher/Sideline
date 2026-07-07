@@ -8,6 +8,7 @@ import {
   rejectStatsSubmission,
   backfillApprovedStats,
 } from "@/lib/stats";
+import { notify } from "@/lib/push";
 
 export interface StatsReviewState {
   ok: boolean;
@@ -43,6 +44,22 @@ export async function approveSubmissionAction(
 
     const ok = await approveStatsSubmission(submissionId, actor, { goals, assists });
     if (!ok) return { ok: false, message: "Submission not found." };
+
+    // Let the player know their stats went through (never block on push).
+    try {
+      await notify(
+        "stats_approved",
+        {
+          title: "Stats approved \u2705",
+          body: `Your ${goals} goal${goals === 1 ? "" : "s"} and ${assists} assist${assists === 1 ? "" : "s"} were approved.`,
+          url: `/matches/${ok.matchId}/stats`,
+          tag: `stats-approved-${submissionId}`,
+        },
+        { playerIds: [ok.playerId] },
+      );
+    } catch {
+      // ignore push errors
+    }
 
     revalidatePath("/stats");
     revalidatePath("/leaderboard");

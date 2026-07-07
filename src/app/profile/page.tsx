@@ -9,6 +9,7 @@ import {
 import BadgeGallery from "@/components/badge-gallery";
 import ChangePassword from "./change-password";
 import NotificationsToggle from "./notifications-toggle";
+import NotificationPreferences from "./notification-preferences";
 import { SectionIcon } from "@/components/section-icon";
 
 export const metadata = {
@@ -116,6 +117,7 @@ export default async function ProfilePage() {
         <h2 className="text-lg font-semibold tracking-tight">Notifications</h2>
         <div className="mt-3 rounded-xl border border-black/10 p-4 dark:border-white/10">
           <NotificationsToggle />
+          <NotificationPreferences playerId={pid} />
         </div>
       </section>
 

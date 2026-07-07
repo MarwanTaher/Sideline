@@ -224,7 +224,7 @@ export async function approveStatsSubmission(
   submissionId: number,
   actor: string,
   override?: { goals: number; assists: number },
-): Promise<boolean> {
+): Promise<{ playerId: number; matchId: number } | null> {
   if (override) {
     await sqlClient.query(
       `UPDATE player_stats_submissions SET goals = $1, assists = $2 WHERE id = $3`,
@@ -237,7 +237,7 @@ export async function approveStatsSubmission(
     [submissionId],
   );
   const subRows = subRaw as SubmissionRow[];
-  if (subRows.length === 0) return false;
+  if (subRows.length === 0) return null;
   const { match_id, player_id, goals, assists } = subRows[0];
 
   // Prior approved values for the audit trail (null on first approval).
@@ -292,7 +292,7 @@ export async function approveStatsSubmission(
     ],
   );
 
-  return true;
+  return { playerId: Number(player_id), matchId: Number(match_id) };
 }
 
 /** Reject a submission. Marks the submission + goal claim rejected. */

@@ -9,11 +9,14 @@ import {
   setPushEnabled,
   setNotificationTypeEnabled,
   setNotificationTypeAudience,
+  setPlayerPreference,
+  deletePlayerDevice,
   notify,
   type SavedSubscription,
 } from "@/lib/push";
 import {
   isNotificationTypeKey,
+  getNotificationType,
   type AudienceMode,
 } from "@/lib/notification-types";
 import { getUnpaidPlayerIds } from "@/lib/payments";
@@ -128,5 +131,39 @@ export async function setNotificationTypeAudienceAction(
     String(formData.get("mode") ?? "") === "admins" ? "admins" : "default";
   await setNotificationTypeAudience(key, mode);
   revalidatePath("/notifications");
+}
+
+/** User: opt in/out of a notification type for their own account. */
+export async function setMyNotificationPreferenceAction(
+  formData: FormData,
+): Promise<void> {
+  const session = await auth();
+  const playerId =
+    session?.user?.playerId != null ? Number(session.user.playerId) : null;
+  if (playerId == null) return;
+
+  const key = String(formData.get("key") ?? "");
+  if (!isNotificationTypeKey(key)) return;
+  const type = getNotificationType(key);
+  if (!type?.userConfigurable) return;
+
+  const enabled = formData.get("enabled") === "1";
+  await setPlayerPreference(playerId, key, enabled);
+  revalidatePath("/profile");
+}
+
+/** User: remove one of their own push devices. */
+export async function removeMyDeviceAction(
+  formData: FormData,
+): Promise<void> {
+  const session = await auth();
+  const playerId =
+    session?.user?.playerId != null ? Number(session.user.playerId) : null;
+  if (playerId == null) return;
+
+  const endpoint = String(formData.get("endpoint") ?? "");
+  if (!endpoint) return;
+  await deletePlayerDevice(playerId, endpoint);
+  revalidatePath("/profile");
 }
 

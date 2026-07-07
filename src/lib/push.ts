@@ -119,6 +119,41 @@ async function queryAdminSubs(): Promise<Row[]> {
   )) as Row[];
 }
 
+/** All subscriptions, excluding players who opted out of `typeKey`. */
+async function queryAllSubsRespectingPrefs(typeKey: string): Promise<Row[]> {
+  return (await sqlClient.query(
+    `SELECT s.endpoint, s.p256dh, s.auth
+       FROM push_subscriptions s
+      WHERE s.player_id IS NULL
+         OR NOT EXISTS (
+              SELECT 1 FROM push_preferences p
+               WHERE p.player_id = s.player_id
+                 AND p.type_key = $1
+                 AND p.enabled = 0
+            )`,
+    [typeKey],
+  )) as Row[];
+}
+
+/** Subscriptions for the given players, excluding those who opted out. */
+async function queryPlayerSubsRespectingPrefs(
+  playerIds: number[],
+  typeKey: string,
+): Promise<Row[]> {
+  return (await sqlClient.query(
+    `SELECT s.endpoint, s.p256dh, s.auth
+       FROM push_subscriptions s
+      WHERE s.player_id = ANY($1)
+        AND NOT EXISTS (
+              SELECT 1 FROM push_preferences p
+               WHERE p.player_id = s.player_id
+                 AND p.type_key = $2
+                 AND p.enabled = 0
+            )`,
+    [playerIds, typeKey],
+  )) as Row[];
+}
+
 /** Send a notification to every subscription belonging to the given players. */
 export async function sendPushToPlayers(
   playerIds: number[],
@@ -249,14 +284,91 @@ export async function notify(
   if (effectiveAudience === "admins") {
     raw = await queryAdminSubs();
   } else if (effectiveAudience === "all") {
-    raw = await queryAllSubs();
+    raw = type.userConfigurable
+      ? await queryAllSubsRespectingPrefs(typeKey)
+      : await queryAllSubs();
   } else {
     const ids = opts.playerIds ?? [];
     if (ids.length === 0) return;
-    raw = await queryPlayerSubs(ids);
+    raw = type.userConfigurable
+      ? await queryPlayerSubsRespectingPrefs(ids, typeKey)
+      : await queryPlayerSubs(ids);
   }
 
   await dispatch(await rowsToSubscriptions(raw), payload);
+}
+
+// ---------------------------------------------------------------------------
+// Per-user preferences & device management
+// ---------------------------------------------------------------------------
+
+/** Read a player's opt-outs as a map of typeKey -> enabled. */
+export async function getPlayerPreferences(
+  playerId: number,
+): Promise<Record<string, boolean>> {
+  const rows = (await sqlClient.query(
+    `SELECT type_key, enabled FROM push_preferences WHERE player_id = $1`,
+    [playerId],
+  )) as Array<{ type_key: string; enabled: number }>;
+  const map: Record<string, boolean> = {};
+  for (const r of rows) map[r.type_key] = r.enabled !== 0;
+  return map;
+}
+
+export async function setPlayerPreference(
+  playerId: number,
+  typeKey: NotificationTypeKey,
+  enabled: boolean,
+): Promise<void> {
+  await sqlClient.query(
+    `INSERT INTO push_preferences(player_id, type_key, enabled, updated_at)
+     VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+     ON CONFLICT (player_id, type_key)
+     DO UPDATE SET enabled = EXCLUDED.enabled, updated_at = CURRENT_TIMESTAMP`,
+    [playerId, typeKey, enabled ? 1 : 0],
+  );
+}
+
+export type PlayerDevice = {
+  id: number;
+  userAgent: string;
+  createdAt: string;
+  endpoint: string;
+};
+
+/** List a player's registered push devices, newest first. */
+export async function getPlayerDevices(
+  playerId: number,
+): Promise<PlayerDevice[]> {
+  const rows = (await sqlClient.query(
+    `SELECT id, user_agent, created_at, endpoint
+       FROM push_subscriptions
+      WHERE player_id = $1
+      ORDER BY created_at DESC`,
+    [playerId],
+  )) as Array<{
+    id: number;
+    user_agent: string;
+    created_at: string;
+    endpoint: string;
+  }>;
+  return rows.map((r) => ({
+    id: r.id,
+    userAgent: r.user_agent,
+    createdAt: String(r.created_at),
+    endpoint: r.endpoint,
+  }));
+}
+
+/** Remove one of a player's devices (scoped to that player for safety). */
+export async function deletePlayerDevice(
+  playerId: number,
+  endpoint: string,
+): Promise<void> {
+  await sqlClient.query(
+    `DELETE FROM push_subscriptions WHERE player_id = $1 AND endpoint = $2`,
+    [playerId, endpoint],
+  );
 }
 
 async function dispatch(
