@@ -14,7 +14,7 @@ import {
 } from "@/lib/availability";
 import { AvailabilityControls } from "./availability-controls";
 import { AddGuestForm, GuestList, AdminAddGuestForm } from "./guest-controls";
-import { listGuests, MAX_GUESTS_PER_HOST } from "@/lib/guests";
+import { listGuests, MAX_GUESTS_PER_HOST, type Guest } from "@/lib/guests";
 import { MatchNav } from "../match-nav";
 
 export const metadata = {
@@ -30,13 +30,22 @@ const MATCHDAY_BADGE: Record<MatchdayStatus, string> = {
   closed: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
 };
 
-function StatusList({ title, players }: { title: ReactNode; players: PlayerAvailability[] }) {
+function StatusList({
+  title,
+  players,
+  guests = [],
+}: {
+  title: ReactNode;
+  players: PlayerAvailability[];
+  guests?: Guest[];
+}) {
+  const total = players.length + guests.length;
   return (
     <div className="rounded-xl border border-black/10 p-3 dark:border-white/10">
       <h3 className="text-sm font-semibold">
-        {title} <span className="font-normal text-neutral-400">({players.length})</span>
+        {title} <span className="font-normal text-neutral-400">({total})</span>
       </h3>
-      {players.length === 0 ? (
+      {total === 0 ? (
         <p className="mt-2 text-xs text-neutral-400">None</p>
       ) : (
         <ul className="mt-2 space-y-1 text-sm">
@@ -48,6 +57,20 @@ function StatusList({ title, players }: { title: ReactNode; players: PlayerAvail
                   {p.preferredPosition}
                 </span>
               ) : null}
+            </li>
+          ))}
+          {guests.map((g) => (
+            <li key={`g-${g.id}`} className="flex items-center justify-between">
+              <span className="truncate">
+                <span className="mr-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
+                  Guest
+                </span>
+                {g.name}
+                <span className="text-xs text-neutral-500"> · of {g.hostName}</span>
+              </span>
+              <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                {g.position}
+              </span>
             </li>
           ))}
         </ul>
@@ -171,7 +194,7 @@ export default async function AvailabilityPage({
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-black/10 p-4 text-center dark:border-white/10">
             <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-              {summary.inCount}
+              {summary.inCount + guests.length}
             </div>
             <div className="text-xs uppercase tracking-wide text-neutral-500">In</div>
           </div>
@@ -189,7 +212,7 @@ export default async function AvailabilityPage({
       </section>
 
       <section className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatusList title={<><span aria-hidden="true">✅</span> In</>} players={inPlayers} />
+        <StatusList title={<><span aria-hidden="true">✅</span> In</>} players={inPlayers} guests={guests} />
         <StatusList title={<><span aria-hidden="true">❌</span> Out</>} players={outPlayers} />
         <StatusList title={<><span aria-hidden="true">⏳</span> Pending</>} players={pendingPlayers} />
       </section>
