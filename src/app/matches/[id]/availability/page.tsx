@@ -13,7 +13,7 @@ import {
   type PlayerAvailability,
 } from "@/lib/availability";
 import { AvailabilityControls } from "./availability-controls";
-import { AddGuestForm, GuestList } from "./guest-controls";
+import { AddGuestForm, GuestList, AdminAddGuestForm } from "./guest-controls";
 import { listGuests, MAX_GUESTS_PER_HOST } from "@/lib/guests";
 import { MatchNav } from "../match-nav";
 
@@ -148,10 +148,20 @@ export default async function AvailabilityPage({
         </details>
       ) : null}
 
-      {isAdmin && guests.length > 0 ? (
+      {isAdmin ? (
         <section className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
-          <h2 className="text-sm font-semibold">All guests ({guests.length})</h2>
+          <h2 className="text-sm font-semibold">Guests (admin)</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            Add a guest on behalf of a player, or remove any guest.
+          </p>
           <div className="mt-3">
+            <AdminAddGuestForm
+              matchId={matchId}
+              hosts={inPlayers.map((p) => ({ playerId: p.playerId, name: p.name }))}
+              open={open}
+            />
+          </div>
+          <div className="mt-4">
             <GuestList matchId={matchId} guests={guests} showHost canRemove />
           </div>
         </section>

@@ -116,6 +116,120 @@ export function AddGuestForm({ matchId, hostPlayerId, remaining, open }: AddGues
   );
 }
 
+export interface AdminHostOption {
+  playerId: number;
+  name: string;
+}
+
+export interface AdminAddGuestFormProps {
+  matchId: number;
+  hosts: AdminHostOption[];
+  open: boolean;
+}
+
+export function AdminAddGuestForm({ matchId, hosts, open }: AdminAddGuestFormProps) {
+  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  const [state, formAction, pending] = useActionState(addGuestAction, INITIAL);
+
+  useEffect(() => {
+    if (state.ok) {
+      formRef.current?.reset();
+      router.refresh();
+    }
+  }, [state, router]);
+
+  if (!open) {
+    return (
+      <p className="text-sm text-neutral-500">
+        Guests can no longer be added — availability is closed.
+      </p>
+    );
+  }
+
+  if (hosts.length === 0) {
+    return (
+      <p className="text-sm text-neutral-500">
+        No players are marked in yet — a guest must be assigned to a participating player.
+      </p>
+    );
+  }
+
+  return (
+    <form ref={formRef} action={formAction} className="space-y-3">
+      <input type="hidden" name="matchId" value={matchId} />
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <label className="text-sm">
+          <span className="mb-1 block text-neutral-500">Assign to player</span>
+          <select
+            name="hostPlayerId"
+            required
+            defaultValue=""
+            className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/15"
+          >
+            <option value="" disabled>
+              Select player…
+            </option>
+            {hosts.map((h) => (
+              <option key={h.playerId} value={h.playerId}>
+                {h.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-neutral-500">Guest name</span>
+          <input
+            type="text"
+            name="name"
+            required
+            maxLength={60}
+            placeholder="Full name"
+            className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/15"
+          />
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-neutral-500">Position (optional)</span>
+          <select
+            name="position"
+            defaultValue=""
+            className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/15"
+          >
+            <option value="">Any</option>
+            {POSITIONS.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
+          <span className="mb-1 block text-neutral-500">Skill (optional)</span>
+          <select
+            name="skill"
+            defaultValue=""
+            className="w-full rounded-lg border border-black/15 bg-transparent px-3 py-2 text-sm dark:border-white/15"
+          >
+            <option value="">Below average (default)</option>
+            {SKILL_LEVELS.map((s) => (
+              <option key={s.key} value={s.key}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <Button type="submit" pending={pending} pendingLabel="Adding…">
+        Add guest
+      </Button>
+
+      <FeedbackMessage ok={state.ok} message={state.message} />
+    </form>
+  );
+}
+
 export interface GuestListProps {
   matchId: number;
   guests: Guest[];
