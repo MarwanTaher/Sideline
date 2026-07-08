@@ -75,3 +75,75 @@ button:focus-visible,
     outline-color: rgb(255 255 255 / 0.55);
   }
 }
+
+/* ---------------------------------------------------------------------------
+ * Sideline logo "draw into place" animation.
+ * The mark is built from three horizontal lines + one vertical line, so each
+ * stroke scales in from its own edge, staggered, to look hand-drawn.
+ * ------------------------------------------------------------------------- */
+@keyframes sideline-draw-x {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes sideline-draw-y {
+  from { transform: scaleY(0); }
+  to { transform: scaleY(1); }
+}
+@keyframes sideline-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sideline-splash-out {
+  to { opacity: 0; visibility: hidden; }
+}
+
+.sideline-logo .s-bg {
+  animation: sideline-fade 0.4s ease both;
+}
+.sideline-logo .s-line {
+  transform-box: fill-box;
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: sideline-draw-x 0.5s cubic-bezier(0.65, 0, 0.35, 1) both;
+}
+.sideline-logo .s-line-2 { animation-delay: 0.15s; }
+.sideline-logo .s-line-3 { animation-delay: 0.3s; }
+.sideline-logo .s-vline {
+  transform-box: fill-box;
+  transform-origin: center top;
+  transform: scaleY(0);
+  animation: sideline-draw-y 0.5s cubic-bezier(0.65, 0, 0.35, 1) both;
+  animation-delay: 0.45s;
+}
+
+/* Looping variant for ongoing loading states — lines gently draw back and forth. */
+.sideline-logo--loop .s-line {
+  animation: sideline-draw-x 1.2s ease-in-out infinite alternate;
+}
+.sideline-logo--loop .s-line-2 { animation-delay: 0.15s; }
+.sideline-logo--loop .s-line-3 { animation-delay: 0.3s; }
+.sideline-logo--loop .s-vline {
+  animation: sideline-draw-y 1.2s ease-in-out infinite alternate;
+  animation-delay: 0.45s;
+}
+
+/* Cold-load splash overlay: fades itself out after the mark has drawn. */
+.sideline-splash {
+  animation: sideline-splash-out 0.5s ease 1.15s forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sideline-logo .s-bg,
+  .sideline-logo .s-line,
+  .sideline-logo .s-vline,
+  .sideline-logo--loop .s-line,
+  .sideline-logo--loop .s-vline {
+    animation: none;
+    transform: none;
+    opacity: 1;
+  }
+  .sideline-splash {
+    animation: sideline-splash-out 0.3s ease 0.3s forwards;
+  }
+}
+
