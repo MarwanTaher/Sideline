@@ -127,9 +127,14 @@ button:focus-visible,
   animation-delay: 0.45s;
 }
 
-/* Cold-load splash overlay: fades itself out after the mark has drawn. */
+/* Cold-load splash overlay: fades out once the app is ready (JS-controlled),
+ * with a CSS-only fallback fade so it never lingers if hydration is delayed. */
 .sideline-splash {
-  animation: sideline-splash-out 0.5s ease 1.15s forwards;
+  transition: opacity 0.4s ease;
+  animation: sideline-splash-out 0.4s ease 2.5s forwards;
+}
+.sideline-splash[data-hide="true"] {
+  opacity: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -144,6 +149,7 @@ button:focus-visible,
   }
   .sideline-splash {
     animation: sideline-splash-out 0.3s ease 0.3s forwards;
+    transition: none;
   }
 }
 
