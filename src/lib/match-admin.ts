@@ -185,6 +185,31 @@ export async function setAvailabilityOpen(
     `UPDATE matches SET availability_open = $1 WHERE id = $2`,
     [open ? 1 : 0, matchId],
   );
+
+  if (open) {
+    // Opening availability asks everyone to respond — link straight to the
+    // availability page. Never let a push failure block the switch.
+    try {
+      const raw = await sqlClient.query(
+        `SELECT played_on, match_time FROM matches WHERE id = $1`,
+        [matchId],
+      );
+      const meta = (raw as { played_on: string | null; match_time: string | null }[])[0];
+      const when = meta
+        ? `${meta.played_on ?? ""}${meta.match_time ? ` at ${meta.match_time}` : ""}`.trim()
+        : "";
+      await notify("availability_open", {
+        title: "Availability open \u26bd",
+        body: when
+          ? `Match on ${when} \u2014 mark yourself in or out.`
+          : `Match ${matchId} \u2014 mark yourself in or out.`,
+        url: `/matches/${matchId}/availability`,
+        tag: `match-${matchId}-availability`,
+      });
+    } catch {
+      // ignore push errors
+    }
+  }
 }
 
 /** Set the maximum number of players that can mark themselves IN. */
@@ -232,7 +257,7 @@ export async function setMatchdayStatus(
       await notify("match_activated", {
         title: "Match is live \u26bd",
         body: `Match ${matchId} is now active \u2014 set your availability and get ready.`,
-        url: `/matches/${matchId}`,
+        url: `/matches/${matchId}/availability`,
         tag: `match-${matchId}-active`,
       });
     } catch {

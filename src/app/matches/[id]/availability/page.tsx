@@ -176,9 +176,11 @@ export default async function AvailabilityPage({
       ) : null}
 
       {isAdmin ? (
-        <section className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
-          <h2 className="text-sm font-semibold">Availability (admin)</h2>
-          <p className="mt-1 text-xs text-neutral-500">
+        <details className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Availability control (admin)
+          </summary>
+          <p className="mt-2 text-xs text-neutral-500">
             Open or close responses, set the player cap, and mark players in or out.
           </p>
           <div className="mt-3 space-y-4">
@@ -191,13 +193,15 @@ export default async function AvailabilityPage({
               <AdminPlayerControls matchId={matchId} players={players} />
             </div>
           </div>
-        </section>
+        </details>
       ) : null}
 
       {isAdmin ? (
-        <section className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
-          <h2 className="text-sm font-semibold">Guests (admin)</h2>
-          <p className="mt-1 text-xs text-neutral-500">
+        <details className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
+          <summary className="cursor-pointer text-sm font-semibold">
+            Add guests (admin)
+          </summary>
+          <p className="mt-2 text-xs text-neutral-500">
             Add a guest on behalf of a player, or remove any guest.
           </p>
           <div className="mt-3">
@@ -210,7 +214,7 @@ export default async function AvailabilityPage({
           <div className="mt-4">
             <GuestList matchId={matchId} guests={guests} showHost canRemove />
           </div>
-        </section>
+        </details>
       ) : null}
 
       <section className="mt-8">
