@@ -6,8 +6,9 @@ import { auth } from "@/auth";
 import {
   setPlayerAvailability,
   getAvailabilityMatch,
-  availabilityOpen,
+  countInPlayers,
 } from "@/lib/availability";
+import { setAvailabilityOpen, setMaxPlayers } from "@/lib/match-admin";
 import { deleteGuestsForHost } from "@/lib/guests";
 
 export interface AvailabilityActionState {
@@ -16,7 +17,31 @@ export interface AvailabilityActionState {
 }
 
 const matchIdSchema = z.coerce.number().int().positive();
+const playerIdSchema = z.coerce.number().int().positive();
 const statusSchema = z.enum(["in", "out"]);
+const maxPlayersSchema = z.coerce
+  .number()
+  .int()
+  .min(1, "Max players must be at least 1.")
+  .max(60, "Max players must be 60 or fewer.");
+
+function errorMessage(err: unknown): string {
+  if (err instanceof z.ZodError) return err.issues.map((i) => i.message).join(" ");
+  return err instanceof Error ? err.message : "Something went wrong.";
+}
+
+async function requireAdmin(): Promise<void> {
+  const session = await auth();
+  const role = session?.user?.role;
+  if (role !== "admin" && role !== "super") {
+    throw new Error("Not authorized");
+  }
+}
+
+function revalidateAvailability(matchId: number): void {
+  revalidatePath(`/matches/${matchId}/availability`);
+  revalidatePath(`/matches/${matchId}/draft`);
+}
 
 export async function setAvailabilityAction(
   _prev: AvailabilityActionState,
@@ -38,13 +63,26 @@ export async function setAvailabilityAction(
     const matchId = matchIdSchema.parse(formData.get("matchId"));
     const status = statusSchema.parse(String(formData.get("status")));
 
-    // Availability is only collected while the matchday is draft/active.
+    // Availability is only collected while the admin has it open.
     const match = await getAvailabilityMatch(matchId);
     if (!match) {
       return { ok: false, message: "Match not found." };
     }
-    if (!availabilityOpen(match.matchdayStatus)) {
+    if (!match.availabilityOpen) {
       return { ok: false, message: "Availability is closed for this match." };
+    }
+
+    // Enforce the per-match cap when a player marks themselves IN. A player
+    // moving to IN is always transitioning from out/pending (the IN button is
+    // disabled when they are already in), so it always adds one to the count.
+    if (status === "in") {
+      const inCount = await countInPlayers(matchId);
+      if (inCount >= match.maxPlayers) {
+        return {
+          ok: false,
+          message: `Match is full (${match.maxPlayers} players). Ask an admin if you need in.`,
+        };
+      }
     }
 
     await setPlayerAvailability(matchId, playerId, status);
@@ -52,19 +90,84 @@ export async function setAvailabilityAction(
       // Guests follow their host — if the host is out, so are their guests.
       await deleteGuestsForHost(matchId, playerId);
     }
-    revalidatePath(`/matches/${matchId}/availability`);
-    revalidatePath(`/matches/${matchId}/draft`);
+    revalidateAvailability(matchId);
     return {
       ok: true,
       message: status === "in" ? "You're marked IN." : "You're marked OUT.",
     };
   } catch (err) {
-    const message =
-      err instanceof z.ZodError
-        ? err.issues.map((i) => i.message).join(" ")
-        : err instanceof Error
-          ? err.message
-          : "Something went wrong.";
-    return { ok: false, message };
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
+/**
+ * Admin override: set any player's availability. Bypasses the open/closed
+ * switch and the per-match cap — the admin is in full control.
+ */
+export async function adminSetAvailabilityAction(
+  _prev: AvailabilityActionState,
+  formData: FormData,
+): Promise<AvailabilityActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const playerId = playerIdSchema.parse(formData.get("playerId"));
+    const status = statusSchema.parse(String(formData.get("status")));
+
+    const match = await getAvailabilityMatch(matchId);
+    if (!match) {
+      return { ok: false, message: "Match not found." };
+    }
+
+    await setPlayerAvailability(matchId, playerId, status);
+    if (status === "out") {
+      await deleteGuestsForHost(matchId, playerId);
+    }
+    revalidateAvailability(matchId);
+    return {
+      ok: true,
+      message: status === "in" ? "Player marked IN." : "Player marked OUT.",
+    };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
+/** Admin: open or close availability responses, independent of matchday status. */
+export async function setAvailabilityOpenAction(
+  _prev: AvailabilityActionState,
+  formData: FormData,
+): Promise<AvailabilityActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const open = String(formData.get("open")) === "true";
+
+    await setAvailabilityOpen(matchId, open);
+    revalidateAvailability(matchId);
+    return {
+      ok: true,
+      message: open ? "Availability opened." : "Availability closed.",
+    };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
+/** Admin: configure the maximum number of players that can mark themselves IN. */
+export async function setMaxPlayersAction(
+  _prev: AvailabilityActionState,
+  formData: FormData,
+): Promise<AvailabilityActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const maxPlayers = maxPlayersSchema.parse(formData.get("maxPlayers"));
+
+    await setMaxPlayers(matchId, maxPlayers);
+    revalidateAvailability(matchId);
+    return { ok: true, message: `Max players set to ${maxPlayers}.` };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
   }
 }

@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
-import { availabilityOpen } from "@/lib/availability";
 import { getLeaderboard } from "@/lib/leaderboard";
 import { getStatsReviewCounts } from "@/lib/stats";
 import { getPlayersAdminData } from "@/lib/players-admin";
@@ -75,7 +74,7 @@ export default async function Home() {
 
       {playerId != null &&
       nextMatch &&
-      availabilityOpen(nextMatch.matchdayStatus) ? (
+      nextMatch.availabilityOpen ? (
         <Link
           href={`/matches/${nextMatch.id}/availability`}
           className="mt-6 block"

@@ -14,7 +14,12 @@ export interface MatchAdmin {
   statsScoringEnabled: boolean;
   status: MatchStatus;
   matchdayStatus: MatchdayStatus;
+  maxPlayers: number;
+  availabilityOpen: boolean;
 }
+
+/** Default cap on how many players can mark themselves IN for a match. */
+export const DEFAULT_MAX_PLAYERS = 18;
 
 export interface CreateMatchInput {
   playedOn: string; // YYYY-MM-DD
@@ -80,12 +85,16 @@ interface MatchAdminRow {
   stats_scoring_enabled: number | null;
   status: string | null;
   matchday_status: string | null;
+  max_players: number | null;
+  availability_open: number | null;
 }
 
 export async function getMatchAdmin(matchId: number): Promise<MatchAdmin | null> {
   const raw = await sqlClient.query(
     `SELECT id, played_on, match_time, num_teams, team_size,
-            stats_scoring_enabled, status, matchday_status
+            stats_scoring_enabled, status, matchday_status,
+            COALESCE(max_players, ${DEFAULT_MAX_PLAYERS}) AS max_players,
+            COALESCE(availability_open, 1) AS availability_open
        FROM matches WHERE id = $1`,
     [matchId],
   );
@@ -101,6 +110,8 @@ export async function getMatchAdmin(matchId: number): Promise<MatchAdmin | null>
     statsScoringEnabled: Number(m.stats_scoring_enabled ?? 1) === 1,
     status: normStatus(m.status),
     matchdayStatus: normMatchday(m.matchday_status),
+    maxPlayers: Number(m.max_players ?? DEFAULT_MAX_PLAYERS),
+    availabilityOpen: Number(m.availability_open ?? 1) === 1,
   };
 }
 
@@ -160,6 +171,28 @@ export async function updateMatchSettings(
       matchId,
     ],
   );
+}
+
+/**
+ * Open or close availability responses for a match. This is a manual admin
+ * switch that is independent of the matchday lifecycle (draft/active/closed).
+ */
+export async function setAvailabilityOpen(
+  matchId: number,
+  open: boolean,
+): Promise<void> {
+  await sqlClient.query(
+    `UPDATE matches SET availability_open = $1 WHERE id = $2`,
+    [open ? 1 : 0, matchId],
+  );
+}
+
+/** Set the maximum number of players that can mark themselves IN. */
+export async function setMaxPlayers(matchId: number, maxPlayers: number): Promise<void> {
+  await sqlClient.query(`UPDATE matches SET max_players = $1 WHERE id = $2`, [
+    maxPlayers,
+    matchId,
+  ]);
 }
 
 /**

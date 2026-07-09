@@ -22,6 +22,8 @@ export interface AvailabilityMatch {
   playedOn: string;
   matchTime: string;
   matchdayStatus: MatchdayStatus;
+  maxPlayers: number;
+  availabilityOpen: boolean;
 }
 
 function normMatchday(value: unknown): MatchdayStatus {
@@ -29,16 +31,16 @@ function normMatchday(value: unknown): MatchdayStatus {
   return s === "active" || s === "closed" ? s : "draft";
 }
 
-/** Availability responses are only collected while the matchday is draft or active. */
-export function availabilityOpen(status: MatchdayStatus): boolean {
-  return status === "draft" || status === "active";
-}
+/** Default cap on how many players can mark themselves IN for a match. */
+export const DEFAULT_MAX_PLAYERS = 18;
 
 interface MatchMetaRow {
   id: number;
   played_on: string | null;
   match_time: string | null;
   matchday_status: string | null;
+  max_players: number | null;
+  availability_open: number | null;
 }
 
 /** Load the minimal match meta needed by the availability screen, or null. */
@@ -46,7 +48,9 @@ export async function getAvailabilityMatch(
   matchId: number,
 ): Promise<AvailabilityMatch | null> {
   const raw = await sqlClient.query(
-    `SELECT id, played_on, match_time, matchday_status
+    `SELECT id, played_on, match_time, matchday_status,
+            COALESCE(max_players, ${DEFAULT_MAX_PLAYERS}) AS max_players,
+            COALESCE(availability_open, 1) AS availability_open
        FROM matches WHERE id = $1`,
     [matchId],
   );
@@ -58,6 +62,8 @@ export async function getAvailabilityMatch(
     playedOn: m.played_on ?? "",
     matchTime: m.match_time ?? "",
     matchdayStatus: normMatchday(m.matchday_status),
+    maxPlayers: Number(m.max_players ?? DEFAULT_MAX_PLAYERS),
+    availabilityOpen: Number(m.availability_open ?? 1) === 1,
   };
 }
 
@@ -132,4 +138,17 @@ export async function setPlayerAvailability(
      DO UPDATE SET status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP`,
     [matchId, playerId, status],
   );
+}
+
+/** How many active players are currently marked IN for a match. */
+export async function countInPlayers(matchId: number): Promise<number> {
+  const raw = await sqlClient.query(
+    `SELECT COUNT(*) AS c
+       FROM match_availability ma
+       JOIN players p ON p.id = ma.player_id AND p.active = 1
+      WHERE ma.match_id = $1 AND ma.status = 'in'`,
+    [matchId],
+  );
+  const rows = raw as { c: number }[];
+  return Number(rows[0]?.c ?? 0);
 }

@@ -8,11 +8,15 @@ import {
   getAvailabilityMatch,
   getAvailabilityAllPlayers,
   summarize,
-  availabilityOpen,
   type MatchdayStatus,
   type PlayerAvailability,
 } from "@/lib/availability";
 import { AvailabilityControls } from "./availability-controls";
+import {
+  AvailabilityOpenToggle,
+  MaxPlayersForm,
+  AdminPlayerControls,
+} from "./availability-admin";
 import { AddGuestForm, GuestList, AdminAddGuestForm } from "./guest-controls";
 import { listGuests, MAX_GUESTS_PER_HOST, type Guest } from "@/lib/guests";
 import { MatchNav } from "../match-nav";
@@ -98,7 +102,7 @@ export default async function AvailabilityPage({
 
   const players = await getAvailabilityAllPlayers(matchId);
   const summary = summarize(players);
-  const open = availabilityOpen(match.matchdayStatus);
+  const open = match.availabilityOpen;
 
   const inPlayers = players.filter((p) => p.status === "in");
   const outPlayers = players.filter((p) => p.status === "out");
@@ -173,6 +177,25 @@ export default async function AvailabilityPage({
 
       {isAdmin ? (
         <section className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
+          <h2 className="text-sm font-semibold">Availability (admin)</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            Open or close responses, set the player cap, and mark players in or out.
+          </p>
+          <div className="mt-3 space-y-4">
+            <AvailabilityOpenToggle matchId={matchId} open={open} />
+            <div className="border-t border-black/5 pt-4 dark:border-white/5">
+              <MaxPlayersForm matchId={matchId} maxPlayers={match.maxPlayers} />
+            </div>
+            <div className="border-t border-black/5 pt-4 dark:border-white/5">
+              <h3 className="mb-2 text-sm font-medium">Set player availability</h3>
+              <AdminPlayerControls matchId={matchId} players={players} />
+            </div>
+          </div>
+        </section>
+      ) : null}
+
+      {isAdmin ? (
+        <section className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
           <h2 className="text-sm font-semibold">Guests (admin)</h2>
           <p className="mt-1 text-xs text-neutral-500">
             Add a guest on behalf of a player, or remove any guest.
@@ -196,7 +219,9 @@ export default async function AvailabilityPage({
             <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
               {summary.inCount + guests.length}
             </div>
-            <div className="text-xs uppercase tracking-wide text-neutral-500">In</div>
+            <div className="text-xs uppercase tracking-wide text-neutral-500">
+              In <span className="normal-case text-neutral-400">/ {match.maxPlayers} max</span>
+            </div>
           </div>
           <div className="rounded-xl border border-black/10 p-4 text-center dark:border-white/10">
             <div className="text-2xl font-semibold text-amber-600 dark:text-amber-400">

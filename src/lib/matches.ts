@@ -12,6 +12,7 @@ export interface MatchListItem {
   status: MatchStatus;
   statsScoringEnabled: boolean;
   playerCount: number;
+  availabilityOpen: boolean;
 }
 
 export interface MatchTeamPlayer {
@@ -68,11 +69,12 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
            COALESCE(m.matchday_status, 'draft') AS matchday_status,
            COALESCE(m.status, 'open') AS status,
            COALESCE(m.stats_scoring_enabled, 1) AS stats_scoring_enabled,
+           COALESCE(m.availability_open, 1) AS availability_open,
            COUNT(mp.player_id) AS player_count
     FROM matches m
     LEFT JOIN match_players mp ON mp.match_id = m.id
     ${restrict ? "WHERE (EXISTS (SELECT 1 FROM match_players mpx WHERE mpx.match_id = m.id AND mpx.player_id = $1) OR COALESCE(m.matchday_status, 'draft') IN ('draft', 'active'))" : ""}
-    GROUP BY m.id, m.played_on, m.match_time, m.matchday_status, m.status, m.stats_scoring_enabled
+    GROUP BY m.id, m.played_on, m.match_time, m.matchday_status, m.status, m.stats_scoring_enabled, m.availability_open
     ORDER BY m.id DESC
     `,
     restrict ? [forPlayerId] : [],
@@ -83,6 +85,7 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
     matchday_status: string;
     status: string;
     stats_scoring_enabled: number;
+    availability_open: number;
     player_count: number;
   }>;
 
@@ -94,6 +97,7 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
     status: normStatus(r.status),
     statsScoringEnabled: Number(r.stats_scoring_enabled) === 1,
     playerCount: Number(r.player_count),
+    availabilityOpen: Number(r.availability_open) === 1,
   }));
 }
 
