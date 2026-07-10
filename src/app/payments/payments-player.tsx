@@ -81,7 +81,7 @@ function GuestPaidToggle({
   );
 }
 
-function MatchCard({ m }: { m: PlayerPaymentMatch }) {
+function MatchCard({ m, showHeader = true }: { m: PlayerPaymentMatch; showHeader?: boolean }) {
   const guestsOwed = m.guests.length * m.share;
   const myOwed = m.inRoster ? m.share : 0;
   const total = myOwed + guestsOwed;
@@ -89,10 +89,16 @@ function MatchCard({ m }: { m: PlayerPaymentMatch }) {
   return (
     <div className="rounded-2xl border border-black/10 p-5 dark:border-white/10">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold">Match {m.matchId}</h2>
-          <p className="text-sm text-neutral-500">{fmtDate(m.playedOn)}</p>
-        </div>
+        {showHeader ? (
+          <div>
+            <h2 className="text-lg font-semibold">Match {m.matchId}</h2>
+            <p className="text-sm text-neutral-500">{fmtDate(m.playedOn)}</p>
+          </div>
+        ) : (
+          <div>
+            <p className="text-sm font-medium">What you owe</p>
+          </div>
+        )}
         <div className="text-right">
           <div className="text-xs uppercase tracking-wide text-neutral-500">You owe</div>
           <div className="text-2xl font-semibold">{total}</div>
@@ -160,6 +166,15 @@ export function PaymentsPlayer({ matches }: { matches: PlayerPaymentMatch[] }) {
       {matches.map((m) => (
         <MatchCard key={m.matchId} m={m} />
       ))}
+    </div>
+  );
+}
+
+/** Single-match variant used inside a match's Payments tab. */
+export function PaymentsPlayerMatch({ match }: { match: PlayerPaymentMatch }) {
+  return (
+    <div className="mt-4">
+      <MatchCard m={match} showHeader={false} />
     </div>
   );
 }

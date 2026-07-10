@@ -243,6 +243,58 @@ export interface PlayerPaymentMatch {
 }
 
 /**
+ * Build the payment view for one match from the player's perspective. Assumes
+ * the caller has already decided the player is involved; returns null only if
+ * the match/meta is missing.
+ */
+async function buildPlayerPaymentMatch(
+  matchId: number,
+  playerId: number,
+): Promise<PlayerPaymentMatch | null> {
+  const [meta, rows] = await Promise.all([getPaymentMeta(matchId), getPaymentRows(matchId)]);
+  if (!meta) return null;
+  const guestRows = (await sqlClient.query(
+    `SELECT id, name, host_player_id, paid FROM match_guests WHERE match_id = $1`,
+    [matchId],
+  )) as unknown as { id: number; name: string; host_player_id: number; paid: number }[];
+  const summary = computeSummary(
+    rows,
+    meta.totalPayment,
+    guestRows.map((g) => g.paid === 1),
+  );
+  const mine = rows.find((r) => r.playerId === playerId);
+  const myGuests = guestRows.filter((g) => g.host_player_id === playerId);
+  return {
+    matchId,
+    playedOn: meta.playedOn,
+    paymentName: meta.paymentName,
+    paymentMobile: meta.paymentMobile,
+    paymentMethod: meta.paymentMethod,
+    paymentNote: meta.paymentNote,
+    totalPayment: meta.totalPayment,
+    share: summary.sharePerPlayer,
+    inRoster: Boolean(mine),
+    paid: mine?.paid ?? false,
+    guests: myGuests.map((g) => ({ id: g.id, name: g.name, paid: g.paid === 1 })),
+  };
+}
+
+/**
+ * The player's payment view for one match, or null when payments are closed or
+ * the player has nothing to pay (not on the roster and no guests).
+ */
+export async function getPlayerPaymentForMatch(
+  matchId: number,
+  playerId: number,
+): Promise<PlayerPaymentMatch | null> {
+  if (!(await isPaymentsActive(matchId))) return null;
+  const view = await buildPlayerPaymentMatch(matchId, playerId);
+  if (!view) return null;
+  if (!view.inRoster && view.guests.length === 0) return null;
+  return view;
+}
+
+/**
  * Every match with self-service payments open that the player is involved in
  * (on the roster, or hosting a guest), with their own share, paid status and
  * their guests' paid status.
@@ -261,32 +313,8 @@ export async function getPlayerPaymentMatches(playerId: number): Promise<PlayerP
 
   const result: PlayerPaymentMatch[] = [];
   for (const { id } of matchRows) {
-    const [meta, rows] = await Promise.all([getPaymentMeta(id), getPaymentRows(id)]);
-    if (!meta) continue;
-    const guestRows = (await sqlClient.query(
-      `SELECT id, name, host_player_id, paid FROM match_guests WHERE match_id = $1`,
-      [id],
-    )) as unknown as { id: number; name: string; host_player_id: number; paid: number }[];
-    const summary = computeSummary(
-      rows,
-      meta.totalPayment,
-      guestRows.map((g) => g.paid === 1),
-    );
-    const mine = rows.find((r) => r.playerId === playerId);
-    const myGuests = guestRows.filter((g) => g.host_player_id === playerId);
-    result.push({
-      matchId: id,
-      playedOn: meta.playedOn,
-      paymentName: meta.paymentName,
-      paymentMobile: meta.paymentMobile,
-      paymentMethod: meta.paymentMethod,
-      paymentNote: meta.paymentNote,
-      totalPayment: meta.totalPayment,
-      share: summary.sharePerPlayer,
-      inRoster: Boolean(mine),
-      paid: mine?.paid ?? false,
-      guests: myGuests.map((g) => ({ id: g.id, name: g.name, paid: g.paid === 1 })),
-    });
+    const view = await buildPlayerPaymentMatch(id, playerId);
+    if (view) result.push(view);
   }
   return result;
 }

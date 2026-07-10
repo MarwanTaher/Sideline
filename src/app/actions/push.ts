@@ -19,7 +19,7 @@ import {
   getNotificationType,
   type AudienceMode,
 } from "@/lib/notification-types";
-import { getUnpaidPlayerIds } from "@/lib/payments";
+import { getUnpaidPlayerIds, isPaymentsActive } from "@/lib/payments";
 
 async function requireAdmin(): Promise<boolean> {
   const session = await auth();
@@ -87,6 +87,12 @@ export async function sendPaymentReminderAction(
 ): Promise<{ ok: boolean; message: string }> {
   if (!(await requireAdmin())) return { ok: false, message: "Not authorized." };
 
+  // Players can only see and act on payments once they are open, so don't
+  // remind about something they can't reach.
+  if (!(await isPaymentsActive(matchId))) {
+    return { ok: false, message: "Open payments for players before sending reminders." };
+  }
+
   const unpaid = await getUnpaidPlayerIds(matchId);
   if (unpaid.length === 0) {
     return { ok: true, message: "Everyone has already paid." };
@@ -97,7 +103,7 @@ export async function sendPaymentReminderAction(
     {
       title: "Payment reminder \uD83D\uDCB0",
       body: `You have an outstanding payment for match ${matchId}. Please settle up.`,
-      url: "/payments",
+      url: `/matches/${matchId}/payments`,
       tag: `payment-reminder-${matchId}`,
     },
     { playerIds: unpaid },
