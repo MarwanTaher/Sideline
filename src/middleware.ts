@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 /** Routes that never require a session. */
-const PUBLIC_PATHS = ["/login", "/register"];
+const PUBLIC_PATHS = ["/login", "/register", "/reset", "/magic"];
 
 /**
  * Auth.js sets one of these cookies once signed in. We only check for presence
