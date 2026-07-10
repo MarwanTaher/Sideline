@@ -20,6 +20,7 @@ export const matches = pgTable("matches", {
 	matchTime: text("match_time").default("").notNull(),
 	maxPlayers: integer("max_players").default(18).notNull(),
 	availabilityOpen: integer("availability_open").default(1).notNull(),
+	paymentsActive: integer("payments_active").default(0).notNull(),
 }, (table) => [
 	index("idx_matches_status_played_on").using("btree", table.status.asc().nullsLast().op("text_ops"), table.playedOn.asc().nullsLast().op("text_ops")),
 	check("matches_num_teams_check", sql`num_teams = ANY (ARRAY[2, 3])`),

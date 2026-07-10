@@ -5,10 +5,12 @@ import {
   computeSummary,
   getPaymentMeta,
   getPaymentRows,
+  getPlayerPaymentMatches,
   listMatchesForPayments,
 } from "@/lib/payments";
 import { listGuests } from "@/lib/guests";
 import { PaymentsAdmin } from "./payments-admin";
+import { PaymentsPlayer } from "./payments-player";
 import { SectionIcon } from "@/components/section-icon";
 
 export const metadata = {
@@ -27,7 +29,23 @@ export default async function PaymentsPage({
 
   const role = session.user.role;
   const isAdmin = await isAdminView(role === "admin" || role === "super");
-  if (!isAdmin) redirect("/leaderboard");
+  if (!isAdmin) {
+    const playerId = session.user.playerId;
+    const playerMatches =
+      playerId == null ? [] : await getPlayerPaymentMatches(playerId);
+    return (
+      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
+        <div className="flex items-center gap-3">
+          <SectionIcon name="payments" className="h-9 w-9" />
+          <h1 className="text-2xl font-semibold tracking-tight">Payments</h1>
+        </div>
+        <p className="mt-1 text-sm text-neutral-500">
+          Your share for matches where payments are open. Mark yourself paid once you&apos;ve sent it.
+        </p>
+        <PaymentsPlayer matches={playerMatches} />
+      </main>
+    );
+  }
 
   const matches = await listMatchesForPayments();
 
@@ -63,6 +81,7 @@ export default async function PaymentsPage({
     paymentMobile: "",
     paymentMethod: "",
     paymentNote: "",
+    paymentsActive: false,
   };
 
   return (

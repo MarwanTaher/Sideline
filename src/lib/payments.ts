@@ -9,6 +9,7 @@ export interface PaymentMeta {
   paymentMobile: string;
   paymentMethod: string;
   paymentNote: string;
+  paymentsActive: boolean;
 }
 
 export interface PaymentRow {
@@ -53,6 +54,7 @@ interface MetaRow {
   payment_mobile: string;
   payment_method: string;
   payment_note: string;
+  payments_active: number;
 }
 
 export async function getPaymentMeta(matchId: number): Promise<PaymentMeta | null> {
@@ -62,7 +64,8 @@ export async function getPaymentMeta(matchId: number): Promise<PaymentMeta | nul
             COALESCE(payment_name, '') AS payment_name,
             COALESCE(payment_mobile, '') AS payment_mobile,
             COALESCE(payment_method, '') AS payment_method,
-            COALESCE(payment_note, '') AS payment_note
+            COALESCE(payment_note, '') AS payment_note,
+            COALESCE(payments_active, 0) AS payments_active
      FROM matches WHERE id = $1`,
     [matchId],
   )) as unknown as MetaRow[];
@@ -76,6 +79,7 @@ export async function getPaymentMeta(matchId: number): Promise<PaymentMeta | nul
     paymentMobile: r.payment_mobile,
     paymentMethod: r.payment_method,
     paymentNote: r.payment_note,
+    paymentsActive: Number(r.payments_active) === 1,
   };
 }
 
@@ -177,4 +181,112 @@ export async function resetAllUnpaid(matchId: number): Promise<void> {
     `UPDATE payments SET paid = 0, updated_at = CURRENT_TIMESTAMP WHERE match_id = $1`,
     [matchId],
   );
+}
+
+/** Open or close self-service payments for a match (players see it on their tab). */
+export async function setPaymentsActive(matchId: number, active: boolean): Promise<void> {
+  await sqlClient.query(`UPDATE matches SET payments_active = $1 WHERE id = $2`, [
+    active ? 1 : 0,
+    matchId,
+  ]);
+}
+
+/** Whether self-service payments are currently open for a match. */
+export async function isPaymentsActive(matchId: number): Promise<boolean> {
+  const rows = (await sqlClient.query(
+    `SELECT COALESCE(payments_active, 0) AS a FROM matches WHERE id = $1`,
+    [matchId],
+  )) as unknown as { a: number }[];
+  return Number(rows[0]?.a ?? 0) === 1;
+}
+
+/** Is the player on the confirmed roster for a match? */
+export async function isPlayerInMatch(matchId: number, playerId: number): Promise<boolean> {
+  const rows = (await sqlClient.query(
+    `SELECT 1 FROM match_players WHERE match_id = $1 AND player_id = $2`,
+    [matchId, playerId],
+  )) as unknown as unknown[];
+  return rows.length > 0;
+}
+
+/** Does the player host this guest for this match? */
+export async function playerHostsGuest(
+  matchId: number,
+  playerId: number,
+  guestId: number,
+): Promise<boolean> {
+  const rows = (await sqlClient.query(
+    `SELECT 1 FROM match_guests WHERE id = $1 AND match_id = $2 AND host_player_id = $3`,
+    [guestId, matchId, playerId],
+  )) as unknown as unknown[];
+  return rows.length > 0;
+}
+
+export interface PlayerGuestPayment {
+  id: number;
+  name: string;
+  paid: boolean;
+}
+
+export interface PlayerPaymentMatch {
+  matchId: number;
+  playedOn: string;
+  paymentName: string;
+  paymentMobile: string;
+  paymentMethod: string;
+  paymentNote: string;
+  totalPayment: number;
+  share: number;
+  inRoster: boolean;
+  paid: boolean;
+  guests: PlayerGuestPayment[];
+}
+
+/**
+ * Every match with self-service payments open that the player is involved in
+ * (on the roster, or hosting a guest), with their own share, paid status and
+ * their guests' paid status.
+ */
+export async function getPlayerPaymentMatches(playerId: number): Promise<PlayerPaymentMatch[]> {
+  const matchRows = (await sqlClient.query(
+    `SELECT DISTINCT m.id
+       FROM matches m
+       LEFT JOIN match_players mp ON mp.match_id = m.id AND mp.player_id = $1
+       LEFT JOIN match_guests mg ON mg.match_id = m.id AND mg.host_player_id = $1
+      WHERE COALESCE(m.payments_active, 0) = 1
+        AND (mp.player_id IS NOT NULL OR mg.host_player_id IS NOT NULL)
+      ORDER BY m.id DESC`,
+    [playerId],
+  )) as unknown as { id: number }[];
+
+  const result: PlayerPaymentMatch[] = [];
+  for (const { id } of matchRows) {
+    const [meta, rows] = await Promise.all([getPaymentMeta(id), getPaymentRows(id)]);
+    if (!meta) continue;
+    const guestRows = (await sqlClient.query(
+      `SELECT id, name, host_player_id, paid FROM match_guests WHERE match_id = $1`,
+      [id],
+    )) as unknown as { id: number; name: string; host_player_id: number; paid: number }[];
+    const summary = computeSummary(
+      rows,
+      meta.totalPayment,
+      guestRows.map((g) => g.paid === 1),
+    );
+    const mine = rows.find((r) => r.playerId === playerId);
+    const myGuests = guestRows.filter((g) => g.host_player_id === playerId);
+    result.push({
+      matchId: id,
+      playedOn: meta.playedOn,
+      paymentName: meta.paymentName,
+      paymentMobile: meta.paymentMobile,
+      paymentMethod: meta.paymentMethod,
+      paymentNote: meta.paymentNote,
+      totalPayment: meta.totalPayment,
+      share: summary.sharePerPlayer,
+      inRoster: Boolean(mine),
+      paid: mine?.paid ?? false,
+      guests: myGuests.map((g) => ({ id: g.id, name: g.name, paid: g.paid === 1 })),
+    });
+  }
+  return result;
 }

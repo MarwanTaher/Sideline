@@ -45,6 +45,7 @@ export default function MainNav({
       activePaths: ["/awards"],
       show: true,
     },
+    { href: "/payments", label: "Payments", show: !adminView },
   ];
 
   const adminItems: NavItem[] = [

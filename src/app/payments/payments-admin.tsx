@@ -8,6 +8,7 @@ import {
   saveTotalAction,
   togglePaidAction,
   toggleGuestPaidAction,
+  setPaymentsActiveAction,
   type PaymentActionState,
 } from "./actions";
 import { sendPaymentReminderAction } from "@/app/actions/push";
@@ -49,6 +50,39 @@ function TotalForm({ matchId, total }: { matchId: number; total: number }) {
         Save total
       </Button>
       <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+    </form>
+  );
+}
+
+function ActivateForm({ matchId, active }: { matchId: number; active: boolean }) {
+  const [state, action, pending] = useActionState(setPaymentsActiveAction, INITIAL);
+  useRefreshOnOk(state);
+  return (
+    <form
+      action={action}
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/10 p-4 dark:border-white/10"
+    >
+      <input type="hidden" name="matchId" value={matchId} />
+      <input type="hidden" name="active" value={active ? "0" : "1"} />
+      <div>
+        <p className="text-sm font-medium">Self-service payments</p>
+        <p className="mt-0.5 text-xs text-neutral-500">
+          {active
+            ? "Players can see their share and mark themselves paid on their Payments tab."
+            : "Closed — players cannot see or update payments for this match."}
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <Badge tone={active ? "success" : "neutral"}>{active ? "Open" : "Closed"}</Badge>
+        <Button
+          type="submit"
+          variant={active ? "secondary" : "success"}
+          pending={pending}
+          pendingLabel="Saving…"
+        >
+          {active ? "Close payments" : "Open for players"}
+        </Button>
+      </div>
     </form>
   );
 }
@@ -261,10 +295,9 @@ export function PaymentsAdmin({
         </select>
       </label>
 
+      <ActivateForm matchId={selectedMatchId} active={meta.paymentsActive} />
       <TotalForm matchId={selectedMatchId} total={meta.totalPayment} />
-      <DetailsForm matchId={selectedMatchId} meta={meta} />
-
-      {rows.length === 0 && guests.length === 0 ? (
+      <DetailsForm matchId={selectedMatchId} meta={meta} />      {rows.length === 0 && guests.length === 0 ? (
         <p className="text-sm text-neutral-500">No players in this match.</p>
       ) : (
         <div>

@@ -8,6 +8,10 @@ import {
   savePaymentDetails,
   savePaymentTotal,
   setPaid,
+  setPaymentsActive,
+  isPaymentsActive,
+  isPlayerInMatch,
+  playerHostsGuest,
 } from "@/lib/payments";
 import { setGuestPaid } from "@/lib/guests";
 
@@ -116,6 +120,91 @@ export async function resetUnpaidAction(
     await resetAllUnpaid(matchId);
     revalidatePath("/payments");
     return { ok: true, message: "All players marked unpaid for this match." };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** Admin: open or close self-service payments for a match. */
+export async function setPaymentsActiveAction(
+  _prev: PaymentActionState,
+  formData: FormData,
+): Promise<PaymentActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const active = formData.get("active") === "1";
+    await setPaymentsActive(matchId, active);
+    revalidatePath("/payments");
+    return {
+      ok: true,
+      message: active ? "Payments opened for players." : "Payments closed.",
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Player self-service: mark their OWN payment paid/unpaid. Only allowed while
+ * the admin has payments open for the match and only for the signed-in player.
+ */
+export async function playerSetPaidAction(
+  _prev: PaymentActionState,
+  formData: FormData,
+): Promise<PaymentActionState> {
+  try {
+    const session = await auth();
+    const playerId = session?.user?.playerId;
+    if (playerId == null) {
+      return { ok: false, message: "Only player accounts can update payments." };
+    }
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const paid = formData.get("paid") === "1";
+
+    if (!(await isPaymentsActive(matchId))) {
+      return { ok: false, message: "Payments are closed for this match." };
+    }
+    if (!(await isPlayerInMatch(matchId, playerId))) {
+      return { ok: false, message: "You are not on the roster for this match." };
+    }
+
+    await setPaid(matchId, playerId, paid);
+    revalidatePath("/payments");
+    return { ok: true, message: paid ? "Marked as paid." : "Marked as not paid." };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Player self-service: mark one of THEIR OWN guests paid/unpaid, subject to the
+ * same open-payments guard and host ownership check.
+ */
+export async function playerSetGuestPaidAction(
+  _prev: PaymentActionState,
+  formData: FormData,
+): Promise<PaymentActionState> {
+  try {
+    const session = await auth();
+    const playerId = session?.user?.playerId;
+    if (playerId == null) {
+      return { ok: false, message: "Only player accounts can update payments." };
+    }
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const guestId = guestIdSchema.parse(formData.get("guestId"));
+    const paid = formData.get("paid") === "1";
+
+    if (!(await isPaymentsActive(matchId))) {
+      return { ok: false, message: "Payments are closed for this match." };
+    }
+    if (!(await playerHostsGuest(matchId, playerId, guestId))) {
+      return { ok: false, message: "That guest is not yours." };
+    }
+
+    await setGuestPaid(matchId, guestId, paid);
+    revalidatePath("/payments");
+    return { ok: true, message: paid ? "Guest marked as paid." : "Guest marked as not paid." };
   } catch (err) {
     return fail(err);
   }
