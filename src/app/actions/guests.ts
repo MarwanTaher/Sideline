@@ -3,7 +3,8 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { addGuest, removeGuest, GuestError, SKILL_LEVELS } from "@/lib/guests";
+import { addGuest, removeGuest, GuestError, SKILL_LEVELS, countGuests } from "@/lib/guests";
+import { getAvailabilityMatch, countInPlayers } from "@/lib/availability";
 import { POSITIONS, type Position } from "@/lib/positions";
 
 export interface GuestActionState {
@@ -65,6 +66,23 @@ export async function addGuestAction(
       hostPlayerId = session.user.playerId;
     } else {
       throw new GuestError("Select a host player.");
+    }
+
+    // A guest fills a spot too, so a self-service guest cannot push the squad
+    // (players IN + guests) past the match cap. Admins bypass this.
+    if (!isAdmin) {
+      const match = await getAvailabilityMatch(matchId);
+      if (match) {
+        const [inCount, guestCount] = await Promise.all([
+          countInPlayers(matchId),
+          countGuests(matchId),
+        ]);
+        if (inCount + guestCount >= match.maxPlayers) {
+          throw new GuestError(
+            `Match is full (${match.maxPlayers} players). Ask an admin to add a guest.`,
+          );
+        }
+      }
     }
 
     await addGuest({ matchId, hostPlayerId, name, position, skillKey });

@@ -5,11 +5,12 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import {
   setPlayerAvailability,
+  clearPlayerAvailability,
   getAvailabilityMatch,
   countInPlayers,
 } from "@/lib/availability";
 import { setAvailabilityOpen, setMaxPlayers } from "@/lib/match-admin";
-import { deleteGuestsForHost } from "@/lib/guests";
+import { deleteGuestsForHost, countGuests } from "@/lib/guests";
 
 export interface AvailabilityActionState {
   ok: boolean;
@@ -19,6 +20,8 @@ export interface AvailabilityActionState {
 const matchIdSchema = z.coerce.number().int().positive();
 const playerIdSchema = z.coerce.number().int().positive();
 const statusSchema = z.enum(["in", "out"]);
+// Admins may additionally reset a player back to "pending" (no stored response).
+const adminStatusSchema = z.enum(["in", "out", "pending"]);
 const maxPlayersSchema = z.coerce
   .number()
   .int()
@@ -72,12 +75,18 @@ export async function setAvailabilityAction(
       return { ok: false, message: "Availability is closed for this match." };
     }
 
-    // Enforce the per-match cap when a player marks themselves IN. A player
-    // moving to IN is always transitioning from out/pending (the IN button is
-    // disabled when they are already in), so it always adds one to the count.
+    // Enforce the per-match cap when a player marks themselves IN. The cap
+    // counts the whole squad — players marked IN plus their guests — because
+    // that is what fills the available spots (and what the "In / max" figure
+    // shows). A player moving to IN is always transitioning from out/pending
+    // (the IN button is disabled when they are already in), so it always adds
+    // one to the count.
     if (status === "in") {
-      const inCount = await countInPlayers(matchId);
-      if (inCount >= match.maxPlayers) {
+      const [inCount, guestCount] = await Promise.all([
+        countInPlayers(matchId),
+        countGuests(matchId),
+      ]);
+      if (inCount + guestCount >= match.maxPlayers) {
         return {
           ok: false,
           message: `Match is full (${match.maxPlayers} players). Ask an admin if you need in.`,
@@ -112,21 +121,31 @@ export async function adminSetAvailabilityAction(
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
     const playerId = playerIdSchema.parse(formData.get("playerId"));
-    const status = statusSchema.parse(String(formData.get("status")));
+    const status = adminStatusSchema.parse(String(formData.get("status")));
 
     const match = await getAvailabilityMatch(matchId);
     if (!match) {
       return { ok: false, message: "Match not found." };
     }
 
-    await setPlayerAvailability(matchId, playerId, status);
-    if (status === "out") {
+    if (status === "pending") {
+      await clearPlayerAvailability(matchId, playerId);
+    } else {
+      await setPlayerAvailability(matchId, playerId, status);
+    }
+    // Guests follow their host off the sheet when the host is no longer IN.
+    if (status === "out" || status === "pending") {
       await deleteGuestsForHost(matchId, playerId);
     }
     revalidateAvailability(matchId);
     return {
       ok: true,
-      message: status === "in" ? "Player marked IN." : "Player marked OUT.",
+      message:
+        status === "in"
+          ? "Player marked IN."
+          : status === "out"
+            ? "Player marked OUT."
+            : "Player reset to pending.",
     };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };

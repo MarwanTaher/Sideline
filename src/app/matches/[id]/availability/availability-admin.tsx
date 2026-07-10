@@ -165,6 +165,21 @@ export function AdminPlayerControls({
                   OUT
                 </Button>
               </form>
+              <form action={formAction}>
+                <input type="hidden" name="matchId" value={matchId} />
+                <input type="hidden" name="playerId" value={p.playerId} />
+                <input type="hidden" name="status" value="pending" />
+                <Button
+                  type="submit"
+                  variant="ghost"
+                  className="px-2 py-1 text-xs"
+                  disabled={p.status === "pending"}
+                  pending={pending}
+                  pendingLabel="…"
+                >
+                  PENDING
+                </Button>
+              </form>
             </div>
           </li>
         ))}

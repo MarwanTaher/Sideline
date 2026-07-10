@@ -140,6 +140,20 @@ export async function setPlayerAvailability(
   );
 }
 
+/**
+ * Clear a player's stored availability for a match, returning them to the
+ * synthetic "pending" state (no row = pending).
+ */
+export async function clearPlayerAvailability(
+  matchId: number,
+  playerId: number,
+): Promise<void> {
+  await sqlClient.query(
+    `DELETE FROM match_availability WHERE match_id = $1 AND player_id = $2`,
+    [matchId, playerId],
+  );
+}
+
 /** How many active players are currently marked IN for a match. */
 export async function countInPlayers(matchId: number): Promise<number> {
   const raw = await sqlClient.query(
