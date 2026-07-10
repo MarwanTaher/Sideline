@@ -9,6 +9,20 @@ import { requestResetAction } from "./actions";
 
 type PlayerOption = { id: number; name: string };
 
+/**
+ * Resolve a safe post-login destination. Falls back to the dashboard ("/")
+ * when the callbackUrl is empty or not a same-site relative path — an empty
+ * string would otherwise make `router.push("")` reload the login page and
+ * appear stuck.
+ */
+function resolveTarget(callbackUrl: string | undefined): string {
+  if (!callbackUrl) return "/";
+  if (!callbackUrl.startsWith("/") || callbackUrl.startsWith("//") || callbackUrl.startsWith("/\\")) {
+    return "/";
+  }
+  return callbackUrl;
+}
+
 export default function LoginForm({
   players,
   callbackUrl = "/",
@@ -17,6 +31,7 @@ export default function LoginForm({
   callbackUrl?: string;
 }) {
   const router = useRouter();
+  const target = resolveTarget(callbackUrl);
   const [playerId, setPlayerId] = useState<string>(
     players[0]?.id.toString() ?? "",
   );
@@ -43,7 +58,7 @@ export default function LoginForm({
       return;
     }
 
-    router.push(callbackUrl);
+    router.push(target);
     router.refresh();
   }
 
