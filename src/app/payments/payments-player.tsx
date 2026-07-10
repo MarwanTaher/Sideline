@@ -8,7 +8,7 @@ import {
   type PaymentActionState,
 } from "./actions";
 import type { PlayerPaymentMatch } from "@/lib/payments";
-import { fmtDate } from "@/lib/matches";
+import { fmtDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FeedbackMessage } from "@/components/ui/banner";
