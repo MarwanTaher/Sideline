@@ -12,6 +12,19 @@ const IQR_MULTIPLIER: Record<OutlierSensitivity, number> = {
   lenient: 2.0,
 };
 
+/**
+ * Minimum half-width of the acceptable band around the median, used as a floor
+ * when the IQR is tiny/zero (e.g. most voters agree on one rating). Prevents
+ * harmless small deviations (4 or 6 around a cluster of 5s) from being flagged
+ * while still catching genuinely wild votes (0, 1 or 9, 10). The band is only
+ * ever widened by this floor, never narrowed, so it can only reduce flags.
+ */
+const MIN_HALF_BAND: Record<OutlierSensitivity, number> = {
+  strict: 1.5, // keep median ±1; flag deviations of 2+ (…3,7…)
+  normal: 2.5, // keep median ±2; flag deviations of 3+ (…2,8…)
+  lenient: 3.5, // keep median ±3; flag deviations of 4+ (…1,9…)
+};
+
 export interface VoteControls {
   rating: number;
   includeInCalculation: number;
@@ -452,24 +465,51 @@ interface OutlierRawRow {
   rating: number;
   include_in_calculation: number;
   scope_status: string;
+  voter_name: string;
+  voted_for_name: string;
+}
+
+/** A vote the detector considers an outlier, with the acceptable band. */
+export interface OutlierCandidate {
+  matchId: number;
+  voterId: number;
+  votedForId: number;
+  voterName: string;
+  votedForName: string;
+  rating: number;
+  /** Inclusive-ish acceptable band the rating fell outside of. */
+  low: number;
+  high: number;
+  /** Median rating of the bucket (the group's consensus). */
+  median: number;
+  includeInCalculation: number;
+  scopeStatus: ScopeStatus;
+  /** Already excluded from the calculation (a re-run would be a no-op). */
+  alreadyOutOfScope: boolean;
 }
 
 /**
- * Flag statistical outlier votes (per match+target bucket via IQR fences) as
- * out_of_scope. Buckets with fewer than 4 votes are skipped. matchId=0 scans
- * every match. Returns the number of votes flagged.
+ * Detect statistical outlier votes (per match+target bucket via IQR fences,
+ * with a median floor so tight clusters only flag genuinely wild votes).
+ * Buckets with fewer than 4 votes are skipped. matchId=0 scans every match.
+ * Pure read — does not modify any data. Used for the admin preview and as the
+ * basis for {@link autoFlagOutliers}.
  */
-export async function autoFlagOutliers(
+export async function detectOutliers(
   matchId: number,
   sensitivity: OutlierSensitivity,
-  actor: string,
-): Promise<number> {
+): Promise<OutlierCandidate[]> {
   const mult = IQR_MULTIPLIER[sensitivity];
+  const minHalf = MIN_HALF_BAND[sensitivity];
   const raw = (await sqlClient.query(
-    `SELECT match_id, voter_id, voted_for_id, rating,
-            COALESCE(include_in_calculation, 1) AS include_in_calculation,
-            COALESCE(scope_status, 'in_scope') AS scope_status
-     FROM votes`,
+    `SELECT v.match_id, v.voter_id, v.voted_for_id, v.rating,
+            COALESCE(v.include_in_calculation, 1) AS include_in_calculation,
+            COALESCE(v.scope_status, 'in_scope') AS scope_status,
+            voter.name AS voter_name,
+            target.name AS voted_for_name
+       FROM votes v
+       JOIN players voter ON voter.id = v.voter_id
+       JOIN players target ON target.id = v.voted_for_id`,
   )) as unknown as OutlierRawRow[];
 
   const rows = raw.filter((r) => matchId === 0 || r.match_id === matchId);
@@ -481,41 +521,77 @@ export async function autoFlagOutliers(
     else grouped.set(gkey, [r]);
   }
 
-  const flagged: OutlierRawRow[] = [];
+  const candidates: OutlierCandidate[] = [];
   for (const bucket of grouped.values()) {
     if (bucket.length < 4) continue;
     const vals = bucket.map((x) => x.rating);
     const q1 = percentile(vals, 0.25);
     const q3 = percentile(vals, 0.75);
     const iqr = q3 - q1;
-    const low = q1 - mult * iqr;
-    const high = q3 + mult * iqr;
+    const med = percentile(vals, 0.5);
+    // Use whichever band is wider: the IQR fences or the median floor. This
+    // keeps small deviations around a tight cluster from being flagged while
+    // still catching wild votes.
+    const low = Math.min(q1 - mult * iqr, med - minHalf);
+    const high = Math.max(q3 + mult * iqr, med + minHalf);
     for (const vote of bucket) {
-      if (vote.rating < low || vote.rating > high) flagged.push(vote);
+      if (vote.rating < low || vote.rating > high) {
+        candidates.push({
+          matchId: vote.match_id,
+          voterId: vote.voter_id,
+          votedForId: vote.voted_for_id,
+          voterName: vote.voter_name,
+          votedForName: vote.voted_for_name,
+          rating: vote.rating,
+          low,
+          high,
+          median: med,
+          includeInCalculation: vote.include_in_calculation,
+          scopeStatus: normScope(vote.scope_status),
+          alreadyOutOfScope: vote.include_in_calculation === 0,
+        });
+      }
     }
   }
+  return candidates;
+}
 
-  for (const row of flagged) {
+/**
+ * Flag statistical outlier votes as out_of_scope. Buckets with fewer than 4
+ * votes are skipped. matchId=0 scans every match. Votes already excluded from
+ * the calculation are left untouched (so re-runs are idempotent). Returns the
+ * number of votes newly flagged.
+ */
+export async function autoFlagOutliers(
+  matchId: number,
+  sensitivity: OutlierSensitivity,
+  actor: string,
+): Promise<number> {
+  const candidates = await detectOutliers(matchId, sensitivity);
+  let flagged = 0;
+  for (const c of candidates) {
+    if (c.alreadyOutOfScope) continue;
     await sqlClient.query(
       `UPDATE votes
        SET include_in_calculation = 0, scope_status = 'out_of_scope', updated_at = CURRENT_TIMESTAMP
        WHERE match_id = $1 AND voter_id = $2 AND voted_for_id = $3`,
-      [row.match_id, row.voter_id, row.voted_for_id],
+      [c.matchId, c.voterId, c.votedForId],
     );
     await logVoteAudit(
-      row.match_id,
-      row.voter_id,
-      row.voted_for_id,
+      c.matchId,
+      c.voterId,
+      c.votedForId,
       "mark_out_of_scope",
       actor,
       {
-        rating: row.rating,
-        includeInCalculation: row.include_in_calculation,
-        scopeStatus: normScope(row.scope_status),
+        rating: c.rating,
+        includeInCalculation: c.includeInCalculation,
+        scopeStatus: c.scopeStatus,
       },
-      { rating: row.rating, includeInCalculation: 0, scopeStatus: "out_of_scope" },
-      `Detected as statistical outlier (IQR x ${mult})`,
+      { rating: c.rating, includeInCalculation: 0, scopeStatus: "out_of_scope" },
+      `Detected as statistical outlier (${sensitivity})`,
     );
+    flagged++;
   }
-  return flagged.length;
+  return flagged;
 }

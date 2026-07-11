@@ -4,16 +4,19 @@ import { useEffect, useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import {
   addVoteAction,
-  autoFlagAction,
+  applyAutoFlagAction,
   deleteVoteAction,
   editVoteAction,
   excludeVoteAction,
+  previewAutoFlagAction,
   resetVoteAction,
+  type AutoFlagState,
   type VoteActionState,
 } from "./actions";
 import { SCOPE_OPTIONS } from "@/lib/vote-admin-constants";
 import type {
   MatchOption,
+  OutlierSensitivity,
   ParticipantOption,
   VoteAuditRow,
   VoteReviewCounts,
@@ -264,29 +267,153 @@ function AddPanel({
   );
 }
 
-function AutoFlagPanel({ matchId }: { matchId: number }) {
-  const [state, action, pending] = useActionState(autoFlagAction, INITIAL);
-  useRefreshOnOk(state);
+const AUTO_FLAG_INITIAL: AutoFlagState = {
+  ok: false,
+  message: "",
+  candidates: null,
+  sensitivity: null,
+  matchId: null,
+};
+
+function AutoFlagPanel({
+  matches,
+  selectedMatchId,
+}: {
+  matches: MatchOption[];
+  selectedMatchId: number;
+}) {
+  const router = useRouter();
+  const [previewState, previewAction, previewPending] = useActionState(
+    previewAutoFlagAction,
+    AUTO_FLAG_INITIAL,
+  );
+  const [applyState, applyAction, applyPending] = useActionState(
+    applyAutoFlagAction,
+    AUTO_FLAG_INITIAL,
+  );
+  const [matchId, setMatchId] = useState<number>(selectedMatchId);
+  const [sensitivity, setSensitivity] = useState<OutlierSensitivity>("normal");
+
+  useEffect(() => {
+    if (applyState.ok) router.refresh();
+  }, [applyState, router]);
+
+  const candidates = previewState.candidates ?? [];
+  const toFlag = candidates.filter((c) => !c.alreadyOutOfScope);
+  // The Apply button reuses exactly what was previewed.
+  const applyMatchId = previewState.matchId ?? matchId;
+  const applySensitivity = previewState.sensitivity ?? sensitivity;
+
   return (
-    <form action={action} className="rounded-xl border border-black/10 p-4 dark:border-white/10">
-      <input type="hidden" name="matchId" value={matchId} />
-      <p className="text-sm text-neutral-500">
-        Detect suspicious votes that differ strongly from the group for the same player in the same match
-        (IQR fences). Buckets with fewer than 4 votes are skipped.
-      </p>
-      <label className="mt-3 block max-w-60 text-sm">
-        <span className="font-medium">Outlier sensitivity</span>
-        <select name="sensitivity" defaultValue="normal" className={inputCls}>
-          <option value="strict">strict (flags more)</option>
-          <option value="normal">normal</option>
-          <option value="lenient">lenient (flags fewer)</option>
-        </select>
-      </label>
-      <button type="submit" disabled={pending} className={`mt-3 ${btnPrimary}`}>
-        {pending ? "Scanning…" : "Mark detected out-of-scope votes"}
-      </button>
-      <Banner state={state} />
-    </form>
+    <div className="space-y-4">
+      <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+        <p className="text-sm text-neutral-500">
+          Detect suspicious votes that differ strongly from the group for the same player in the same
+          match. Buckets with fewer than 4 votes are skipped. Preview first, then apply. New votes are
+          also scanned automatically as they come in.
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            <span className="font-medium">Match to scan</span>
+            <select
+              value={matchId}
+              onChange={(e) => setMatchId(Number(e.target.value))}
+              className={inputCls}
+            >
+              <option value={0}>All matches</option>
+              {matches.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm">
+            <span className="font-medium">Outlier sensitivity</span>
+            <select
+              value={sensitivity}
+              onChange={(e) => setSensitivity(e.target.value as OutlierSensitivity)}
+              className={inputCls}
+            >
+              <option value="strict">strict (flags more)</option>
+              <option value="normal">normal</option>
+              <option value="lenient">lenient (flags fewer)</option>
+            </select>
+          </label>
+        </div>
+        <form action={previewAction} className="mt-3">
+          <input type="hidden" name="matchId" value={matchId} />
+          <input type="hidden" name="sensitivity" value={sensitivity} />
+          <button type="submit" disabled={previewPending} className={btnGhost}>
+            {previewPending ? "Scanning…" : "Preview outliers"}
+          </button>
+        </form>
+        <Banner state={previewState} />
+      </div>
+
+      {previewState.candidates != null ? (
+        <div className="space-y-3">
+          {candidates.length === 0 ? (
+            <p className="text-sm text-neutral-500">No outliers found for this selection.</p>
+          ) : (
+            <DataTable>
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-neutral-500">
+                  <tr>
+                    <th scope="col" className="py-2 pr-4">Match</th>
+                    <th scope="col" className="py-2 pr-4">Voter</th>
+                    <th scope="col" className="py-2 pr-4">Voted for</th>
+                    <th scope="col" className="py-2 pr-4">Rating</th>
+                    <th scope="col" className="py-2 pr-4">Group median</th>
+                    <th scope="col" className="py-2 pr-4">Accepted band</th>
+                    <th scope="col" className="py-2 pr-4">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {candidates.map((c) => (
+                    <tr
+                      key={`${c.matchId}-${c.voterId}-${c.votedForId}`}
+                      className="border-t border-black/5 dark:border-white/5"
+                    >
+                      <td className="py-2 pr-4">{c.matchId}</td>
+                      <td className="py-2 pr-4">{c.voterName}</td>
+                      <td className="py-2 pr-4">{c.votedForName}</td>
+                      <td className="py-2 pr-4 font-medium">{c.rating}</td>
+                      <td className="py-2 pr-4">{c.median}</td>
+                      <td className="py-2 pr-4 text-xs text-neutral-500">
+                        {c.low.toFixed(1)} – {c.high.toFixed(1)}
+                      </td>
+                      <td className="py-2 pr-4">
+                        {c.alreadyOutOfScope ? (
+                          <Badge tone="neutral">already out</Badge>
+                        ) : (
+                          <Badge tone="warning" dot>
+                            will flag
+                          </Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </DataTable>
+          )}
+
+          {toFlag.length > 0 ? (
+            <form action={applyAction}>
+              <input type="hidden" name="matchId" value={applyMatchId} />
+              <input type="hidden" name="sensitivity" value={applySensitivity} />
+              <button type="submit" disabled={applyPending} className={btnPrimary}>
+                {applyPending
+                  ? "Applying…"
+                  : `Apply — flag ${toFlag.length} vote${toFlag.length === 1 ? "" : "s"}`}
+              </button>
+            </form>
+          ) : null}
+          <Banner state={applyState} />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -407,7 +534,7 @@ export function VotesAdmin({
 
         {tab === "Edit Vote" ? <EditPanel votes={votes} /> : null}
         {tab === "Add Vote" ? <AddPanel matchId={selectedMatchId} participants={participants} /> : null}
-        {tab === "Auto-flag" ? <AutoFlagPanel matchId={selectedMatchId} /> : null}
+        {tab === "Auto-flag" ? <AutoFlagPanel matches={matches} selectedMatchId={selectedMatchId} /> : null}
 
         {tab === "Change Log" ? (
           audit.length === 0 ? (

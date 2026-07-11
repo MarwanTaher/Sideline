@@ -7,10 +7,12 @@ import {
   addOrUpdateVote,
   autoFlagOutliers,
   deleteVote,
+  detectOutliers,
   editVote,
   excludeVote,
   resetVote,
   SCOPE_OPTIONS,
+  type OutlierCandidate,
   type OutlierSensitivity,
 } from "@/lib/vote-admin";
 
@@ -159,10 +161,57 @@ export async function addVoteAction(
 
 const sensitivitySchema = z.enum(["strict", "normal", "lenient"]);
 
-export async function autoFlagAction(
-  _prev: VoteActionState,
+export interface AutoFlagState {
+  ok: boolean;
+  message: string;
+  /** Preview results (null unless a preview just ran). */
+  candidates: OutlierCandidate[] | null;
+  /** Echoed back so Apply reuses exactly what was previewed. */
+  sensitivity: OutlierSensitivity | null;
+  matchId: number | null;
+}
+
+const AUTO_FLAG_INITIAL: AutoFlagState = {
+  ok: false,
+  message: "",
+  candidates: null,
+  sensitivity: null,
+  matchId: null,
+};
+
+/** Dry-run: detect outliers and return them for review without changing data. */
+export async function previewAutoFlagAction(
+  _prev: AutoFlagState,
   formData: FormData,
-): Promise<VoteActionState> {
+): Promise<AutoFlagState> {
+  try {
+    await requireAdmin();
+    const matchId = idSchema.parse(formData.get("matchId"));
+    const sensitivity = sensitivitySchema.parse(
+      formData.get("sensitivity"),
+    ) as OutlierSensitivity;
+    const candidates = await detectOutliers(matchId, sensitivity);
+    const toFlag = candidates.filter((c) => !c.alreadyOutOfScope);
+    const already = candidates.length - toFlag.length;
+    const message =
+      toFlag.length === 0
+        ? already > 0
+          ? `No new outliers — ${already} already out of scope.`
+          : "No outliers detected."
+        : `Found ${toFlag.length} vote(s) to flag${
+            already > 0 ? ` (${already} already out of scope)` : ""
+          }. Review below, then apply.`;
+    return { ok: true, message, candidates, sensitivity, matchId };
+  } catch (err) {
+    return { ...AUTO_FLAG_INITIAL, ...fail(err) };
+  }
+}
+
+/** Apply flags for the given match + sensitivity (same logic as the preview). */
+export async function applyAutoFlagAction(
+  _prev: AutoFlagState,
+  formData: FormData,
+): Promise<AutoFlagState> {
   try {
     const actor = await requireAdmin();
     const matchId = idSchema.parse(formData.get("matchId"));
@@ -171,8 +220,14 @@ export async function autoFlagAction(
     ) as OutlierSensitivity;
     const flagged = await autoFlagOutliers(matchId, sensitivity, actor);
     revalidate();
-    return { ok: true, message: `Out-of-scope detection applied. Flagged ${flagged} vote(s).` };
+    return {
+      ok: true,
+      message: `Out-of-scope detection applied. Flagged ${flagged} vote(s).`,
+      candidates: null,
+      sensitivity,
+      matchId,
+    };
   } catch (err) {
-    return fail(err);
+    return { ...AUTO_FLAG_INITIAL, ...fail(err) };
   }
 }

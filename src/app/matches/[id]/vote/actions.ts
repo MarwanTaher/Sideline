@@ -10,6 +10,7 @@ import {
   MIN_RATING,
   MAX_RATING,
 } from "@/lib/voting";
+import { autoFlagOutliers } from "@/lib/vote-admin";
 
 export interface VoteActionState {
   ok: boolean;
@@ -73,6 +74,15 @@ export async function submitVotesAction(
     }
 
     await submitPlayerVotes(matchId, voterId, rated, cleanSkips, state.hasVotedBefore);
+
+    // Auto-detect outliers once a bucket has enough votes (>= 4). Runs on the
+    // whole match at the default (normal) sensitivity. Best-effort: never let a
+    // detection failure block the player's vote from being saved.
+    try {
+      await autoFlagOutliers(matchId, "normal", "system:auto");
+    } catch {
+      // ignore — auto-detection is a background convenience
+    }
 
     revalidatePath(`/matches/${matchId}/vote`);
     revalidatePath(`/matches/${matchId}`);
