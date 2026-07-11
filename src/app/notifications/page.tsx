@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
+import { isTabLockedForCurrentUser } from "@/lib/admin-access";
 import { sqlClient } from "@/lib/db";
 import { isPushEnabled } from "@/lib/push";
 import { setPushEnabledAction } from "@/app/actions/push";
@@ -19,7 +20,9 @@ export default async function NotificationsAdminPage() {
   if (!session?.user) redirect("/login");
 
   const role = session.user.role;
-  const isAdmin = await isAdminView(role === "admin" || role === "super");
+  const isAdmin =
+    (await isAdminView(role === "admin" || role === "super")) &&
+    !(await isTabLockedForCurrentUser("notifications"));
   if (!isAdmin) redirect("/leaderboard");
 
   const [enabled, countRows] = await Promise.all([

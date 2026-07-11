@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
+import { isTabLockedForCurrentUser } from "@/lib/admin-access";
 import { getPlayersNotificationMatrix } from "@/lib/push";
 import { USER_CONFIGURABLE_TYPES } from "@/lib/notification-types";
 import {
@@ -46,7 +47,9 @@ export default async function PerUserNotificationsPage() {
   if (!session?.user) redirect("/login");
 
   const role = session.user.role;
-  const isAdmin = await isAdminView(role === "admin" || role === "super");
+  const isAdmin =
+    (await isAdminView(role === "admin" || role === "super")) &&
+    !(await isTabLockedForCurrentUser("notifications"));
   if (!isAdmin) redirect("/leaderboard");
 
   const players = await getPlayersNotificationMatrix();

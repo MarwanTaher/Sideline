@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
+import { isTabLockedForCurrentUser } from "@/lib/admin-access";
 import { getDiagnostics } from "@/lib/diagnostics";
 import { SectionIcon } from "@/components/section-icon";
 
@@ -24,7 +25,9 @@ export default async function DiagnosticsPage() {
   if (!session?.user) redirect("/login");
 
   const role = session.user.role;
-  const isAdmin = await isAdminView(role === "admin" || role === "super");
+  const isAdmin =
+    (await isAdminView(role === "admin" || role === "super")) &&
+    !(await isTabLockedForCurrentUser("diagnostics"));
   if (!isAdmin) redirect("/leaderboard");
 
   const d = await getDiagnostics();

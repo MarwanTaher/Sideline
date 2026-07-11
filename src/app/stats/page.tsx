@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
+import { isTabLockedForCurrentUser } from "@/lib/admin-access";
 import { getAllPendingSubmissions, getStatsReviewCounts } from "@/lib/stats";
 import { ReviewRow, BackfillPanel } from "./review-controls";
 import { SectionIcon } from "@/components/section-icon";
@@ -17,7 +18,9 @@ export default async function StatsReviewPage() {
   if (!session?.user) redirect("/login");
 
   const role = session.user.role;
-  const isAdmin = await isAdminView(role === "admin" || role === "super");
+  const isAdmin =
+    (await isAdminView(role === "admin" || role === "super")) &&
+    !(await isTabLockedForCurrentUser("stats"));
   if (!isAdmin) redirect("/matches");
 
   const [pending, counts] = await Promise.all([

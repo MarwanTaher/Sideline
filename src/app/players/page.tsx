@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
+import { isTabLockedForCurrentUser } from "@/lib/admin-access";
 import { getPlayersAdminData } from "@/lib/players-admin";
 import PlayersAdmin from "./players-admin";
 import { SectionIcon } from "@/components/section-icon";
@@ -16,7 +17,9 @@ export default async function PlayersPage() {
   if (!session?.user) redirect("/login");
 
   const role = session.user.role;
-  const isAdmin = await isAdminView(role === "admin" || role === "super");
+  const isAdmin =
+    (await isAdminView(role === "admin" || role === "super")) &&
+    !(await isTabLockedForCurrentUser("players"));
   if (!isAdmin) redirect("/leaderboard");
 
   const { players, activeCount, inactiveCount, resetRequests } =

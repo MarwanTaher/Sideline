@@ -236,6 +236,19 @@ export const admins = pgTable("admins", {
 		}).onDelete("set null"),
 ]);
 
+export const adminTabLocks = pgTable("admin_tab_locks", {
+	adminId: integer("admin_id").notNull(),
+	tabKey: text("tab_key").notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.adminId, table.tabKey], name: "admin_tab_locks_pkey" }),
+	foreignKey({
+			columns: [table.adminId],
+			foreignColumns: [admins.id],
+			name: "admin_tab_locks_admin_id_fkey"
+		}).onDelete("cascade"),
+]);
+
 export const adminSessions = pgTable("admin_sessions", {
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "admin_sessions_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	token: text().notNull(),

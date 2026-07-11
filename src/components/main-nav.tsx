@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ADMIN_TABS, type AdminTabKey } from "@/lib/admin-tabs";
 
 type NavItem = {
   href: string;
@@ -28,11 +29,14 @@ function isActive(pathname: string, item: NavItem): boolean {
 export default function MainNav({
   adminView,
   isSuper,
+  lockedTabs = [],
 }: {
   /** Whether admin chrome (Votes/Payments/Admin menu) should be shown. */
   adminView: boolean;
   /** Whether the current account is a super admin (adds Accounts). */
   isSuper: boolean;
+  /** Tab keys locked for this admin by a super admin (hidden from the menu). */
+  lockedTabs?: AdminTabKey[];
 }) {
   const pathname = usePathname();
 
@@ -47,14 +51,12 @@ export default function MainNav({
     },
   ];
 
+  const locked = new Set(lockedTabs);
   const adminItems: NavItem[] = [
-    { href: "/votes", label: "Votes" },
-    { href: "/payments", label: "Payments" },
-    { href: "/players", label: "Players" },
-    { href: "/stats", label: "Stats review" },
-    { href: "/scoring", label: "Scoring" },
-    { href: "/diagnostics", label: "Diagnostics" },
-    { href: "/notifications", label: "Notifications" },
+    ...ADMIN_TABS.filter((t) => !locked.has(t.key)).map((t) => ({
+      href: t.href,
+      label: t.label,
+    })),
     ...(isSuper ? [{ href: "/admin/accounts", label: "Accounts" }] : []),
   ];
 

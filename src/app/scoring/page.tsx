@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
+import { isTabLockedForCurrentUser } from "@/lib/admin-access";
 import { getScoringConfig } from "@/lib/scoring-config";
 import { ScoringForm } from "./scoring-form";
 import { SectionIcon } from "@/components/section-icon";
@@ -16,7 +17,9 @@ export default async function ScoringConfigPage() {
   if (!session?.user) redirect("/login");
 
   const role = session.user.role;
-  const isAdmin = await isAdminView(role === "admin" || role === "super");
+  const isAdmin =
+    (await isAdminView(role === "admin" || role === "super")) &&
+    !(await isTabLockedForCurrentUser("scoring"));
   if (!isAdmin) redirect("/leaderboard");
 
   const config = await getScoringConfig();

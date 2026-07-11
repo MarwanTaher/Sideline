@@ -3,7 +3,8 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { setAdminPlayerLink } from "@/lib/admins";
+import { setAdminPlayerLink, setTabLock } from "@/lib/admins";
+import { ADMIN_TAB_KEYS, type AdminTabKey } from "@/lib/admin-tabs";
 
 export interface AccountActionState {
   ok: boolean;
@@ -49,6 +50,36 @@ export async function linkAccountAction(
     return {
       ok: true,
       message: playerId ? "Account linked to player." : "Account unlinked.",
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+const tabLockSchema = z.object({
+  adminId: z.coerce.number().int().positive(),
+  tabKey: z.enum(ADMIN_TAB_KEYS as unknown as [string, ...string[]]),
+  locked: z
+    .union([z.literal("1"), z.literal("0")])
+    .transform((v) => v === "1"),
+});
+
+export async function setTabLockAction(
+  _prev: AccountActionState,
+  formData: FormData,
+): Promise<AccountActionState> {
+  try {
+    await requireSuper();
+    const { adminId, tabKey, locked } = tabLockSchema.parse({
+      adminId: formData.get("adminId"),
+      tabKey: formData.get("tabKey"),
+      locked: formData.get("locked"),
+    });
+    await setTabLock(adminId, tabKey as AdminTabKey, locked);
+    revalidatePath("/admin/accounts");
+    return {
+      ok: true,
+      message: locked ? "Tab locked." : "Tab unlocked.",
     };
   } catch (err) {
     return fail(err);

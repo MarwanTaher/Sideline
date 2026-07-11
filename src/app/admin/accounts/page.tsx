@@ -1,7 +1,11 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
-import { getAdminAccounts, getLinkablePlayers } from "@/lib/admins";
+import {
+  getAdminAccounts,
+  getLinkablePlayers,
+  getTabLocksByAdmin,
+} from "@/lib/admins";
 import AccountsAdmin from "./accounts-admin";
 
 export const metadata = {
@@ -20,16 +24,26 @@ export default async function AccountsPage() {
     getLinkablePlayers(),
   ]);
 
+  const tabLocks = await getTabLocksByAdmin();
+  const lockedByAdmin = Object.fromEntries(
+    accounts.map((a) => [a.id, tabLocks.get(a.id) ?? []]),
+  );
+
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
       <h1 className="text-2xl font-semibold tracking-tight">Admin accounts</h1>
       <p className="mt-1 text-sm text-neutral-500">
         Link an admin account to a player so the same person can administer and
         also vote, set availability, and appear on the leaderboard — all with one
-        login. Leave unlinked for admins who never play.
+        login. Leave unlinked for admins who never play. Lock individual tabs to
+        limit what a non-super admin can access.
       </p>
 
-      <AccountsAdmin accounts={accounts} players={players} />
+      <AccountsAdmin
+        accounts={accounts}
+        players={players}
+        lockedByAdmin={lockedByAdmin}
+      />
     </main>
   );
 }

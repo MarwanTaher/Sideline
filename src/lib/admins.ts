@@ -1,5 +1,6 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
+import type { AdminTabKey } from "@/lib/admin-tabs";
 
 export interface AdminAccountRow {
   id: number;
@@ -64,4 +65,45 @@ export async function setAdminPlayerLink(
     .update(schema.admins)
     .set({ playerId })
     .where(eq(schema.admins.id, adminId));
+}
+
+/** All tab locks, grouped by admin account id. */
+export async function getTabLocksByAdmin(): Promise<Map<number, AdminTabKey[]>> {
+  const rows = await db
+    .select({
+      adminId: schema.adminTabLocks.adminId,
+      tabKey: schema.adminTabLocks.tabKey,
+    })
+    .from(schema.adminTabLocks);
+
+  const map = new Map<number, AdminTabKey[]>();
+  for (const r of rows) {
+    const list = map.get(r.adminId) ?? [];
+    list.push(r.tabKey as AdminTabKey);
+    map.set(r.adminId, list);
+  }
+  return map;
+}
+
+/** Lock or unlock a single tab for an admin account. */
+export async function setTabLock(
+  adminId: number,
+  tabKey: AdminTabKey,
+  locked: boolean,
+): Promise<void> {
+  if (locked) {
+    await db
+      .insert(schema.adminTabLocks)
+      .values({ adminId, tabKey })
+      .onConflictDoNothing();
+  } else {
+    await db
+      .delete(schema.adminTabLocks)
+      .where(
+        and(
+          eq(schema.adminTabLocks.adminId, adminId),
+          eq(schema.adminTabLocks.tabKey, tabKey),
+        ),
+      );
+  }
 }
