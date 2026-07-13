@@ -142,6 +142,7 @@ async function computedMatchAwards(
   const peerRaw = (await sqlClient.query(
     `
     SELECT p.id AS player_id, p.name, p.preferred_position,
+           mp.position_played AS assigned_position,
            AVG(v.rating) AS metric_value,
            COUNT(*) AS valid_votes
     FROM votes v
@@ -149,16 +150,21 @@ async function computedMatchAwards(
     JOIN match_players mp ON mp.match_id = v.match_id AND mp.player_id = v.voted_for_id
     WHERE v.match_id = $1
       AND ${VALID_VOTE_CASE_SQL}
-    GROUP BY p.id, p.name, p.preferred_position
+    GROUP BY p.id, p.name, p.preferred_position, mp.position_played
     HAVING COUNT(*) >= $2
     `,
     [mid, Math.trunc(minPeerVotes)],
-  )) as RawWinnerRow[];
+  )) as Array<RawWinnerRow & { assigned_position: string | null }>;
   const peerRows = peerRaw.map(toWinner);
 
-  const defenderRows = peerRows.filter((r) =>
-    r.preferred_position === "DEF" || r.preferred_position === "MID",
-  );
+  // Top Defender for a match uses the position the player was ASSIGNED in the
+  // draft (match_players.position_played), not their preferred position.
+  const defenderRows = peerRaw
+    .filter((r) => {
+      const pos = String(r.assigned_position ?? "").toUpperCase();
+      return pos === "DEF" || pos === "MID";
+    })
+    .map(toWinner);
 
   return buildBlocks(scorerRows, assistRows, peerRows, defenderRows);
 }

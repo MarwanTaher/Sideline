@@ -267,12 +267,14 @@ export function PaymentsAdmin({
   rows,
   guests,
   summary,
+  totalChange,
 }: {
   selectedMatchId: number;
   meta: PaymentMeta;
   rows: PaymentRow[];
   guests: Guest[];
   summary: PaymentSummary;
+  totalChange: number;
 }) {
   return (
     <div className="mt-6 space-y-6">
@@ -288,6 +290,8 @@ export function PaymentsAdmin({
             <Metric label="Unpaid" value={summary.unpaidCount} />
             <Metric label="Per player share" value={summary.sharePerPlayer} />
             <Metric label="Remaining" value={summary.remaining} />
+            <Metric label="Change (this match)" value={summary.changeCollected} />
+            <Metric label="Change (all matches)" value={totalChange} />
           </div>
 
           <div className="mt-4">
@@ -343,6 +347,9 @@ export function PaymentsAdmin({
 
           <p className="mt-3 text-xs text-neutral-500">
             Collected so far: {summary.collected} / {Math.trunc(meta.totalPayment)}
+            {summary.changeCollected > 0
+              ? ` · +${summary.changeCollected} extra from rounding`
+              : ""}
           </p>
           <div className="mt-3">
             <ResetForm matchId={selectedMatchId} />

@@ -9,6 +9,7 @@ import {
   getPaymentMeta,
   getPaymentRows,
   getPlayerPaymentForMatch,
+  getTotalPaymentChange,
   isPaymentsActive,
 } from "@/lib/payments";
 import { listGuests } from "@/lib/guests";
@@ -66,10 +67,11 @@ export default async function MatchPaymentsPage({
 }
 
 async function AdminSection({ matchId }: { matchId: number }) {
-  const [meta, rows, guests] = await Promise.all([
+  const [meta, rows, guests, totalChange] = await Promise.all([
     getPaymentMeta(matchId),
     getPaymentRows(matchId),
     listGuests(matchId),
+    getTotalPaymentChange(),
   ]);
 
   const safeMeta = meta ?? {
@@ -93,6 +95,7 @@ async function AdminSection({ matchId }: { matchId: number }) {
         meta={safeMeta}
         rows={rows}
         guests={guests}
+        totalChange={totalChange}
         summary={computeSummary(
           rows,
           safeMeta.totalPayment,

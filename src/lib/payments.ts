@@ -27,6 +27,7 @@ export interface PaymentSummary {
   sharePerPlayer: number;
   collected: number;
   remaining: number;
+  changeCollected: number;
 }
 
 export interface MatchOption {
@@ -141,6 +142,10 @@ export function computeSummary(
   const sharePerPlayer = totalPlayers > 0 ? Math.ceil(totalPayment / totalPlayers) : 0;
   const collected = sharePerPlayer * paidCount;
   const remaining = Math.max(Math.trunc(totalPayment) - collected, 0);
+  // Rounding each share up means a fully collected pot slightly exceeds the
+  // actual amount owed. The overage is the extra "change" kept once collected
+  // has passed the real total.
+  const changeCollected = Math.max(collected - Math.trunc(totalPayment), 0);
   return {
     totalPlayers,
     paidCount,
@@ -148,7 +153,46 @@ export function computeSummary(
     sharePerPlayer,
     collected,
     remaining,
+    changeCollected,
   };
+}
+
+/**
+ * Total rounding "change" collected across every match so far: for each match
+ * we split the pot across all heads (players + guests) rounding each share up,
+ * then sum how much the collected amount exceeds the real pot. Mirrors the
+ * per-match `changeCollected` from {@link computeSummary}.
+ */
+export async function getTotalPaymentChange(): Promise<number> {
+  const raw = (await sqlClient.query(
+    `SELECT m.id,
+            COALESCE(m.total_payment, 0) AS total_payment,
+            (SELECT COUNT(*) FROM match_players mp WHERE mp.match_id = m.id) AS player_heads,
+            (SELECT COUNT(*) FROM match_guests g WHERE g.match_id = m.id) AS guest_heads,
+            (SELECT COUNT(*) FROM match_players mp2
+               LEFT JOIN payments pay ON pay.match_id = mp2.match_id AND pay.player_id = mp2.player_id
+             WHERE mp2.match_id = m.id AND COALESCE(pay.paid, 0) = 1) AS paid_players,
+            (SELECT COUNT(*) FROM match_guests g2 WHERE g2.match_id = m.id AND g2.paid = 1) AS paid_guests
+     FROM matches m`,
+  )) as unknown as Array<{
+    total_payment: number | string;
+    player_heads: number | string;
+    guest_heads: number | string;
+    paid_players: number | string;
+    paid_guests: number | string;
+  }>;
+
+  let total = 0;
+  for (const r of raw) {
+    const totalPayment = Math.trunc(Number(r.total_payment));
+    const heads = Number(r.player_heads) + Number(r.guest_heads);
+    const paidCount = Number(r.paid_players) + Number(r.paid_guests);
+    if (heads === 0 || totalPayment <= 0) continue;
+    const share = Math.ceil(totalPayment / heads);
+    const collected = share * paidCount;
+    total += Math.max(collected - totalPayment, 0);
+  }
+  return total;
 }
 
 export async function savePaymentTotal(matchId: number, total: number): Promise<void> {
