@@ -5,6 +5,7 @@ import { isTabLockedForCurrentUser } from "@/lib/admin-access";
 import {
   getMatchParticipants,
   getVoteAuditRows,
+  getVoteSubmissionStatus,
   getVotesForReview,
   listMatchesForReview,
   reviewCounts,
@@ -43,6 +44,9 @@ export default async function VotesPage({
     selectedMatchId > 0 ? getMatchParticipants(selectedMatchId) : Promise.resolve([]),
   ]);
 
+  const submissions =
+    selectedMatchId > 0 ? await getVoteSubmissionStatus(selectedMatchId) : [];
+
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10">
       <div className="flex items-center gap-3">
@@ -60,6 +64,7 @@ export default async function VotesPage({
         counts={reviewCounts(votes)}
         audit={audit}
         participants={participants}
+        submissions={submissions}
       />
     </main>
   );

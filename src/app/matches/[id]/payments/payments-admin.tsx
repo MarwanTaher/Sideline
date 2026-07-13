@@ -13,7 +13,6 @@ import {
 } from "./actions";
 import { sendPaymentReminderAction } from "@/app/actions/push";
 import type {
-  MatchOption,
   PaymentMeta,
   PaymentRow,
   PaymentSummary,
@@ -263,38 +262,20 @@ function ReminderButton({
 }
 
 export function PaymentsAdmin({
-  matches,
   selectedMatchId,
   meta,
   rows,
   guests,
   summary,
 }: {
-  matches: MatchOption[];
   selectedMatchId: number;
   meta: PaymentMeta;
   rows: PaymentRow[];
   guests: Guest[];
   summary: PaymentSummary;
 }) {
-  const router = useRouter();
   return (
     <div className="mt-6 space-y-6">
-      <label className="block max-w-xs text-sm">
-        <span className="font-medium">Select match day</span>
-        <select
-          value={selectedMatchId}
-          onChange={(e) => router.push(`/payments?match=${e.target.value}`)}
-          className={inputCls}
-        >
-          {matches.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.label}
-            </option>
-          ))}
-        </select>
-      </label>
-
       <ActivateForm matchId={selectedMatchId} active={meta.paymentsActive} />
       <TotalForm matchId={selectedMatchId} total={meta.totalPayment} />
       <DetailsForm matchId={selectedMatchId} meta={meta} />      {rows.length === 0 && guests.length === 0 ? (

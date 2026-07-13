@@ -4,8 +4,16 @@ import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { fmtDate, fmtMatchTime } from "@/lib/matches";
 import { getAvailabilityMatch } from "@/lib/availability";
-import { getPlayerPaymentForMatch, isPaymentsActive } from "@/lib/payments";
-import { PaymentsPlayerMatch } from "@/app/payments/payments-player";
+import {
+  computeSummary,
+  getPaymentMeta,
+  getPaymentRows,
+  getPlayerPaymentForMatch,
+  isPaymentsActive,
+} from "@/lib/payments";
+import { listGuests } from "@/lib/guests";
+import { PaymentsAdmin } from "./payments-admin";
+import { PaymentsPlayerMatch } from "./payments-player";
 import { MatchNav } from "../match-nav";
 
 export const metadata = {
@@ -32,14 +40,6 @@ export default async function MatchPaymentsPage({
   const role = session.user.role;
   const isAdmin = await isAdminView(role === "admin" || role === "super");
 
-  // Admins manage payments from the full payments tool.
-  if (isAdmin) redirect(`/payments?match=${matchId}`);
-
-  const playerId = session.user.playerId;
-  const active = await isPaymentsActive(matchId);
-  const view =
-    active && playerId != null ? await getPlayerPaymentForMatch(matchId, playerId) : null;
-
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
       <Link
@@ -56,15 +56,73 @@ export default async function MatchPaymentsPage({
         Match {match.id} · {fmtDate(match.playedOn)} at {fmtMatchTime(match.matchTime)}
       </p>
 
-      {view ? (
-        <PaymentsPlayerMatch match={view} />
+      {isAdmin ? (
+        <AdminSection matchId={matchId} />
       ) : (
-        <p className="mt-6 rounded-xl border border-black/10 p-4 text-sm text-neutral-500 dark:border-white/10">
-          {active
-            ? "You have nothing to pay for this match."
-            : "Payments are not open for this match yet."}
-        </p>
+        <PlayerSection matchId={matchId} playerId={session.user.playerId} />
       )}
     </main>
+  );
+}
+
+async function AdminSection({ matchId }: { matchId: number }) {
+  const [meta, rows, guests] = await Promise.all([
+    getPaymentMeta(matchId),
+    getPaymentRows(matchId),
+    listGuests(matchId),
+  ]);
+
+  const safeMeta = meta ?? {
+    id: matchId,
+    playedOn: "",
+    totalPayment: 0,
+    paymentName: "",
+    paymentMobile: "",
+    paymentMethod: "",
+    paymentNote: "",
+    paymentsActive: false,
+  };
+
+  return (
+    <>
+      <p className="mt-1 text-sm text-neutral-500">
+        Track the pot, publish payment details, and mark who has paid.
+      </p>
+      <PaymentsAdmin
+        selectedMatchId={matchId}
+        meta={safeMeta}
+        rows={rows}
+        guests={guests}
+        summary={computeSummary(
+          rows,
+          safeMeta.totalPayment,
+          guests.map((g) => g.paid),
+        )}
+      />
+    </>
+  );
+}
+
+async function PlayerSection({
+  matchId,
+  playerId,
+}: {
+  matchId: number;
+  playerId: number | null;
+}) {
+  const active = await isPaymentsActive(matchId);
+  const view =
+    active && playerId != null ? await getPlayerPaymentForMatch(matchId, playerId) : null;
+
+  if (view) {
+    return <PaymentsPlayerMatch match={view} />;
+  }
+
+  return (
+    <p className="mt-6 rounded-xl border border-black/10 p-4 text-sm text-neutral-500 dark:border-white/10">
+      {active
+        ? "You have nothing to pay for this match."
+        : "Payments are not open for this match yet."}
+    </p>
   );
 }

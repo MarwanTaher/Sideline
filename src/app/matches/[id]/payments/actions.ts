@@ -49,7 +49,7 @@ export async function saveTotalAction(
     const matchId = matchIdSchema.parse(formData.get("matchId"));
     const total = totalSchema.parse(formData.get("total"));
     await savePaymentTotal(matchId, total);
-    revalidatePath("/payments");
+    revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: "Total payment updated." };
   } catch (err) {
     return fail(err);
@@ -69,7 +69,7 @@ export async function saveDetailsAction(
       method: String(formData.get("method") ?? ""),
       note: String(formData.get("note") ?? ""),
     });
-    revalidatePath("/payments");
+    revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: "Payment details saved." };
   } catch (err) {
     return fail(err);
@@ -86,7 +86,7 @@ export async function togglePaidAction(
     const playerId = playerIdSchema.parse(formData.get("playerId"));
     const paid = formData.get("paid") === "1";
     await setPaid(matchId, playerId, paid);
-    revalidatePath("/payments");
+    revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: "Updated." };
   } catch (err) {
     return fail(err);
@@ -103,7 +103,7 @@ export async function toggleGuestPaidAction(
     const guestId = guestIdSchema.parse(formData.get("guestId"));
     const paid = formData.get("paid") === "1";
     await setGuestPaid(matchId, guestId, paid);
-    revalidatePath("/payments");
+    revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: "Updated." };
   } catch (err) {
     return fail(err);
@@ -118,7 +118,7 @@ export async function resetUnpaidAction(
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
     await resetAllUnpaid(matchId);
-    revalidatePath("/payments");
+    revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: "All players marked unpaid for this match." };
   } catch (err) {
     return fail(err);
@@ -135,7 +135,7 @@ export async function setPaymentsActiveAction(
     const matchId = matchIdSchema.parse(formData.get("matchId"));
     const active = formData.get("active") === "1";
     await setPaymentsActive(matchId, active);
-    revalidatePath("/payments");
+    revalidatePath(`/matches/${matchId}/payments`);
     return {
       ok: true,
       message: active ? "Payments opened for players." : "Payments closed.",
@@ -170,7 +170,7 @@ export async function playerSetPaidAction(
     }
 
     await setPaid(matchId, playerId, paid);
-    revalidatePath("/payments");
+    revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: paid ? "Marked as paid." : "Marked as not paid." };
   } catch (err) {
     return fail(err);
@@ -203,7 +203,7 @@ export async function playerSetGuestPaidAction(
     }
 
     await setGuestPaid(matchId, guestId, paid);
-    revalidatePath("/payments");
+    revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: paid ? "Guest marked as paid." : "Guest marked as not paid." };
   } catch (err) {
     return fail(err);

@@ -282,6 +282,58 @@ export async function getMatchParticipants(matchId: number): Promise<Participant
   return raw.map((r) => ({ id: r.id, name: r.name }));
 }
 
+/** Per-rostered-player voting status for a match. */
+export interface VoteSubmissionRow {
+  playerId: number;
+  name: string;
+  submitted: boolean;
+  ratings: number;
+  skips: number;
+}
+
+interface VoteSubmissionRawRow {
+  player_id: number;
+  name: string;
+  ratings: number;
+  skips: number;
+}
+
+/**
+ * For a single match, list every rostered player and whether they have
+ * submitted their votes (any rating or explicit skip counts as submitted).
+ */
+export async function getVoteSubmissionStatus(
+  matchId: number,
+): Promise<VoteSubmissionRow[]> {
+  const raw = (await sqlClient.query(
+    `SELECT mp.player_id,
+            p.name,
+            COUNT(DISTINCT v.voted_for_id) AS ratings,
+            COUNT(DISTINCT vs.skipped_player_id) AS skips
+       FROM match_players mp
+       JOIN players p ON p.id = mp.player_id
+       LEFT JOIN votes v
+         ON v.match_id = mp.match_id AND v.voter_id = mp.player_id
+       LEFT JOIN vote_skips vs
+         ON vs.match_id = mp.match_id AND vs.voter_id = mp.player_id
+      WHERE mp.match_id = $1
+      GROUP BY mp.player_id, p.name
+      ORDER BY p.name`,
+    [matchId],
+  )) as unknown as VoteSubmissionRawRow[];
+  return raw.map((r) => {
+    const ratings = Number(r.ratings);
+    const skips = Number(r.skips);
+    return {
+      playerId: Number(r.player_id),
+      name: r.name,
+      submitted: ratings > 0 || skips > 0,
+      ratings,
+      skips,
+    };
+  });
+}
+
 async function getExistingVote(
   matchId: number,
   voterId: number,

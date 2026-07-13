@@ -1,4 +1,5 @@
 import { sqlClient } from "@/lib/db";
+import { fmtDate } from "@/lib/format";
 
 export type SubmissionStatus = "pending" | "approved" | "rejected";
 
@@ -156,6 +157,84 @@ export async function getStatsReviewCounts(): Promise<StatsReviewCounts> {
     approved: Number(r.approved ?? 0),
     rejected: Number(r.rejected ?? 0),
   };
+}
+
+export interface StatMatchOption {
+  id: number;
+  label: string;
+}
+
+interface StatMatchRow {
+  id: number;
+  played_on: string;
+}
+
+/** Matches newest-first for the stats submission-status picker. */
+export async function listMatchesForStats(): Promise<StatMatchOption[]> {
+  const raw = (await sqlClient.query(
+    `SELECT id, played_on FROM matches ORDER BY played_on DESC, id DESC`,
+  )) as unknown as StatMatchRow[];
+  return raw.map((m) => ({ id: Number(m.id), label: `Match ${m.id} (${fmtDate(m.played_on)})` }));
+}
+
+/** Per-rostered-player stats status for a match. */
+export type StatSubmissionState = "approved" | "pending" | "rejected" | "missing";
+
+export interface StatSubmissionRow {
+  playerId: number;
+  name: string;
+  state: StatSubmissionState;
+  goals: number | null;
+  assists: number | null;
+}
+
+interface StatSubmissionRawRow {
+  player_id: number;
+  name: string;
+  sub_status: SubmissionStatus | null;
+  has_approved_stat: number;
+  goals: number | null;
+  assists: number | null;
+}
+
+/**
+ * For a single match, list every rostered player and their stats status:
+ * whether they have a submission (pending/approved/rejected) or an approved
+ * `stats` row, or nothing yet (missing).
+ */
+export async function getStatsSubmissionStatus(
+  matchId: number,
+): Promise<StatSubmissionRow[]> {
+  const raw = (await sqlClient.query(
+    `SELECT mp.player_id,
+            p.name,
+            pss.status AS sub_status,
+            CASE WHEN s.match_id IS NOT NULL THEN 1 ELSE 0 END AS has_approved_stat,
+            COALESCE(pss.goals, s.goals) AS goals,
+            COALESCE(pss.assists, s.assists) AS assists
+       FROM match_players mp
+       JOIN players p ON p.id = mp.player_id
+       LEFT JOIN player_stats_submissions pss
+         ON pss.match_id = mp.match_id AND pss.player_id = mp.player_id
+       LEFT JOIN stats s
+         ON s.match_id = mp.match_id AND s.player_id = mp.player_id
+      WHERE mp.match_id = $1
+      ORDER BY p.name`,
+    [matchId],
+  )) as unknown as StatSubmissionRawRow[];
+  return raw.map((r) => {
+    let state: StatSubmissionState;
+    if (r.sub_status) state = r.sub_status;
+    else if (Number(r.has_approved_stat) === 1) state = "approved";
+    else state = "missing";
+    return {
+      playerId: Number(r.player_id),
+      name: r.name,
+      state,
+      goals: r.goals == null ? null : Number(r.goals),
+      assists: r.assists == null ? null : Number(r.assists),
+    };
+  });
 }
 
 // ── Writes ───────────────────────────────────────────────────────────────

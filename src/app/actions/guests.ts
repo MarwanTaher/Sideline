@@ -34,7 +34,7 @@ function revalidateGuestPaths(matchId: number): void {
   revalidatePath(`/matches/${matchId}/availability`);
   revalidatePath(`/matches/${matchId}/draft`);
   revalidatePath(`/matches/${matchId}`);
-  revalidatePath("/payments");
+  revalidatePath(`/matches/${matchId}/payments`);
 }
 
 export async function addGuestAction(

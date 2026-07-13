@@ -8,7 +8,6 @@
  */
 export const ADMIN_TABS = [
   { key: "votes", href: "/votes", label: "Votes" },
-  { key: "payments", href: "/payments", label: "Payments" },
   { key: "players", href: "/players", label: "Players" },
   { key: "stats", href: "/stats", label: "Stats review" },
   { key: "scoring", href: "/scoring", label: "Scoring" },

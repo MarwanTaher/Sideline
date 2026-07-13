@@ -15,6 +15,33 @@ import { FeedbackMessage } from "@/components/ui/banner";
 
 const INITIAL: StatsReviewState = { ok: false, message: "" };
 
+export function StatsMatchPicker({
+  matches,
+  selectedMatchId,
+}: {
+  matches: { id: number; label: string }[];
+  selectedMatchId: number;
+}) {
+  const router = useRouter();
+  return (
+    <label className="block text-sm">
+      <span className="font-medium">Match</span>
+      <select
+        value={selectedMatchId}
+        onChange={(e) => router.push(`/stats?match=${e.target.value}`)}
+        className="mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-neutral-900"
+      >
+        <option value={0}>Select a match…</option>
+        {matches.map((m) => (
+          <option key={m.id} value={m.id}>
+            {m.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 export function ReviewRow({ sub }: { sub: PendingSubmission }) {
   const router = useRouter();
   const [apState, apAction, apPending] = useActionState(approveSubmissionAction, INITIAL);

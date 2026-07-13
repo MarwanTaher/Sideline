@@ -21,13 +21,14 @@ import type {
   VoteAuditRow,
   VoteReviewCounts,
   VoteReviewRow,
+  VoteSubmissionRow,
 } from "@/lib/vote-admin";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 
 const INITIAL: VoteActionState = { ok: false, message: "" };
 
-const TABS = ["Votes Table", "Edit Vote", "Add Vote", "Auto-flag", "Change Log"] as const;
+const TABS = ["Votes Table", "Submissions", "Edit Vote", "Add Vote", "Auto-flag", "Change Log"] as const;
 type Tab = (typeof TABS)[number];
 
 function Banner({ state }: { state: VoteActionState }) {
@@ -275,6 +276,84 @@ const AUTO_FLAG_INITIAL: AutoFlagState = {
   matchId: null,
 };
 
+function SubmissionsPanel({
+  selectedMatchId,
+  submissions,
+}: {
+  selectedMatchId: number;
+  submissions: VoteSubmissionRow[];
+}) {
+  if (selectedMatchId === 0) {
+    return (
+      <p className="text-sm text-neutral-500">
+        Select a specific match above to see who has voted and who hasn&apos;t.
+      </p>
+    );
+  }
+  if (submissions.length === 0) {
+    return <p className="text-sm text-neutral-500">No players on the roster for this match.</p>;
+  }
+
+  const submitted = submissions.filter((s) => s.submitted);
+  const missing = submissions.filter((s) => !s.submitted);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-6 text-sm">
+        <div>
+          <div className="text-xs text-neutral-500">Roster</div>
+          <div className="text-lg font-semibold">{submissions.length}</div>
+        </div>
+        <div>
+          <div className="text-xs text-neutral-500">Submitted</div>
+          <div className="text-lg font-semibold text-emerald-600 dark:text-emerald-400">
+            {submitted.length}
+          </div>
+        </div>
+        <div>
+          <div className="text-xs text-neutral-500">Not yet</div>
+          <div className="text-lg font-semibold text-amber-600 dark:text-amber-400">
+            {missing.length}
+          </div>
+        </div>
+      </div>
+
+      <DataTable>
+        <table className="w-full text-sm">
+          <thead className="text-left text-xs text-neutral-500">
+            <tr>
+              <th scope="col" className="py-2 pr-4">Player</th>
+              <th scope="col" className="py-2 pr-4">Status</th>
+              <th scope="col" className="py-2 pr-4">Ratings</th>
+              <th scope="col" className="py-2 pr-4">Skips</th>
+            </tr>
+          </thead>
+          <tbody>
+            {submissions.map((s) => (
+              <tr key={s.playerId} className="border-t border-black/5 dark:border-white/5">
+                <td className="py-2 pr-4">{s.name}</td>
+                <td className="py-2 pr-4">
+                  {s.submitted ? (
+                    <Badge tone="success" dot>
+                      voted
+                    </Badge>
+                  ) : (
+                    <Badge tone="warning" dot>
+                      not yet
+                    </Badge>
+                  )}
+                </td>
+                <td className="py-2 pr-4">{s.ratings}</td>
+                <td className="py-2 pr-4">{s.skips}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </DataTable>
+    </div>
+  );
+}
+
 function AutoFlagPanel({
   matches,
   selectedMatchId,
@@ -432,6 +511,7 @@ export function VotesAdmin({
   counts,
   audit,
   participants,
+  submissions,
 }: {
   matches: MatchOption[];
   selectedMatchId: number;
@@ -439,6 +519,7 @@ export function VotesAdmin({
   counts: VoteReviewCounts;
   audit: VoteAuditRow[];
   participants: ParticipantOption[];
+  submissions: VoteSubmissionRow[];
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("Votes Table");
@@ -533,6 +614,9 @@ export function VotesAdmin({
         ) : null}
 
         {tab === "Edit Vote" ? <EditPanel votes={votes} /> : null}
+        {tab === "Submissions" ? (
+          <SubmissionsPanel selectedMatchId={selectedMatchId} submissions={submissions} />
+        ) : null}
         {tab === "Add Vote" ? <AddPanel matchId={selectedMatchId} participants={participants} /> : null}
         {tab === "Auto-flag" ? <AutoFlagPanel matches={matches} selectedMatchId={selectedMatchId} /> : null}
 
