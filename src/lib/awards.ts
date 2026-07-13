@@ -158,12 +158,9 @@ async function computedMatchAwards(
   const peerRows = peerRaw.map(toWinner);
 
   // Top Defender for a match uses the position the player was ASSIGNED in the
-  // draft (match_players.position_played), not their preferred position.
+  // draft (match_players.position_played), restricted to defenders.
   const defenderRows = peerRaw
-    .filter((r) => {
-      const pos = String(r.assigned_position ?? "").toUpperCase();
-      return pos === "DEF" || pos === "MID";
-    })
+    .filter((r) => String(r.assigned_position ?? "").toUpperCase() === "DEF")
     .map(toWinner);
 
   return buildBlocks(scorerRows, assistRows, peerRows, defenderRows);
