@@ -125,7 +125,9 @@ export default async function AwardsPage({
                 <th scope="col" className="px-4 py-2 font-medium">Award</th>
                 <th scope="col" className="px-4 py-2 font-medium">Winner(s)</th>
                 <th scope="col" className="px-4 py-2 font-medium">Metric</th>
-                <th scope="col" className="px-4 py-2 font-medium">Source</th>
+                {isAdmin ? (
+                  <th scope="col" className="px-4 py-2 font-medium">Source</th>
+                ) : null}
               </tr>
             </thead>
             <tbody>
@@ -151,15 +153,17 @@ export default async function AwardsPage({
                       <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">
                         {metric}
                       </td>
-                      <td className="px-4 py-2">
-                        {block.source === "override" ? (
-                          <Badge tone="warning" dot>
-                            override
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-neutral-400">computed</span>
-                        )}
-                      </td>
+                      {isAdmin ? (
+                        <td className="px-4 py-2">
+                          {block.source === "override" ? (
+                            <Badge tone="warning" dot>
+                              override
+                            </Badge>
+                          ) : (
+                            <span className="text-xs text-neutral-400">computed</span>
+                          )}
+                        </td>
+                      ) : null}
                     </tr>
                   );
                 })}
