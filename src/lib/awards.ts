@@ -209,8 +209,8 @@ async function computedOverallAwards(
   )) as RawWinnerRow[];
   const peerRows = peerRaw.map(toWinner);
 
-  const defenderRows = peerRows.filter((r) =>
-    r.preferred_position === "DEF" || r.preferred_position === "MID",
+  const defenderRows = peerRows.filter(
+    (r) => r.preferred_position === "DEF",
   );
 
   return buildBlocks(scorerRows, assistRows, peerRows, defenderRows);
