@@ -39,6 +39,7 @@ const assignmentSchema = z.object({
 const savePayloadSchema = z.object({
   assignments: z.array(assignmentSchema),
   benchPlayerIds: z.array(z.coerce.number().int().refine((n) => n !== 0, "Invalid id.")),
+  teamNames: z.record(z.string(), z.string()).optional(),
 });
 
 function errorMessage(err: unknown): string {
@@ -80,9 +81,12 @@ export async function saveDraftAction(
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
     const raw = JSON.parse(String(formData.get("payload") ?? "{}"));
-    const { assignments, benchPlayerIds } = savePayloadSchema.parse(raw);
+    const { assignments, benchPlayerIds, teamNames } = savePayloadSchema.parse(raw);
 
-    await saveDraftAssignments(matchId, assignments, benchPlayerIds);
+    const teamNamesMap = teamNames
+      ? Object.fromEntries(Object.entries(teamNames).map(([k, v]) => [Number(k), v]))
+      : undefined;
+    await saveDraftAssignments(matchId, assignments, benchPlayerIds, teamNamesMap);
     revalidatePath(`/matches/${matchId}/draft`);
     revalidatePath(`/matches/${matchId}`);
     return { ok: true, message: "Teams saved." };

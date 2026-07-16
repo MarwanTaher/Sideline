@@ -6,6 +6,7 @@ import { getMatchDetail, fmtDate, fmtMatchTime, isPlayerInMatch, type MatchdaySt
 import { getMatchAdmin } from "@/lib/match-admin";
 import { MatchSettings } from "./match-settings";
 import { MatchNav } from "./match-nav";
+import { TeamsView } from "./teams-view";
 
 export const metadata = {
   title: "Match · Sideline",
@@ -94,41 +95,7 @@ export default async function MatchDetailPage({
         {match.teams.length === 0 ? (
           <p className="mt-2 text-sm text-neutral-500">No teams drafted yet.</p>
         ) : (
-          <div className="mt-3 grid gap-4 sm:grid-cols-2">
-            {match.teams.map((team) => (
-              <div
-                key={team.teamNo}
-                className="rounded-xl border border-black/10 p-4 dark:border-white/10"
-              >
-                <h3 className="text-sm font-semibold">
-                  Team {team.teamNo}{" "}
-                  <span className="font-normal text-neutral-400">
-                    ({team.players.length})
-                  </span>
-                </h3>
-                <ul className="mt-2 space-y-1 text-sm">
-                  {team.players.map((p) => (
-                    <li key={p.playerId} className="flex items-center justify-between">
-                      <span>
-                        {p.isGuest ? (
-                          <span className="mr-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
-                            Guest
-                          </span>
-                        ) : null}
-                        {p.name}
-                        {p.isGuest && p.hostName ? (
-                          <span className="text-xs text-neutral-500"> · of {p.hostName}</span>
-                        ) : null}
-                      </span>
-                      <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                        {p.position}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+          <TeamsView teams={match.teams} />
         )}
       </section>
       ) : null}

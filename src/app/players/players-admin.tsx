@@ -156,6 +156,20 @@ function PlayerCard({ player }: { player: PlayerRow }) {
       </button>
       {open && (
         <div className="border-t border-black/10 px-4 py-4 dark:border-white/10">
+          {(player.email || player.phone) && (
+            <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
+              {player.email ? (
+                <a href={`mailto:${player.email}`} className="hover:underline">
+                  ✉ {player.email}
+                </a>
+              ) : null}
+              {player.phone ? (
+                <a href={`tel:${player.phone}`} className="hover:underline">
+                  ☎ {player.phone}
+                </a>
+              ) : null}
+            </div>
+          )}
           <form action={save} className="flex flex-wrap items-end gap-3">
             <input type="hidden" name="playerId" value={player.id} />
             <label className="block text-sm">

@@ -12,6 +12,8 @@ export interface PlayerRow {
   active: boolean;
   hasPassword: boolean;
   activeLinkCount: number;
+  email: string | null;
+  phone: string | null;
 }
 
 export interface ResetRequestRow {
@@ -37,7 +39,7 @@ function isValidPosition(pos: string): pos is Position {
 export async function getPlayersAdminData(): Promise<PlayersAdminData> {
   const players = (await sqlClient.query(
     `
-    SELECT p.id, p.name, p.preferred_position, p.active,
+    SELECT p.id, p.name, p.preferred_position, p.active, p.email, p.phone,
            CASE WHEN c.player_id IS NULL THEN 0 ELSE 1 END AS has_password
     FROM players p
     LEFT JOIN player_credentials c ON c.player_id = p.id
@@ -48,6 +50,8 @@ export async function getPlayersAdminData(): Promise<PlayersAdminData> {
     name: string;
     preferred_position: string;
     active: number;
+    email: string | null;
+    phone: string | null;
     has_password: number;
   }>;
 
@@ -60,6 +64,8 @@ export async function getPlayersAdminData(): Promise<PlayersAdminData> {
     active: Number(p.active) === 1,
     hasPassword: Number(p.has_password) === 1,
     activeLinkCount: linkCounts.get(Number(p.id)) ?? 0,
+    email: p.email ?? null,
+    phone: p.phone ?? null,
   }));
 
   const resetRows = (await sqlClient.query(

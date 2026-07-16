@@ -37,6 +37,7 @@ export interface DraftPlayer {
   teamNo: number | null;
   availStatus: AvailabilityStatus;
   score: number;
+  photoUrl?: string | null;
   isGuest?: boolean;
   hostName?: string;
 }
@@ -48,6 +49,7 @@ export interface DraftState {
   status: MatchStatus;
   matchdayStatus: MatchdayStatus;
   players: DraftPlayer[];
+  teamNames: Record<number, string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +114,25 @@ function normMatchday(value: unknown): MatchdayStatus {
   return s === "active" || s === "closed" ? s : "draft";
 }
 
+// Parse the team_names JSON column into a { teamNo: name } map, tolerating
+// nulls and malformed data.
+export function parseTeamNames(value: unknown): Record<number, string> {
+  if (typeof value !== "string" || value.trim() === "") return {};
+  try {
+    const obj = JSON.parse(value) as Record<string, unknown>;
+    const out: Record<number, string> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      const n = Number(k);
+      if (Number.isFinite(n) && typeof v === "string" && v.trim() !== "") {
+        out[n] = v.trim().slice(0, 40);
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Data access
 // ---------------------------------------------------------------------------
@@ -122,6 +143,7 @@ interface MatchMetaRow {
   team_size: number | null;
   status: string | null;
   matchday_status: string | null;
+  team_names: string | null;
 }
 
 interface CandidateRow {
@@ -131,6 +153,7 @@ interface CandidateRow {
   team_no: number | null;
   position_played: string | null;
   avail_status: string | null;
+  photo_url: string | null;
 }
 
 /**
@@ -142,7 +165,7 @@ interface CandidateRow {
  */
 export async function getDraftState(matchId: number): Promise<DraftState | null> {
   const metaRaw = await sqlClient.query(
-    `SELECT id, num_teams, team_size, status, matchday_status
+    `SELECT id, num_teams, team_size, status, matchday_status, team_names
        FROM matches WHERE id = $1`,
     [matchId],
   );
@@ -151,7 +174,7 @@ export async function getDraftState(matchId: number): Promise<DraftState | null>
   const meta = metaRows[0];
 
   const candidatesRaw = await sqlClient.query(
-    `SELECT p.id AS player_id, p.name, p.preferred_position,
+    `SELECT p.id AS player_id, p.name, p.preferred_position, p.photo_url,
             mp.team_no, mp.position_played,
             COALESCE(ma.status, 'pending') AS avail_status
        FROM players p
@@ -176,6 +199,7 @@ export async function getDraftState(matchId: number): Promise<DraftState | null>
     teamNo: r.team_no == null ? null : Number(r.team_no),
     availStatus: normAvail(r.avail_status),
     score: scores[Number(r.player_id)]?.final ?? 50,
+    photoUrl: r.photo_url ?? null,
   }));
 
   // Append guests as draftable entities using negative ids.
@@ -201,6 +225,7 @@ export async function getDraftState(matchId: number): Promise<DraftState | null>
     status: normMatchStatus(meta.status),
     matchdayStatus: normMatchday(meta.matchday_status),
     players,
+    teamNames: parseTeamNames(meta.team_names),
   };
 }
 
@@ -320,6 +345,7 @@ export async function saveDraftAssignments(
   matchId: number,
   assignments: Assignment[],
   benchPlayerIds: number[],
+  teamNames?: Record<number, string>,
 ): Promise<void> {
   // Split real players (positive id) from guests (negative id).
   const playerAssignments = assignments.filter((a) => a.playerId > 0);
@@ -376,6 +402,21 @@ export async function saveDraftAssignments(
     Math.floor(assignments.length / numTeams),
     matchId,
   ]);
+
+  // Persist team names (only entries with a non-empty label are stored).
+  if (teamNames) {
+    const clean: Record<number, string> = {};
+    for (const [k, v] of Object.entries(teamNames)) {
+      const n = Number(k);
+      const name = typeof v === "string" ? v.trim().slice(0, 40) : "";
+      if (Number.isFinite(n) && name !== "") clean[n] = name;
+    }
+    const json = Object.keys(clean).length > 0 ? JSON.stringify(clean) : null;
+    await sqlClient.query(`UPDATE matches SET team_names = $1 WHERE id = $2`, [
+      json,
+      matchId,
+    ]);
+  }
 }
 
 /**
@@ -391,5 +432,5 @@ export async function resetDraft(matchId: number): Promise<void> {
   await sqlClient.query(`DELETE FROM payments WHERE match_id = $1`, [matchId]);
   await sqlClient.query(`DELETE FROM match_players WHERE match_id = $1`, [matchId]);
   await clearGuestTeams(matchId);
-  await sqlClient.query(`UPDATE matches SET team_size = 0 WHERE id = $1`, [matchId]);
+  await sqlClient.query(`UPDATE matches SET team_size = 0, team_names = NULL WHERE id = $1`, [matchId]);
 }

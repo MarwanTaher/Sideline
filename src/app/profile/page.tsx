@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
+import type { ReactNode } from "react";
 import { auth } from "@/auth";
-import { sqlClient } from "@/lib/db";
 import {
   getAwardsSettings,
   getPlayerBadgeCounts,
@@ -8,9 +8,10 @@ import {
 } from "@/lib/awards";
 import BadgeGallery from "@/components/badge-gallery";
 import ChangePassword from "./change-password";
+import ProfileDetails from "./profile-details";
 import NotificationsToggle from "./notifications-toggle";
 import NotificationPreferences from "./notification-preferences";
-import { SectionIcon } from "@/components/section-icon";
+import { getPlayerContact } from "@/lib/player-profile";
 
 export const metadata = {
   title: "Profile · Sideline",
@@ -18,6 +19,17 @@ export const metadata = {
 
 // Awards/badges are recomputed from live data on every request (no caching).
 export const dynamic = "force-dynamic";
+
+function Card({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section className="rounded-2xl border border-black/10 p-5 dark:border-white/10">
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
+        {title}
+      </h2>
+      <div className="mt-4">{children}</div>
+    </section>
+  );
+}
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -44,8 +56,8 @@ export default async function ProfilePage() {
     minOverallVotes: settings.overallMinValidVotes,
   };
 
-  const [playerRowsRaw, badgeCounts, history] = await Promise.all([
-    sqlClient.query("SELECT name, preferred_position FROM players WHERE id = $1", [pid]),
+  const [contact, badgeCounts, history] = await Promise.all([
+    getPlayerContact(pid),
     getPlayerBadgeCounts(pid, thresholds),
     getPlayerAwardHistory(pid, {
       recentMatchLimit: 8,
@@ -54,79 +66,79 @@ export default async function ProfilePage() {
     }),
   ]);
 
-  const playerRows = playerRowsRaw as Array<{ name: string; preferred_position: string }>;
-  const player = playerRows[0];
-  const displayName = player?.name ?? session.user.name ?? "Player";
+  const displayName = contact?.name ?? session.user.name ?? "Player";
 
   return (
-    <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
-      <div className="flex items-center gap-3">
-        <SectionIcon name="profile" className="h-9 w-9" />
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">{displayName}</h1>
-          {player?.preferred_position ? (
-            <p className="mt-1 text-sm text-neutral-500">{player.preferred_position}</p>
-          ) : null}
-        </div>
-      </div>
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
+      <h1 className="text-2xl font-semibold tracking-tight">Profile</h1>
 
-      <section className="mt-8">
-        <h2 className="text-lg font-semibold tracking-tight">Badge collection</h2>
-        <div className="mt-2">
+      <div className="mt-6 space-y-5">
+        {/* Identity + contact */}
+        <section className="rounded-2xl border border-black/10 p-5 dark:border-white/10">
+          <ProfileDetails
+            name={displayName}
+            position={contact?.preferredPosition ?? null}
+            email={contact?.email ?? null}
+            phone={contact?.phone ?? null}
+            photoUrl={contact?.photoUrl ?? null}
+          />
+        </section>
+
+        {/* Achievements: badges + awards */}
+        <Card title="Achievements">
           <BadgeGallery counts={badgeCounts} />
-        </div>
-      </section>
 
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold tracking-tight">Awards history</h2>
-        {history.length === 0 ? (
-          <p className="mt-2 text-sm text-neutral-500">No awards yet.</p>
-        ) : (
-          <div className="mt-3 overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
-            <table className="w-full text-sm">
-              <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500 dark:bg-neutral-900">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Scope</th>
-                  <th className="px-4 py-2 font-medium">Award</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((h, i) => (
-                  <tr
-                    key={`${h.scope}-${h.award_type}-${i}`}
-                    className="border-t border-black/5 dark:border-white/5"
-                  >
-                    <td className="px-4 py-2">{h.scope}</td>
-                    <td className="px-4 py-2 font-medium">
-                      {h.award_label}
-                      {h.source === "override" ? (
-                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
-                          override
-                        </span>
-                      ) : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="my-5 h-px bg-black/5 dark:bg-white/10" />
+
+          <h3 className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+            Awards history
+          </h3>
+          {history.length === 0 ? (
+            <p className="mt-2 text-sm text-neutral-500">No awards yet.</p>
+          ) : (
+            <ul className="mt-2 divide-y divide-black/5 dark:divide-white/10">
+              {history.map((h, i) => (
+                <li
+                  key={`${h.scope}-${h.award_type}-${i}`}
+                  className="flex items-center justify-between gap-3 py-2 text-sm"
+                >
+                  <span className="font-medium">
+                    {h.award_label}
+                    {h.source === "override" ? (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-800 dark:bg-amber-950/50 dark:text-amber-300">
+                        override
+                      </span>
+                    ) : null}
+                  </span>
+                  <span className="shrink-0 text-xs uppercase tracking-wide text-neutral-400">
+                    {h.scope}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        {/* Settings: notifications + account */}
+        <Card title="Settings">
+          <h3 className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+            Notifications
+          </h3>
+          <div className="mt-2">
+            <NotificationsToggle />
+            <NotificationPreferences playerId={pid} />
           </div>
-        )}
-      </section>
 
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold tracking-tight">Notifications</h2>
-        <div className="mt-3 rounded-xl border border-black/10 p-4 dark:border-white/10">
-          <NotificationsToggle />
-          <NotificationPreferences playerId={pid} />
-        </div>
-      </section>
+          <div className="my-5 h-px bg-black/5 dark:bg-white/10" />
 
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold tracking-tight">Account</h2>
-        <div className="mt-3">
-          <ChangePassword />
-        </div>
-      </section>
+          <h3 className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+            Account
+          </h3>
+          <div className="mt-2">
+            <ChangePassword />
+          </div>
+        </Card>
+      </div>
     </main>
   );
 }

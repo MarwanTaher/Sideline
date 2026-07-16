@@ -19,12 +19,14 @@ export interface MatchTeamPlayer {
   playerId: number;
   name: string;
   position: string;
+  photoUrl?: string | null;
   isGuest?: boolean;
   hostName?: string;
 }
 
 export interface MatchTeam {
   teamNo: number;
+  name?: string;
   players: MatchTeamPlayer[];
 }
 
@@ -56,6 +58,24 @@ function normStatus(s: unknown): MatchStatus {
 
 function normMatchday(s: unknown): MatchdayStatus {
   return s === "active" ? "active" : s === "closed" ? "closed" : "draft";
+}
+
+// Parse the matches.team_names JSON column into a { teamNo: name } map.
+function parseTeamNames(value: unknown): Record<number, string> {
+  if (typeof value !== "string" || value.trim() === "") return {};
+  try {
+    const obj = JSON.parse(value) as Record<string, unknown>;
+    const out: Record<number, string> = {};
+    for (const [k, v] of Object.entries(obj)) {
+      const n = Number(k);
+      if (Number.isFinite(n) && typeof v === "string" && v.trim() !== "") {
+        out[n] = v.trim().slice(0, 40);
+      }
+    }
+    return out;
+  } catch {
+    return {};
+  }
 }
 
 /** All matches, newest-first, with participant counts. */
@@ -127,7 +147,8 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
            team_size,
            COALESCE(status, 'open') AS status,
            COALESCE(matchday_status, 'draft') AS matchday_status,
-           COALESCE(stats_scoring_enabled, 1) AS stats_scoring_enabled
+           COALESCE(stats_scoring_enabled, 1) AS stats_scoring_enabled,
+           team_names
     FROM matches
     WHERE id = $1
     `,
@@ -141,21 +162,23 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
     status: string;
     matchday_status: string;
     stats_scoring_enabled: number;
+    team_names: string | null;
   }>;
 
   if (metaRows.length === 0) return null;
   const meta = metaRows[0];
+  const teamNames = parseTeamNames(meta.team_names);
 
   const rosterRows = (await sqlClient.query(
     `
-    SELECT mp.player_id, mp.team_no, p.name, mp.position_played
+    SELECT mp.player_id, mp.team_no, p.name, mp.position_played, p.photo_url
     FROM match_players mp
     JOIN players p ON p.id = mp.player_id
     WHERE mp.match_id = $1
     ORDER BY mp.team_no, p.name
     `,
     [mid],
-  )) as Array<{ player_id: number; team_no: number; name: string; position_played: string }>;
+  )) as Array<{ player_id: number; team_no: number; name: string; position_played: string; photo_url: string | null }>;
 
   const teamMap = new Map<number, MatchTeamPlayer[]>();
   for (const r of rosterRows) {
@@ -165,6 +188,7 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
       playerId: Number(r.player_id),
       name: String(r.name),
       position: String(r.position_played),
+      photoUrl: r.photo_url ?? null,
     });
   }
 
@@ -193,7 +217,7 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
 
   const teams: MatchTeam[] = [...teamMap.keys()]
     .sort((a, b) => a - b)
-    .map((teamNo) => ({ teamNo, players: teamMap.get(teamNo)! }));
+    .map((teamNo) => ({ teamNo, name: teamNames[teamNo], players: teamMap.get(teamNo)! }));
 
   const statRows = (await sqlClient.query(
     `

@@ -21,6 +21,7 @@ export const matches = pgTable("matches", {
 	maxPlayers: integer("max_players").default(18).notNull(),
 	availabilityOpen: integer("availability_open").default(1).notNull(),
 	paymentsActive: integer("payments_active").default(0).notNull(),
+	teamNames: text("team_names"),
 }, (table) => [
 	index("idx_matches_status_played_on").using("btree", table.status.asc().nullsLast().op("text_ops"), table.playedOn.asc().nullsLast().op("text_ops")),
 	check("matches_num_teams_check", sql`num_teams = ANY (ARRAY[2, 3])`),
@@ -35,6 +36,9 @@ export const players = pgTable("players", {
 	preferredPosition: text("preferred_position").notNull(),
 	active: integer().default(1).notNull(),
 	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	phone: text(),
+	photoUrl: text("photo_url"),
+	email: text(),
 }, (table) => [
 	unique("players_name_key").on(table.name),
 	check("players_preferred_position_check", sql`preferred_position = ANY (ARRAY['GK'::text, 'DEF'::text, 'MID'::text, 'FWD'::text])`),
