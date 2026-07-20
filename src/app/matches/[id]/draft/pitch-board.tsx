@@ -443,7 +443,7 @@ function Pitch({
 
       <div className="relative w-full overflow-hidden rounded-xl">
         <PitchSurface />
-        <div className="relative z-10 flex min-h-[440px] flex-col justify-between gap-3 px-2 py-4">
+        <div className="relative z-10 flex min-h-[340px] flex-col justify-between gap-3 px-2 py-4">
           {rows.map((pos) => (
             <PitchRow
               key={pos}
@@ -572,13 +572,8 @@ function PlayerNode({
   return (
     <div className={`flex w-16 flex-col items-center gap-1 ${dragging ? "scale-105" : ""}`}>
       <div className="relative">
-        {/* Faint aura */}
         <div
-          className="absolute -inset-1.5 rounded-full border border-dashed opacity-40"
-          style={{ borderColor: `${BRAND}80` }}
-        />
-        <div
-          className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-2 border-dashed shadow-lg"
+          className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-2 shadow-lg"
           style={{ borderColor: BRAND, backgroundColor: "#141614" }}
         >
           {photo ? (
