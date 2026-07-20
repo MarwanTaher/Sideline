@@ -22,7 +22,7 @@ function groupByRow(players: MatchTeamPlayer[]): Record<Row, MatchTeamPlayer[]> 
 export function StaticLineup({ teams }: { teams: MatchTeam[] }) {
   return (
     <div
-      className={`grid gap-4 ${teams.length >= 3 ? "lg:grid-cols-3" : "sm:grid-cols-2"}`}
+      className={`grid gap-4 ${teams.length >= 3 ? "md:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2"}`}
     >
       {teams.map((team) => (
         <StaticPitch key={team.teamNo} team={team} />
@@ -52,16 +52,14 @@ function StaticPitch({ team }: { team: MatchTeam }) {
 
       <div className="relative w-full overflow-hidden rounded-xl">
         <PitchSurface />
-        <div className="relative z-10 flex min-h-[420px] flex-col justify-between gap-3 px-2 py-4">
+        <div className="relative z-10 flex min-h-[340px] flex-col justify-between gap-3 px-2 py-4">
           {ROW_ORDER.map((row) => (
             <div
               key={row}
               className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2"
             >
               {byRow[row].length === 0 ? (
-                <span className="text-[9px] font-semibold uppercase tracking-wider text-white/30">
-                  {row}
-                </span>
+                <EmptySlot label={row} />
               ) : (
                 byRow[row].map((p) => <StaticNode key={p.playerId} player={p} />)
               )}
@@ -82,16 +80,24 @@ function initialsOf(name: string): string {
     .join("");
 }
 
+// Faint dashed placeholder shown when a position row has no players.
+function EmptySlot({ label }: { label: string }) {
+  return (
+    <div className="flex w-16 flex-col items-center gap-1 opacity-40">
+      <div className="flex h-11 w-11 items-center justify-center rounded-full border-2 border-dashed border-white/30" />
+      <span className="text-[9px] font-semibold uppercase tracking-wider text-white/40">
+        {label}
+      </span>
+    </div>
+  );
+}
+
 function StaticNode({ player }: { player: MatchTeamPlayer }) {
   return (
     <div className="flex w-16 flex-col items-center gap-1">
       <div className="relative">
         <div
-          className="absolute -inset-1.5 rounded-full border border-dashed opacity-40"
-          style={{ borderColor: `${BRAND}80` }}
-        />
-        <div
-          className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-2 border-dashed shadow-lg"
+          className="relative flex h-11 w-11 items-center justify-center overflow-hidden rounded-full border-2 shadow-lg"
           style={{ borderColor: BRAND, backgroundColor: "#141614" }}
         >
           {player.photoUrl ? (

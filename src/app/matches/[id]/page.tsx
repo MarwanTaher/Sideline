@@ -73,10 +73,22 @@ export default async function MatchDetailPage({
         ) : null}
       </div>
 
-      <p className="mt-1 text-sm text-neutral-500">
-        {fmtDate(match.playedOn)} at {fmtMatchTime(match.matchTime)} · {match.numTeams} teams ·{" "}
-        {match.teamSize} per side · stats scoring {match.statsScoringEnabled ? "on" : "off"}
-      </p>
+      <div className="mt-2 flex flex-wrap gap-1.5">
+        {[
+          fmtDate(match.playedOn),
+          fmtMatchTime(match.matchTime),
+          `${match.numTeams} teams`,
+          `${match.teamSize} per side`,
+          `stats scoring ${match.statsScoringEnabled ? "on" : "off"}`,
+        ].map((chip) => (
+          <span
+            key={chip}
+            className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800/80 dark:text-neutral-300"
+          >
+            {chip}
+          </span>
+        ))}
+      </div>
 
       <MatchNav matchId={match.id} isAdmin={isAdmin} />
 

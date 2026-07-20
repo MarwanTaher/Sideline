@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MatchTeam } from "@/lib/matches";
 import { StaticLineup } from "./static-lineup";
 
@@ -9,16 +9,29 @@ import { StaticLineup } from "./static-lineup";
 
 type Mode = "list" | "field";
 
+const STORAGE_KEY = "sideline:teams-view";
+
 export function TeamsView({ teams }: { teams: MatchTeam[] }) {
   const [mode, setMode] = useState<Mode>("field");
+
+  // Restore the last-used view, then persist changes across matches.
+  useEffect(() => {
+    const saved = window.localStorage.getItem(STORAGE_KEY);
+    if (saved === "list" || saved === "field") setMode(saved);
+  }, []);
+
+  function selectMode(next: Mode) {
+    setMode(next);
+    window.localStorage.setItem(STORAGE_KEY, next);
+  }
 
   return (
     <div className="mt-3">
       <div className="mb-4 inline-flex rounded-lg border border-black/10 p-0.5 dark:border-white/10">
-        <TabButton active={mode === "list"} onClick={() => setMode("list")}>
+        <TabButton active={mode === "list"} onClick={() => selectMode("list")}>
           List
         </TabButton>
-        <TabButton active={mode === "field"} onClick={() => setMode("field")}>
+        <TabButton active={mode === "field"} onClick={() => selectMode("field")}>
           Field
         </TabButton>
       </div>
@@ -73,7 +86,7 @@ function TeamList({ teams }: { teams: MatchTeam[] }) {
                       Guest
                     </span>
                   ) : null}
-                  {p.name}
+                  <span>{p.name}</span>
                   {p.isGuest && p.hostName ? (
                     <span className="text-xs text-neutral-500"> · of {p.hostName}</span>
                   ) : null}
