@@ -50,6 +50,19 @@ export default async function LeaderboardPage({
         <h1 className="text-2xl font-semibold tracking-tight">Leaderboard</h1>
       </div>
 
+      <p className="mt-1 text-sm text-neutral-500">
+        Curious how these are worked out?{" "}
+        <a
+          href="/how-scores-work.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-500 dark:text-blue-400"
+        >
+          See how scores work
+        </a>
+        .
+      </p>
+
       {showDetails ? (
         <>
           <p className="mt-1 text-sm text-neutral-500">
