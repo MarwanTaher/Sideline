@@ -2,10 +2,23 @@ import {
   getNotificationTypeStatuses,
   type NotificationTypeStatus,
 } from "@/lib/push";
+import type { NotificationAudience } from "@/lib/notification-types";
 import {
   setNotificationTypeEnabledAction,
   setNotificationTypeAudienceAction,
 } from "@/app/actions/push";
+
+/** Human label for a non-overridable type's fixed audience. */
+function fixedAudienceLabel(audience: NotificationAudience): string {
+  switch (audience) {
+    case "admins":
+      return "Admins only";
+    case "players":
+      return "Players only";
+    default:
+      return "Everyone";
+  }
+}
 
 /** Admin controls for enabling/disabling and targeting each notification type. */
 export default async function NotificationTypesSection({
@@ -69,7 +82,7 @@ function TypeRow({
             />
           </div>
         ) : (
-          <p className="mt-2 text-xs text-neutral-400">Admins only</p>
+          <p className="mt-2 text-xs text-neutral-400">{fixedAudienceLabel(type.audience)}</p>
         )}
       </div>
 

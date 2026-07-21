@@ -53,14 +53,17 @@ const STAT_BASE_WEIGHT = 0.4;
 const NEUTRAL_SCORE = 50.0;
 
 // ---------------------------------------------------------------------------
-// Optional fairness enhancements. All default to 0/legacy so the golden-master
-// engine is reproduced exactly until an admin opts in. Toggles are treated as
-// enabled when > 0.
+// Optional fairness enhancements. Toggles are treated as enabled when > 0.
+// Defaults now enable the fairness refinements that address voter bias and
+// sample size (voter normalization, vote-count weighting, Bayesian shrinkage).
+// The per-match aggregate stays on mean because the IQR outlier filter already
+// handles rogue votes, and recency decay stays off so returning players keep
+// their earned score. Admins can still override any of these on the Scoring page.
 // ---------------------------------------------------------------------------
-const VOTER_NORMALIZATION = 0; // de-bias harsh/lenient voters per match
-const PEER_MATCH_VOTE_WEIGHTING = 0; // weight matches by how many people voted
+const VOTER_NORMALIZATION = 1; // de-bias harsh/lenient voters per match
+const PEER_MATCH_VOTE_WEIGHTING = 1; // weight matches by how many people voted
 const PEER_AGGREGATE_MODE = 0; // 0 = mean (legacy), 1 = median, 2 = trimmed mean
-const BAYESIAN_SHRINKAGE = 0; // smooth shrink toward neutral instead of hard cliffs
+const BAYESIAN_SHRINKAGE = 1; // smooth shrink toward neutral instead of hard cliffs
 const BAYESIAN_PRIOR_STRENGTH = 6; // "k" pseudo-votes of neutral prior
 const RECENCY_DECAY = 0; // pull inactive players back toward neutral over time
 const RECENCY_HALF_LIFE_DAYS = 45; // days for the decay factor to halve
