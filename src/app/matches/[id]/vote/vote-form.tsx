@@ -3,13 +3,29 @@
 import { useEffect, useMemo, useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { submitVotesAction, type VoteActionState } from "./actions";
-import { DEFAULT_RATING, MAX_RATING, MIN_RATING } from "@/lib/voting-constants";
+import {
+  DEFAULT_RATING,
+  MAX_RATING,
+  MIN_RATING,
+  RATING_LABELS,
+  ratingLabel,
+  ratingTier,
+} from "@/lib/voting-constants";
 import type { BallotPlayer } from "@/lib/voting";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Banner, FeedbackMessage } from "@/components/ui/banner";
 
 const INITIAL: VoteActionState = { ok: false, message: "" };
+
+// Tailwind background classes per rating tier, used for the legend dots and the
+// live descriptor chip.
+const TIER_DOT: Record<string, string> = {
+  low: "bg-red-500",
+  mid: "bg-amber-500",
+  high: "bg-lime-600",
+  elite: "bg-emerald-500",
+};
 
 interface RowState {
   rating: number;
@@ -104,9 +120,10 @@ export function VoteForm({ matchId, ballot, hasVotedBefore }: VoteFormProps) {
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-neutral-500">
-          Drag each slider: <span className="font-medium">0 = worst</span> ·{" "}
-          5 = average · <span className="font-medium">10 = best</span>. Use
-          &ldquo;Skip&rdquo; for players you can&rsquo;t rate.
+          Drag each slider from <span className="font-medium">0</span> to{" "}
+          <span className="font-medium">10</span>. Each number has a meaning —
+          see the scale below. Use &ldquo;Skip&rdquo; for players you can&rsquo;t
+          rate.
         </p>
         <div className="flex items-center gap-2">
           <Button
@@ -127,6 +144,24 @@ export function VoteForm({ matchId, ballot, hasVotedBefore }: VoteFormProps) {
           </Button>
         </div>
       </div>
+
+      <details className="mt-3 rounded-xl border border-black/10 p-3 text-xs dark:border-white/10">
+        <summary className="cursor-pointer font-medium text-neutral-600 dark:text-neutral-300">
+          Rating scale — what each number means
+        </summary>
+        <ul className="mt-2 grid grid-cols-1 gap-1 sm:grid-cols-2">
+          {Object.entries(RATING_LABELS).map(([value, label]) => (
+            <li key={value} className="flex items-center gap-2">
+              <span
+                className={`inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white ${TIER_DOT[ratingTier(Number(value))]}`}
+              >
+                {value}
+              </span>
+              <span className="text-neutral-600 dark:text-neutral-300">{label}</span>
+            </li>
+          ))}
+        </ul>
+      </details>
 
       <ul className="mt-3 space-y-2">
         {ballot.map((b) => {
@@ -177,6 +212,15 @@ export function VoteForm({ matchId, ballot, hasVotedBefore }: VoteFormProps) {
                   {row.skipped ? "\u2014" : row.rating}
                 </span>
               </div>
+              {row.skipped ? null : (
+                <div className="mt-1 flex justify-end">
+                  <span
+                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium text-white ${TIER_DOT[ratingTier(row.rating)]}`}
+                  >
+                    {ratingLabel(row.rating)}
+                  </span>
+                </div>
+              )}
             </li>
           );
         })}

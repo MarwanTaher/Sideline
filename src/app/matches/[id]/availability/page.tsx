@@ -115,6 +115,8 @@ export default async function AvailabilityPage({
   const mine = myPlayerId == null ? null : players.find((p) => p.playerId === myPlayerId);
 
   const guests = await listGuests(matchId);
+  const approvedGuests = guests.filter((g) => g.status === "approved");
+  const pendingGuests = guests.filter((g) => g.status === "pending");
   const myGuests = myPlayerId == null ? [] : guests.filter((g) => g.hostPlayerId === myPlayerId);
 
   return (
@@ -160,7 +162,7 @@ export default async function AvailabilityPage({
             Do you want to bring a guest?
           </summary>
           <p className="mt-2 text-xs text-neutral-500">
-            Add up to {MAX_GUESTS_PER_HOST} guests you are bringing. Guests join the draft.
+            Request up to {MAX_GUESTS_PER_HOST} guests. Requests are approved by an admin before they join the draft.
           </p>
           <div className="mt-3">
             <GuestList matchId={matchId} guests={myGuests} canRemove={open} />
@@ -197,14 +199,31 @@ export default async function AvailabilityPage({
       ) : null}
 
       {isAdmin ? (
-        <details className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
+        <details className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10" open={pendingGuests.length > 0}>
           <summary className="cursor-pointer text-sm font-semibold">
-            Add guests (admin)
+            Guests &amp; requests (admin)
+            {pendingGuests.length > 0 ? (
+              <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                {pendingGuests.length} pending
+              </span>
+            ) : null}
           </summary>
           <p className="mt-2 text-xs text-neutral-500">
-            Add a guest on behalf of a player, or remove any guest.
+            Approve or decline guest requests, add a guest on behalf of a player, or remove any guest.
           </p>
-          <div className="mt-3">
+          {pendingGuests.length > 0 ? (
+            <div className="mt-3">
+              <h3 className="mb-2 text-sm font-medium">Pending requests</h3>
+              <GuestList
+                matchId={matchId}
+                guests={pendingGuests}
+                showHost
+                canRemove={false}
+                canApprove
+              />
+            </div>
+          ) : null}
+          <div className="mt-4 border-t border-black/5 pt-4 dark:border-white/5">
             <AdminAddGuestForm
               matchId={matchId}
               hosts={inPlayers.map((p) => ({ playerId: p.playerId, name: p.name }))}
@@ -212,7 +231,8 @@ export default async function AvailabilityPage({
             />
           </div>
           <div className="mt-4">
-            <GuestList matchId={matchId} guests={guests} showHost canRemove />
+            <h3 className="mb-2 text-sm font-medium">Approved guests</h3>
+            <GuestList matchId={matchId} guests={approvedGuests} showHost canRemove />
           </div>
         </details>
       ) : null}
@@ -221,7 +241,7 @@ export default async function AvailabilityPage({
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-black/10 p-4 text-center dark:border-white/10">
             <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-              {summary.inCount + guests.length}
+              {summary.inCount + approvedGuests.length}
             </div>
             <div className="text-xs uppercase tracking-wide text-neutral-500">
               In <span className="normal-case text-neutral-400">/ {match.maxPlayers} max</span>
@@ -241,7 +261,7 @@ export default async function AvailabilityPage({
       </section>
 
       <section className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatusList title={<><span aria-hidden="true">✅</span> In</>} players={inPlayers} guests={guests} />
+        <StatusList title={<><span aria-hidden="true">✅</span> In</>} players={inPlayers} guests={approvedGuests} />
         <StatusList title={<><span aria-hidden="true">❌</span> Out</>} players={outPlayers} />
         <StatusList title={<><span aria-hidden="true">⏳</span> Pending</>} players={pendingPlayers} />
       </section>

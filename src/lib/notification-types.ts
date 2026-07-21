@@ -20,6 +20,8 @@ export type NotificationTypeKey =
   | "payment_due"
   | "stats_approved"
   | "new_player"
+  | "guest_request"
+  | "guest_decision"
   | "announcement";
 
 export type NotificationType = {
@@ -93,6 +95,25 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     audience: "admins",
     audienceOverridable: false,
     userConfigurable: false,
+  },
+  {
+    key: "guest_request",
+    label: "Guest request",
+    description: "Sent to admins when a player requests to bring a guest.",
+    defaultEnabled: true,
+    audience: "admins",
+    audienceOverridable: false,
+    userConfigurable: false,
+  },
+  {
+    key: "guest_decision",
+    label: "Guest request decision",
+    description:
+      "Sent to the host when an admin approves or declines their guest request.",
+    defaultEnabled: true,
+    audience: "players",
+    audienceOverridable: false,
+    userConfigurable: true,
   },
   {
     key: "announcement",

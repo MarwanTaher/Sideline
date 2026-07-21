@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   addGuestAction,
   removeGuestAction,
+  approveGuestAction,
+  rejectGuestAction,
   type GuestActionState,
 } from "@/app/actions/guests";
 import { SKILL_LEVELS, MAX_GUESTS_PER_HOST, type Guest } from "@/lib/guests-shared";
@@ -46,7 +48,7 @@ export function AddGuestForm({ matchId, hostPlayerId, remaining, open }: AddGues
   if (remaining <= 0) {
     return (
       <p className="text-sm text-neutral-500">
-        You have reached the limit of {MAX_GUESTS_PER_HOST} guests.
+        You have reached the limit of {MAX_GUESTS_PER_HOST} guest requests.
       </p>
     );
   }
@@ -103,13 +105,17 @@ export function AddGuestForm({ matchId, hostPlayerId, remaining, open }: AddGues
       </div>
 
       <div className="flex items-center gap-3">
-        <Button type="submit" pending={pending} pendingLabel="Adding…">
-          Add guest
+        <Button type="submit" pending={pending} pendingLabel="Submitting…">
+          Submit guest request
         </Button>
         <span className="text-xs text-neutral-500">
-          {remaining} of {MAX_GUESTS_PER_HOST} slots left
+          {remaining} of {MAX_GUESTS_PER_HOST} requests left
         </span>
       </div>
+
+      <p className="text-xs text-neutral-500">
+        Guest requests are sent to an admin for approval before they join the match.
+      </p>
 
       <FeedbackMessage ok={state.ok} message={state.message} />
     </form>
@@ -237,9 +243,11 @@ export interface GuestListProps {
   showHost?: boolean;
   /** Whether the current viewer may remove these guests. */
   canRemove: boolean;
+  /** Whether the current viewer (admin) may approve/decline pending requests. */
+  canApprove?: boolean;
 }
 
-export function GuestList({ matchId, guests, showHost, canRemove }: GuestListProps) {
+export function GuestList({ matchId, guests, showHost, canRemove, canApprove }: GuestListProps) {
   if (guests.length === 0) {
     return <p className="text-sm text-neutral-500">No guests yet.</p>;
   }
@@ -253,6 +261,7 @@ export function GuestList({ matchId, guests, showHost, canRemove }: GuestListPro
           guest={g}
           showHost={showHost}
           canRemove={canRemove}
+          canApprove={canApprove}
         />
       ))}
     </ul>
@@ -264,24 +273,40 @@ function GuestRow({
   guest,
   showHost,
   canRemove,
+  canApprove,
 }: {
   matchId: number;
   guest: Guest;
   showHost?: boolean;
   canRemove: boolean;
+  canApprove?: boolean;
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(removeGuestAction, INITIAL);
+  const [approveState, approveAction, approving] = useActionState(approveGuestAction, INITIAL);
+  const [rejectState, rejectAction, rejecting] = useActionState(rejectGuestAction, INITIAL);
 
   useEffect(() => {
-    if (state.ok) router.refresh();
-  }, [state, router]);
+    if (state.ok || approveState.ok || rejectState.ok) router.refresh();
+  }, [state, approveState, rejectState, router]);
+
+  const isPending = guest.status === "pending";
+  const showApproval = canApprove && isPending;
 
   return (
-    <li className="flex items-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm dark:border-white/10">
+    <li className="flex flex-wrap items-center gap-2 rounded-lg border border-black/10 px-3 py-2 text-sm dark:border-white/10">
       <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-xs font-medium text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
         Guest
       </span>
+      {isPending ? (
+        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+          Pending
+        </span>
+      ) : (
+        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+          Approved
+        </span>
+      )}
       <span className="flex-1 truncate font-medium">
         {guest.name}
         {showHost ? (
@@ -291,7 +316,33 @@ function GuestRow({
       <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
         {guest.position}
       </span>
-      {canRemove ? (
+      {showApproval ? (
+        <>
+          <form action={approveAction}>
+            <input type="hidden" name="matchId" value={matchId} />
+            <input type="hidden" name="guestId" value={guest.id} />
+            <button
+              type="submit"
+              disabled={approving}
+              className="rounded-lg border border-emerald-600 px-2 py-1 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-50 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+            >
+              {approving ? "…" : "Approve"}
+            </button>
+          </form>
+          <form action={rejectAction}>
+            <input type="hidden" name="matchId" value={matchId} />
+            <input type="hidden" name="guestId" value={guest.id} />
+            <button
+              type="submit"
+              disabled={rejecting}
+              className="rounded-lg border border-red-600 px-2 py-1 text-xs font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
+            >
+              {rejecting ? "…" : "Decline"}
+            </button>
+          </form>
+        </>
+      ) : null}
+      {canRemove && !showApproval ? (
         <form action={formAction}>
           <input type="hidden" name="matchId" value={matchId} />
           <input type="hidden" name="guestId" value={guest.id} />

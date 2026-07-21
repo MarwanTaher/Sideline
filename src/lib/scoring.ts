@@ -17,6 +17,12 @@ export interface ScorePayload {
   peer: number;
   stat: number | null;
   has_stats: boolean;
+  /** Data-confidence tier: unrated < provisional < rated. */
+  tier: "unrated" | "provisional" | "rated";
+  /** Total valid peer votes counted for this player. */
+  valid_votes: number;
+  /** Distinct matches counted for this player. */
+  match_count: number;
 }
 
 type Position = "GK" | "DEF" | "MID" | "FWD";
@@ -46,6 +52,20 @@ const PEER_BASE_WEIGHT = 0.6;
 const STAT_BASE_WEIGHT = 0.4;
 const NEUTRAL_SCORE = 50.0;
 
+// ---------------------------------------------------------------------------
+// Optional fairness enhancements. All default to 0/legacy so the golden-master
+// engine is reproduced exactly until an admin opts in. Toggles are treated as
+// enabled when > 0.
+// ---------------------------------------------------------------------------
+const VOTER_NORMALIZATION = 0; // de-bias harsh/lenient voters per match
+const PEER_MATCH_VOTE_WEIGHTING = 0; // weight matches by how many people voted
+const PEER_AGGREGATE_MODE = 0; // 0 = mean (legacy), 1 = median, 2 = trimmed mean
+const BAYESIAN_SHRINKAGE = 0; // smooth shrink toward neutral instead of hard cliffs
+const BAYESIAN_PRIOR_STRENGTH = 6; // "k" pseudo-votes of neutral prior
+const RECENCY_DECAY = 0; // pull inactive players back toward neutral over time
+const RECENCY_HALF_LIFE_DAYS = 45; // days for the decay factor to halve
+const TRIMMED_MEAN_FRACTION = 0.1; // fraction trimmed from each end for mode 2
+
 const DEFAULT_SCORING_POLICY: Record<string, number> = {
   unrated_min_matches: UNRATED_MIN_MATCHES,
   provisional_min_valid_peer_votes: PROVISIONAL_MIN_VALID_PEER_VOTES,
@@ -57,6 +77,13 @@ const DEFAULT_SCORING_POLICY: Record<string, number> = {
   stat_base_weight: STAT_BASE_WEIGHT,
   neutral_score: NEUTRAL_SCORE,
   conceded_stat_scale: 0.05,
+  voter_normalization: VOTER_NORMALIZATION,
+  peer_match_vote_weighting: PEER_MATCH_VOTE_WEIGHTING,
+  peer_aggregate_mode: PEER_AGGREGATE_MODE,
+  bayesian_shrinkage: BAYESIAN_SHRINKAGE,
+  bayesian_prior_strength: BAYESIAN_PRIOR_STRENGTH,
+  recency_decay: RECENCY_DECAY,
+  recency_half_life_days: RECENCY_HALF_LIFE_DAYS,
 };
 
 // ---------------------------------------------------------------------------
@@ -122,6 +149,13 @@ const POLICY_ALIAS_MAP: Record<string, string> = {
   scoring_stat_base_weight: "stat_base_weight",
   scoring_neutral_score: "neutral_score",
   scoring_conceded_stat_scale: "conceded_stat_scale",
+  scoring_voter_normalization: "voter_normalization",
+  scoring_peer_match_vote_weighting: "peer_match_vote_weighting",
+  scoring_peer_aggregate_mode: "peer_aggregate_mode",
+  scoring_bayesian_shrinkage: "bayesian_shrinkage",
+  scoring_bayesian_prior_strength: "bayesian_prior_strength",
+  scoring_recency_decay: "recency_decay",
+  scoring_recency_half_life_days: "recency_half_life_days",
 };
 
 export async function getScoringPolicy(): Promise<Record<string, number>> {
@@ -154,6 +188,15 @@ export async function getScoringPolicy(): Promise<Record<string, number>> {
   policy.stat_base_weight = Math.max(0.0, policy.stat_base_weight);
   policy.neutral_score = clamp(policy.neutral_score, 0.0, 100.0);
   policy.conceded_stat_scale = Math.max(0.0, policy.conceded_stat_scale ?? 0.05);
+
+  // Fairness enhancement knobs (default to legacy when unset).
+  policy.voter_normalization = policy.voter_normalization > 0 ? 1 : 0;
+  policy.peer_match_vote_weighting = policy.peer_match_vote_weighting > 0 ? 1 : 0;
+  policy.peer_aggregate_mode = clamp(Math.trunc(policy.peer_aggregate_mode ?? 0), 0, 2);
+  policy.bayesian_shrinkage = policy.bayesian_shrinkage > 0 ? 1 : 0;
+  policy.bayesian_prior_strength = Math.max(0.0, policy.bayesian_prior_strength ?? BAYESIAN_PRIOR_STRENGTH);
+  policy.recency_decay = policy.recency_decay > 0 ? 1 : 0;
+  policy.recency_half_life_days = Math.max(1.0, policy.recency_half_life_days ?? RECENCY_HALF_LIFE_DAYS);
 
   const totalWeight = policy.peer_base_weight + policy.stat_base_weight;
   if (totalWeight === 0) {
@@ -257,6 +300,39 @@ export function weightedAvg(values: number[]): number | null {
   return weightedSum / totalWeight;
 }
 
+/** Weighted mean with caller-supplied weights (used for vote-count weighting). */
+export function weightedAvgCustom(values: number[], weights: number[]): number | null {
+  let totalWeight = 0.0;
+  let weightedSum = 0.0;
+  for (let i = 0; i < values.length; i++) {
+    const w = weights[i] ?? 0;
+    weightedSum += values[i] * w;
+    totalWeight += w;
+  }
+  if (totalWeight === 0) return null;
+  return weightedSum / totalWeight;
+}
+
+/** Mean of the middle values, trimming `fraction` off each sorted end. */
+export function trimmedMean(values: number[], fraction: number): number {
+  if (values.length === 0) return 0.0;
+  const xs = [...values].sort((a, b) => a - b);
+  const k = Math.floor(xs.length * fraction);
+  const kept = k > 0 && xs.length - 2 * k > 0 ? xs.slice(k, xs.length - k) : xs;
+  return kept.reduce((a, b) => a + b, 0) / kept.length;
+}
+
+/**
+ * Aggregate a match's filtered votes into a single value per the configured
+ * mode: 0 = mean (legacy), 1 = median, 2 = trimmed mean.
+ */
+export function aggregateVotes(values: number[], mode: number): number {
+  if (values.length === 0) return 0.0;
+  if (mode === 1) return median(values);
+  if (mode === 2) return trimmedMean(values, TRIMMED_MEAN_FRACTION);
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
 export function statNorm(vals: number[], raw: number | null): number {
   if (raw === null) return 50.0;
   if (vals.length === 0) return 50.0;
@@ -284,6 +360,14 @@ export async function getPlayerScores(): Promise<Record<number, ScorePayload>> {
   const peerBaseWeight = policy.peer_base_weight;
   const statBaseWeight = policy.stat_base_weight;
   const neutralScore = policy.neutral_score;
+  const voterNormalization = policy.voter_normalization > 0;
+  const peerVoteWeighting = policy.peer_match_vote_weighting > 0;
+  const peerAggregateMode = Math.trunc(policy.peer_aggregate_mode);
+  const bayesianShrinkage = policy.bayesian_shrinkage > 0;
+  const bayesianPriorStrength = policy.bayesian_prior_strength;
+  const recencyDecay = policy.recency_decay > 0;
+  const recencyHalfLifeDays = policy.recency_half_life_days;
+  const nowMs = Date.now();
   const multipliers = await getEffectiveStatMultipliers();
 
   const players = (await sqlClient.query(
@@ -303,21 +387,27 @@ export async function getPlayerScores(): Promise<Record<number, ScorePayload>> {
     ORDER BY m.played_on DESC, mp.match_id DESC
     `,
     playerIds,
-  )) as Array<{ player_id: number; match_id: number }>;
+  )) as Array<{ player_id: number; match_id: number; played_on: string | null }>;
 
   // Preserve query order (most-recent first) — weightedAvg weights the first 3.
   const playerMatches = new Map<number, number[]>();
+  // Most-recent played_on per player, used only for optional recency decay.
+  const lastPlayedByPlayer = new Map<number, number>();
   for (const row of matchRows) {
     const pid = Number(row.player_id);
     const matchId = Number(row.match_id);
     if (!playerMatches.has(pid)) playerMatches.set(pid, []);
     const list = playerMatches.get(pid)!;
     if (!list.includes(matchId)) list.push(matchId);
+    if (!lastPlayedByPlayer.has(pid) && row.played_on) {
+      const t = new Date(row.played_on).getTime();
+      if (Number.isFinite(t)) lastPlayedByPlayer.set(pid, t);
+    }
   }
 
   const voteRows = (await sqlClient.query(
     `
-    SELECT match_id, voted_for_id, rating
+    SELECT match_id, voter_id, voted_for_id, rating
     FROM votes
     WHERE voted_for_id IN (${placeholders})
                 AND CASE
@@ -327,13 +417,48 @@ export async function getPlayerScores(): Promise<Record<number, ScorePayload>> {
                         END = 1
     `,
     playerIds,
-  )) as Array<{ match_id: number; voted_for_id: number; rating: number }>;
+  )) as Array<{ match_id: number; voter_id: number; voted_for_id: number; rating: number }>;
+
+  // Optional voter de-biasing: shift each voter's ballot so its mean matches the
+  // match's overall mean, cancelling systematic harsh/lenient rating styles
+  // while preserving the match's overall average.
+  const matchMean = new Map<number, number>();
+  const voterMean = new Map<string, number>();
+  if (voterNormalization) {
+    const matchAgg = new Map<number, { sum: number; count: number }>();
+    const voterAgg = new Map<string, { sum: number; count: number }>();
+    for (const row of voteRows) {
+      const mid = Number(row.match_id);
+      const vid = Number(row.voter_id);
+      const r = Number(row.rating);
+      const ma = matchAgg.get(mid) ?? { sum: 0, count: 0 };
+      ma.sum += r;
+      ma.count += 1;
+      matchAgg.set(mid, ma);
+      const vk = `${mid}:${vid}`;
+      const va = voterAgg.get(vk) ?? { sum: 0, count: 0 };
+      va.sum += r;
+      va.count += 1;
+      voterAgg.set(vk, va);
+    }
+    for (const [mid, agg] of matchAgg) matchMean.set(mid, agg.sum / agg.count);
+    for (const [vk, agg] of voterAgg) voterMean.set(vk, agg.sum / agg.count);
+  }
 
   const votesByPlayerMatch = new Map<string, number[]>();
   for (const row of voteRows) {
-    const k = `${Number(row.voted_for_id)}:${Number(row.match_id)}`;
+    const mid = Number(row.match_id);
+    const k = `${Number(row.voted_for_id)}:${mid}`;
+    let rating = Number(row.rating);
+    if (voterNormalization) {
+      const mm = matchMean.get(mid);
+      const vm = voterMean.get(`${mid}:${Number(row.voter_id)}`);
+      if (mm !== undefined && vm !== undefined) {
+        rating = clamp(rating + (mm - vm), 0.0, 10.0);
+      }
+    }
     if (!votesByPlayerMatch.has(k)) votesByPlayerMatch.set(k, []);
-    votesByPlayerMatch.get(k)!.push(Number(row.rating));
+    votesByPlayerMatch.get(k)!.push(rating);
   }
 
   // Approved stats are counted only for matches where stats scoring is enabled.
@@ -405,14 +530,23 @@ export async function getPlayerScores(): Promise<Record<number, ScorePayload>> {
   for (const pid of playerIds) {
     const recentMatches = playerMatches.get(pid) ?? [];
     const peerValues: number[] = [];
+    const peerVoteCounts: number[] = [];
     for (const mid of recentMatches) {
       const votes = votesByPlayerMatch.get(`${pid}:${mid}`) ?? [];
       const filtered = filterOutlierVotes(votes);
       if (filtered.length > 0) {
-        peerValues.push(filtered.reduce((a, b) => a + b, 0) / filtered.length);
+        peerValues.push(aggregateVotes(filtered, peerAggregateMode));
+        peerVoteCounts.push(votes.length);
       }
     }
-    const peerAvg = weightedAvg(peerValues);
+    // Recency weight (first 3 matches count double) optionally scaled by how
+    // many people voted in each match.
+    const peerAvg = peerVoteWeighting
+      ? weightedAvgCustom(
+          peerValues,
+          peerValues.map((_, i) => (i < 3 ? 2.0 : 1.0) * peerVoteCounts[i]),
+        )
+      : weightedAvg(peerValues);
     if (peerAvg !== null) {
       // Ratings are 0-10, map linearly to 0-100.
       peerScore100.set(pid, clamp(peerAvg * 10.0, 0.0, 100.0));
@@ -429,24 +563,47 @@ export async function getPlayerScores(): Promise<Record<number, ScorePayload>> {
       validPeerVotes += (votesByPlayerMatch.get(`${pid}:${mid}`) ?? []).length;
     }
 
-    // Internal state (kept for parity; not used downstream).
-    void (matches.length < unratedMinMatches
-      ? "unrated"
-      : validPeerVotes < provisionalMinValidPeerVotes
-        ? "provisional"
-        : "rated");
+    const tier: "unrated" | "provisional" | "rated" =
+      matches.length < unratedMinMatches
+        ? "unrated"
+        : validPeerVotes < provisionalMinValidPeerVotes
+          ? "provisional"
+          : "rated";
 
     const peerRaw = peerScore100.get(pid) ?? neutralScore;
 
-    let cPeer = validPeerVotes > 0 ? Math.min(1.0, validPeerVotes / peerFullConfidenceVotes) : 0.0;
     const cMatch = recentMatches.length > 0 ? Math.min(1.0, recentMatches.length / matchCountFullConfidence) : 0.0;
-    cPeer *= cMatch;
 
-    const peerAdj = neutralScore + cPeer * (peerRaw - neutralScore);
+    // Optional recency decay: long inactivity pulls confidence (and thus the
+    // score) back toward neutral. decay = 0.5 ^ (daysSinceLastMatch / halfLife).
+    let decay = 1.0;
+    if (recencyDecay) {
+      const last = lastPlayedByPlayer.get(pid);
+      if (last !== undefined) {
+        const days = Math.max(0, (nowMs - last) / 86_400_000);
+        decay = Math.pow(0.5, days / recencyHalfLifeDays);
+      }
+    }
+    const cMatchEff = cMatch * decay;
+
+    // Peer damping: smooth Bayesian shrinkage toward neutral, or the legacy
+    // piecewise confidence ramp. Both still gated by match-count confidence.
+    let peerAdj: number;
+    if (bayesianShrinkage) {
+      const shrunk =
+        (validPeerVotes * peerRaw + bayesianPriorStrength * neutralScore) /
+        (validPeerVotes + bayesianPriorStrength);
+      peerAdj = neutralScore + cMatchEff * (shrunk - neutralScore);
+    } else {
+      let cPeer = validPeerVotes > 0 ? Math.min(1.0, validPeerVotes / peerFullConfidenceVotes) : 0.0;
+      cPeer *= cMatchEff;
+      peerAdj = neutralScore + cPeer * (peerRaw - neutralScore);
+    }
+
     const statRaw = statScore100ByPlayer.has(pid) ? statScore100ByPlayer.get(pid)! : null;
     const statMatchCount = statMatchCountByPlayer.get(pid) ?? 0;
     let cStat = statMatchCount > 0 ? Math.min(1.0, statMatchCount / statFullConfidenceMatches) : 0.0;
-    cStat *= cMatch;
+    cStat *= cMatchEff;
     let statAdj: number | null = null;
     if (statRaw !== null) {
       statAdj = neutralScore + cStat * (statRaw - neutralScore);
@@ -469,6 +626,9 @@ export async function getPlayerScores(): Promise<Record<number, ScorePayload>> {
       peer: round2(peerAdj),
       stat: statAdj !== null ? round2(statAdj) : null,
       has_stats: statAdj !== null,
+      tier,
+      valid_votes: validPeerVotes,
+      match_count: matches.length,
     };
   }
 

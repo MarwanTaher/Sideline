@@ -40,5 +40,9 @@ export interface Guest {
   skill: number;
   teamNo: number | null;
   paid: boolean;
+  status: GuestStatus;
   createdAt: string;
 }
+
+/** Approval state of a guest request. */
+export type GuestStatus = "pending" | "approved";

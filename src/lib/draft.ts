@@ -202,8 +202,8 @@ export async function getDraftState(matchId: number): Promise<DraftState | null>
     photoUrl: r.photo_url ?? null,
   }));
 
-  // Append guests as draftable entities using negative ids.
-  const guests = await listGuests(matchId);
+  // Append approved guests as draftable entities using negative ids.
+  const guests = (await listGuests(matchId)).filter((g) => g.status === "approved");
   for (const g of guests) {
     players.push({
       playerId: guestToDraftId(g.id),

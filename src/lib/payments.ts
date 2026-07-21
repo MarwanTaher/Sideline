@@ -119,7 +119,7 @@ export async function getUnpaidPlayerIds(matchId: number): Promise<number[]> {
   const ids = new Set(rows.filter((r) => !r.paid).map((r) => r.playerId));
   // Hosts are responsible for their guests' share, so remind them too.
   const hostRows = (await sqlClient.query(
-    `SELECT DISTINCT host_player_id FROM match_guests WHERE match_id = $1 AND paid = 0`,
+    `SELECT DISTINCT host_player_id FROM match_guests WHERE match_id = $1 AND paid = 0 AND status = 'approved'`,
     [matchId],
   )) as unknown as { host_player_id: number }[];
   for (const h of hostRows) ids.add(h.host_player_id);
@@ -168,11 +168,11 @@ export async function getTotalPaymentChange(): Promise<number> {
     `SELECT m.id,
             COALESCE(m.total_payment, 0) AS total_payment,
             (SELECT COUNT(*) FROM match_players mp WHERE mp.match_id = m.id) AS player_heads,
-            (SELECT COUNT(*) FROM match_guests g WHERE g.match_id = m.id) AS guest_heads,
+            (SELECT COUNT(*) FROM match_guests g WHERE g.match_id = m.id AND g.status = 'approved') AS guest_heads,
             (SELECT COUNT(*) FROM match_players mp2
                LEFT JOIN payments pay ON pay.match_id = mp2.match_id AND pay.player_id = mp2.player_id
              WHERE mp2.match_id = m.id AND COALESCE(pay.paid, 0) = 1) AS paid_players,
-            (SELECT COUNT(*) FROM match_guests g2 WHERE g2.match_id = m.id AND g2.paid = 1) AS paid_guests
+            (SELECT COUNT(*) FROM match_guests g2 WHERE g2.match_id = m.id AND g2.paid = 1 AND g2.status = 'approved') AS paid_guests
      FROM matches m`,
   )) as unknown as Array<{
     total_payment: number | string;
@@ -260,7 +260,7 @@ export async function playerHostsGuest(
   guestId: number,
 ): Promise<boolean> {
   const rows = (await sqlClient.query(
-    `SELECT 1 FROM match_guests WHERE id = $1 AND match_id = $2 AND host_player_id = $3`,
+    `SELECT 1 FROM match_guests WHERE id = $1 AND match_id = $2 AND host_player_id = $3 AND status = 'approved'`,
     [guestId, matchId, playerId],
   )) as unknown as unknown[];
   return rows.length > 0;
@@ -298,7 +298,7 @@ async function buildPlayerPaymentMatch(
   const [meta, rows] = await Promise.all([getPaymentMeta(matchId), getPaymentRows(matchId)]);
   if (!meta) return null;
   const guestRows = (await sqlClient.query(
-    `SELECT id, name, host_player_id, paid FROM match_guests WHERE match_id = $1`,
+    `SELECT id, name, host_player_id, paid FROM match_guests WHERE match_id = $1 AND status = 'approved'`,
     [matchId],
   )) as unknown as { id: number; name: string; host_player_id: number; paid: number }[];
   const summary = computeSummary(
@@ -348,7 +348,7 @@ export async function getPlayerPaymentMatches(playerId: number): Promise<PlayerP
     `SELECT DISTINCT m.id
        FROM matches m
        LEFT JOIN match_players mp ON mp.match_id = m.id AND mp.player_id = $1
-       LEFT JOIN match_guests mg ON mg.match_id = m.id AND mg.host_player_id = $1
+       LEFT JOIN match_guests mg ON mg.match_id = m.id AND mg.host_player_id = $1 AND mg.status = 'approved'
       WHERE COALESCE(m.payments_active, 0) = 1
         AND (mp.player_id IS NOT NULL OR mg.host_player_id IS NOT NULL)
       ORDER BY m.id DESC`,

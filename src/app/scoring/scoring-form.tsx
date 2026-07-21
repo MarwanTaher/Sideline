@@ -38,6 +38,33 @@ function NumberField({
   );
 }
 
+function ToggleField({
+  label,
+  name,
+  defaultChecked,
+  help,
+}: {
+  label: string;
+  name: string;
+  defaultChecked: boolean;
+  help?: string;
+}) {
+  return (
+    <label className="flex items-start gap-3 text-sm">
+      <input
+        type="checkbox"
+        name={name}
+        defaultChecked={defaultChecked}
+        className="mt-0.5 h-4 w-4 shrink-0"
+      />
+      <span>
+        <span className="font-medium">{label}</span>
+        {help ? <span className="mt-0.5 block text-xs text-neutral-500">{help}</span> : null}
+      </span>
+    </label>
+  );
+}
+
 export function ScoringForm({ config }: { config: ScoringConfigView }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(saveScoringConfigAction, INITIAL);
@@ -139,6 +166,79 @@ export function ScoringForm({ config }: { config: ScoringConfigView }) {
             defaultValue={config.awardsOverallMinValidVotes}
             min={0}
           />
+        </div>
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold tracking-tight">Advanced fairness</h2>
+        <p className="mt-1 text-sm text-neutral-500">
+          Optional refinements to make peer scores more fair, consistent and accurate. All default
+          to off — turning them on changes how scores are computed.
+        </p>
+        <div className="mt-3 space-y-4 rounded-xl border border-black/10 p-4 dark:border-white/10">
+          <ToggleField
+            label="Normalize voter harshness"
+            name="voterNormalization"
+            defaultChecked={config.voterNormalization}
+            help="Re-centre each voter's ballot to the match average so consistently harsh or lenient voters don't skew results."
+          />
+          <ToggleField
+            label="Weight matches by number of voters"
+            name="peerVoteWeighting"
+            defaultChecked={config.peerVoteWeighting}
+            help="Matches rated by more people count for more than thinly-rated ones."
+          />
+          <label className="block text-sm">
+            <span className="font-medium">Per-match vote aggregate</span>
+            <select
+              name="peerAggregateMode"
+              defaultValue={String(config.peerAggregateMode)}
+              className="mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-neutral-900"
+            >
+              <option value="0">Mean (default)</option>
+              <option value="1">Median (robust to outliers)</option>
+              <option value="2">Trimmed mean</option>
+            </select>
+            <span className="mt-1 block text-xs text-neutral-500">
+              How a match&apos;s votes collapse into one value after outlier filtering.
+            </span>
+          </label>
+          <div className="border-t border-black/5 pt-4 dark:border-white/5">
+            <ToggleField
+              label="Bayesian shrinkage"
+              name="bayesianShrinkage"
+              defaultChecked={config.bayesianShrinkage}
+              help="Smoothly pull low-sample scores toward neutral instead of using hard vote thresholds."
+            />
+            <div className="mt-3">
+              <NumberField
+                label="Bayesian prior strength (k)"
+                name="bayesianPriorStrength"
+                defaultValue={config.bayesianPriorStrength}
+                min={0}
+                step={1}
+                help="Pseudo-votes of neutral prior. Higher = more shrinkage toward neutral when data is thin."
+              />
+            </div>
+          </div>
+          <div className="border-t border-black/5 pt-4 dark:border-white/5">
+            <ToggleField
+              label="Recency decay for inactivity"
+              name="recencyDecay"
+              defaultChecked={config.recencyDecay}
+              help="Pull long-inactive players back toward neutral so ratings reflect current form."
+            />
+            <div className="mt-3">
+              <NumberField
+                label="Decay half-life (days)"
+                name="recencyHalfLifeDays"
+                defaultValue={config.recencyHalfLifeDays}
+                min={1}
+                step={1}
+                help="Days of inactivity for a player's confidence to halve."
+              />
+            </div>
+          </div>
         </div>
       </section>
 

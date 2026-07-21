@@ -22,6 +22,9 @@ const nonNegInt = z.coerce.number().int().min(0, "Must be 0 or more.");
 const posInt = z.coerce.number().int().min(1, "Must be 1 or more.");
 const neutralSchema = z.coerce.number().min(0, "Must be 0–100.").max(100, "Must be 0–100.");
 const pctSchema = z.coerce.number().int().min(0, "Must be 0–100.").max(100, "Must be 0–100.");
+const aggregateModeSchema = z.coerce.number().int().min(0).max(2);
+const priorSchema = z.coerce.number().min(0, "Must be 0 or more.").max(100, "Must be 100 or less.");
+const halfLifeSchema = z.coerce.number().int().min(1, "Must be 1 or more.");
 
 export async function saveScoringConfigAction(
   _prev: ScoringConfigState,
@@ -39,6 +42,13 @@ export async function saveScoringConfigAction(
       statWeightPct: pctSchema.parse(formData.get("statWeightPct")),
       awardsMatchMinValidVotes: nonNegInt.parse(formData.get("awardsMatchMinValidVotes")),
       awardsOverallMinValidVotes: nonNegInt.parse(formData.get("awardsOverallMinValidVotes")),
+      voterNormalization: formData.get("voterNormalization") === "on",
+      peerVoteWeighting: formData.get("peerVoteWeighting") === "on",
+      peerAggregateMode: aggregateModeSchema.parse(formData.get("peerAggregateMode") ?? 0),
+      bayesianShrinkage: formData.get("bayesianShrinkage") === "on",
+      bayesianPriorStrength: priorSchema.parse(formData.get("bayesianPriorStrength")),
+      recencyDecay: formData.get("recencyDecay") === "on",
+      recencyHalfLifeDays: halfLifeSchema.parse(formData.get("recencyHalfLifeDays")),
     };
 
     await saveScoringConfig(input);

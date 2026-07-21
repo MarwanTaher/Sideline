@@ -3,8 +3,15 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { addGuest, removeGuest, GuestError, SKILL_LEVELS, countGuests } from "@/lib/guests";
-import { getAvailabilityMatch, countInPlayers } from "@/lib/availability";
+import {
+  addGuest,
+  removeGuest,
+  approveGuest,
+  getGuest,
+  GuestError,
+  SKILL_LEVELS,
+} from "@/lib/guests";
+import { notify } from "@/lib/push";
 import { POSITIONS, type Position } from "@/lib/positions";
 
 export interface GuestActionState {
@@ -57,7 +64,7 @@ export async function addGuestAction(
     const skillKey = rawSkill ? skillSchema.parse(rawSkill) : null;
 
     // Admins may add on behalf of any player via hostPlayerId; otherwise the
-    // signed-in player is the host.
+    // signed-in player is the host requesting the guest.
     const rawHost = formData.get("hostPlayerId");
     let hostPlayerId: number;
     if (isAdmin && rawHost) {
@@ -68,26 +75,114 @@ export async function addGuestAction(
       throw new GuestError("Select a host player.");
     }
 
-    // A guest fills a spot too, so a self-service guest cannot push the squad
-    // (players IN + guests) past the match cap. Admins bypass this.
-    if (!isAdmin) {
-      const match = await getAvailabilityMatch(matchId);
-      if (match) {
-        const [inCount, guestCount] = await Promise.all([
-          countInPlayers(matchId),
-          countGuests(matchId),
-        ]);
-        if (inCount + guestCount >= match.maxPlayers) {
-          throw new GuestError(
-            `Match is full (${match.maxPlayers} players). Ask an admin to add a guest.`,
-          );
-        }
+    // Admin adds are auto-approved and count immediately; player submissions are
+    // pending until an admin approves them, so they do not reserve a spot and
+    // are not subject to the full-match check here.
+    const status = isAdmin ? "approved" : "pending";
+
+    await addGuest({ matchId, hostPlayerId, name, position, skillKey, status });
+    revalidateGuestPaths(matchId);
+
+    if (status === "pending") {
+      const cleanName = name.trim() || "a guest";
+      const hostName = session.user.name || "A player";
+      try {
+        await notify("guest_request", {
+          title: "Guest request \u{1f91d}",
+          body: `${hostName} wants to bring ${cleanName} \u2014 approve or decline.`,
+          url: `/matches/${matchId}/availability`,
+          tag: `match-${matchId}-guest-request`,
+        });
+      } catch {
+        // ignore push errors
       }
+      return { ok: true, message: "Guest request submitted for admin approval." };
     }
 
-    await addGuest({ matchId, hostPlayerId, name, position, skillKey });
-    revalidateGuestPaths(matchId);
     return { ok: true, message: "Guest added." };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function approveGuestAction(
+  _prev: GuestActionState,
+  formData: FormData,
+): Promise<GuestActionState> {
+  try {
+    const session = await auth();
+    if (!session?.user) throw new GuestError("Not signed in.");
+    const role = session.user.role;
+    const isAdmin = role === "admin" || role === "super";
+    if (!isAdmin) throw new GuestError("Only admins can approve guests.");
+
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const guestId = guestIdSchema.parse(formData.get("guestId"));
+
+    const guest = await getGuest(matchId, guestId);
+    if (!guest) throw new GuestError("Guest request not found.");
+
+    await approveGuest(matchId, guestId);
+    revalidateGuestPaths(matchId);
+
+    try {
+      await notify(
+        "guest_decision",
+        {
+          title: "Guest approved \u2705",
+          body: `Your guest ${guest.name} has been approved for the match.`,
+          url: `/matches/${matchId}/availability`,
+          tag: `match-${matchId}-guest-${guestId}-decision`,
+        },
+        { playerIds: [guest.hostPlayerId] },
+      );
+    } catch {
+      // ignore push errors
+    }
+
+    return { ok: true, message: "Guest approved." };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function rejectGuestAction(
+  _prev: GuestActionState,
+  formData: FormData,
+): Promise<GuestActionState> {
+  try {
+    const session = await auth();
+    if (!session?.user) throw new GuestError("Not signed in.");
+    const role = session.user.role;
+    const isAdmin = role === "admin" || role === "super";
+    if (!isAdmin) throw new GuestError("Only admins can decline guests.");
+
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const guestId = guestIdSchema.parse(formData.get("guestId"));
+
+    const guest = await getGuest(matchId, guestId);
+    if (!guest) throw new GuestError("Guest request not found.");
+
+    // Admins may remove any guest, so pass a null owner.
+    await removeGuest(matchId, guestId, null);
+    revalidateGuestPaths(matchId);
+
+    try {
+      await notify(
+        "guest_decision",
+        {
+          title: "Guest declined",
+          body: `Your guest request for ${guest.name} was declined.`,
+          url: `/matches/${matchId}/availability`,
+          tag: `match-${matchId}-guest-${guestId}-decision`,
+        },
+        { playerIds: [guest.hostPlayerId] },
+      );
+    } catch {
+      // ignore push errors
+    }
+
+    return { ok: true, message: "Guest request declined." };
   } catch (err) {
     return fail(err);
   }

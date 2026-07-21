@@ -8,6 +8,7 @@ import {
   skillLabelFromScore,
   type SkillLevel,
   type Guest,
+  type GuestStatus,
 } from "@/lib/guests-shared";
 
 // Re-export the client-safe catalog so existing server imports keep working.
@@ -18,7 +19,7 @@ export {
   skillScoreFromKey,
   skillLabelFromScore,
 };
-export type { SkillLevel, Guest };
+export type { SkillLevel, Guest, GuestStatus };
 
 interface GuestRow {
   id: number;
@@ -30,11 +31,16 @@ interface GuestRow {
   skill: number;
   team_no: number | null;
   paid: number;
+  status: string;
   created_at: string;
 }
 
 function normalizePosition(pos: string): Position {
   return (POSITIONS as readonly string[]).includes(pos) ? (pos as Position) : "MID";
+}
+
+function normalizeStatus(s: string): GuestStatus {
+  return s === "pending" ? "pending" : "approved";
 }
 
 function mapRow(r: GuestRow): Guest {
@@ -48,6 +54,7 @@ function mapRow(r: GuestRow): Guest {
     skill: r.skill,
     teamNo: r.team_no,
     paid: r.paid === 1,
+    status: normalizeStatus(r.status),
     createdAt: r.created_at,
   };
 }
@@ -56,7 +63,7 @@ function mapRow(r: GuestRow): Guest {
 export async function listGuests(matchId: number): Promise<Guest[]> {
   const rows = (await sqlClient.query(
     `SELECT g.id, g.match_id, g.host_player_id, p.name AS host_name, g.name,
-            g.position, g.skill, g.team_no, g.paid, g.created_at
+            g.position, g.skill, g.team_no, g.paid, g.status, g.created_at
        FROM match_guests g
        JOIN players p ON p.id = g.host_player_id
       WHERE g.match_id = $1
@@ -73,7 +80,7 @@ export async function listGuestsForHost(
 ): Promise<Guest[]> {
   const rows = (await sqlClient.query(
     `SELECT g.id, g.match_id, g.host_player_id, p.name AS host_name, g.name,
-            g.position, g.skill, g.team_no, g.paid, g.created_at
+            g.position, g.skill, g.team_no, g.paid, g.status, g.created_at
        FROM match_guests g
        JOIN players p ON p.id = g.host_player_id
       WHERE g.match_id = $1 AND g.host_player_id = $2
@@ -91,6 +98,8 @@ interface AddGuestInput {
   name: string;
   position?: Position | null;
   skillKey?: string | null;
+  /** Approval state to insert with. Player requests default to "pending". */
+  status?: GuestStatus;
 }
 
 /**
@@ -128,14 +137,39 @@ export async function addGuest(input: AddGuestInput): Promise<number> {
 
   const position = input.position ? normalizePosition(input.position) : "MID";
   const skill = skillScoreFromKey(input.skillKey);
+  const status: GuestStatus = input.status === "pending" ? "pending" : "approved";
 
   const inserted = (await sqlClient.query(
-    `INSERT INTO match_guests(match_id, host_player_id, name, position, skill)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO match_guests(match_id, host_player_id, name, position, skill, status)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id`,
-    [input.matchId, input.hostPlayerId, name, position, skill],
+    [input.matchId, input.hostPlayerId, name, position, skill, status],
   )) as unknown as { id: number }[];
   return inserted[0].id;
+}
+
+/** Fetch a single guest by id within a match (or null). */
+export async function getGuest(
+  matchId: number,
+  guestId: number,
+): Promise<Guest | null> {
+  const rows = (await sqlClient.query(
+    `SELECT g.id, g.match_id, g.host_player_id, p.name AS host_name, g.name,
+            g.position, g.skill, g.team_no, g.paid, g.status, g.created_at
+       FROM match_guests g
+       JOIN players p ON p.id = g.host_player_id
+      WHERE g.match_id = $1 AND g.id = $2`,
+    [matchId, guestId],
+  )) as unknown as GuestRow[];
+  return rows[0] ? mapRow(rows[0]) : null;
+}
+
+/** Approve a pending guest request. */
+export async function approveGuest(matchId: number, guestId: number): Promise<void> {
+  await sqlClient.query(
+    `UPDATE match_guests SET status = 'approved' WHERE id = $1 AND match_id = $2`,
+    [guestId, matchId],
+  );
 }
 
 /**
@@ -211,10 +245,10 @@ export async function setGuestPaid(
   );
 }
 
-/** Count guests for a match (for payment share denominator). */
+/** Count approved guests for a match (for capacity + payment share). */
 export async function countGuests(matchId: number): Promise<number> {
   const rows = (await sqlClient.query(
-    `SELECT COUNT(*)::int AS n FROM match_guests WHERE match_id = $1`,
+    `SELECT COUNT(*)::int AS n FROM match_guests WHERE match_id = $1 AND status = 'approved'`,
     [matchId],
   )) as unknown as { n: number }[];
   return rows[0]?.n ?? 0;

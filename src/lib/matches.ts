@@ -198,7 +198,7 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
     SELECT g.id, g.team_no, g.name, g.position, h.name AS host_name
     FROM match_guests g
     JOIN players h ON h.id = g.host_player_id
-    WHERE g.match_id = $1 AND g.team_no IS NOT NULL
+    WHERE g.match_id = $1 AND g.team_no IS NOT NULL AND g.status = 'approved'
     ORDER BY g.team_no, g.name
     `,
     [mid],

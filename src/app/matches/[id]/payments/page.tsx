@@ -67,12 +67,15 @@ export default async function MatchPaymentsPage({
 }
 
 async function AdminSection({ matchId }: { matchId: number }) {
-  const [meta, rows, guests, totalChange] = await Promise.all([
+  const [meta, rows, allGuests, totalChange] = await Promise.all([
     getPaymentMeta(matchId),
     getPaymentRows(matchId),
     listGuests(matchId),
     getTotalPaymentChange(),
   ]);
+
+  // Only approved guests are part of the match, so only they owe a share.
+  const guests = allGuests.filter((g) => g.status === "approved");
 
   const safeMeta = meta ?? {
     id: matchId,
