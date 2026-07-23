@@ -11,8 +11,8 @@ self.addEventListener("push", (event) => {
   const title = data.title || "Sideline";
   const options = {
     body: data.body || "",
-    icon: data.icon || "/logo-mark.svg",
-    badge: data.badge || "/logo-mark.svg",
+    icon: data.icon || "/icon-192.png",
+    badge: data.badge || "/icon-192.png",
     tag: data.tag,
     data: { url: data.url || "/" },
   };

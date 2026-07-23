@@ -250,7 +250,7 @@ export async function submitPlayerStats(
   playerId: number,
   goals: number,
   assists: number,
-): Promise<void> {
+): Promise<number> {
   const existingRaw = await sqlClient.query(
     `SELECT status FROM player_stats_submissions WHERE match_id = $1 AND player_id = $2`,
     [matchId, playerId],
@@ -263,7 +263,7 @@ export async function submitPlayerStats(
     ]);
   }
 
-  await sqlClient.query(
+  const insertRaw = await sqlClient.query(
     `INSERT INTO player_stats_submissions(match_id, player_id, goals, assists, status, created_at)
      VALUES ($1, $2, $3, $4, 'pending', CURRENT_TIMESTAMP)
      ON CONFLICT(match_id, player_id) DO UPDATE SET
@@ -271,9 +271,11 @@ export async function submitPlayerStats(
        assists = EXCLUDED.assists,
        status = 'pending',
        reviewed_by = NULL,
-       reviewed_at = NULL`,
+       reviewed_at = NULL
+     RETURNING id`,
     [matchId, playerId, goals, assists],
   );
+  const submissionId = Number((insertRaw as { id: number }[])[0].id);
 
   await sqlClient.query(
     `INSERT INTO player_goals_claims(match_id, player_id, goals_claimed, status, created_at)
@@ -285,6 +287,8 @@ export async function submitPlayerStats(
        reviewed_at = NULL`,
     [matchId, playerId, goals],
   );
+
+  return submissionId;
 }
 
 interface SubmissionRow {

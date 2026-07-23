@@ -166,3 +166,84 @@ export async function countInPlayers(matchId: number): Promise<number> {
   const rows = raw as { c: number }[];
   return Number(rows[0]?.c ?? 0);
 }
+
+// ── Waitlist (#9) ──────────────────────────────────────────────────────────
+// The match_availability.status CHECK constraint only allows 'in'/'out', so the
+// waitlist is kept as an ordered list of player ids in app_settings, keyed per
+// match. Order = join order, which gives a fair first-in promotion rule.
+
+const WAITLIST_PREFIX = "waitlist_";
+
+export async function getWaitlist(matchId: number): Promise<number[]> {
+  const rows = (await sqlClient.query(
+    `SELECT value FROM app_settings WHERE key = $1`,
+    [`${WAITLIST_PREFIX}${matchId}`],
+  )) as Array<{ value: string | null }>;
+  const raw = rows[0]?.value ?? "";
+  return raw
+    .split(",")
+    .map((s) => Number(s.trim()))
+    .filter((n) => Number.isInteger(n) && n > 0);
+}
+
+async function saveWaitlist(matchId: number, ids: number[]): Promise<void> {
+  const clean = Array.from(new Set(ids.filter((n) => Number.isInteger(n) && n > 0)));
+  await sqlClient.query(
+    `INSERT INTO app_settings(key, value) VALUES ($1, $2)
+     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
+    [`${WAITLIST_PREFIX}${matchId}`, clean.join(",")],
+  );
+}
+
+/** Append a player to the waitlist (idempotent). Returns their 1-based spot. */
+export async function addToWaitlist(matchId: number, playerId: number): Promise<number> {
+  const list = await getWaitlist(matchId);
+  if (!list.includes(playerId)) list.push(playerId);
+  await saveWaitlist(matchId, list);
+  return list.indexOf(playerId) + 1;
+}
+
+/** Remove a player from the waitlist if present. */
+export async function removeFromWaitlist(matchId: number, playerId: number): Promise<void> {
+  const list = await getWaitlist(matchId);
+  const next = list.filter((id) => id !== playerId);
+  if (next.length !== list.length) await saveWaitlist(matchId, next);
+}
+
+/** The waitlisted players (id, name) in join order — for the admin view. */
+export async function getWaitlistPlayers(
+  matchId: number,
+): Promise<{ playerId: number; name: string }[]> {
+  const ids = await getWaitlist(matchId);
+  if (ids.length === 0) return [];
+  const raw = (await sqlClient.query(
+    `SELECT id, name FROM players WHERE id = ANY($1::int[])`,
+    [ids],
+  )) as Array<{ id: number; name: string }>;
+  const byId = new Map(raw.map((r) => [Number(r.id), r.name]));
+  return ids
+    .filter((id) => byId.has(id))
+    .map((id) => ({ playerId: id, name: byId.get(id) as string }));
+}
+
+/**
+ * Promote a waitlisted player into the match if they are still active and not
+ * already IN. Returns true when they were moved to IN.
+ */
+export async function promoteWaitlistCandidate(
+  matchId: number,
+  playerId: number,
+): Promise<boolean> {
+  const rows = (await sqlClient.query(
+    `SELECT p.active, COALESCE(ma.status, 'pending') AS status
+       FROM players p
+       LEFT JOIN match_availability ma ON ma.match_id = $1 AND ma.player_id = p.id
+      WHERE p.id = $2`,
+    [matchId, playerId],
+  )) as Array<{ active: number; status: string }>;
+  if (rows.length === 0) return false;
+  if (Number(rows[0].active) !== 1) return false;
+  if (rows[0].status === "in") return false;
+  await setPlayerAvailability(matchId, playerId, "in");
+  return true;
+}

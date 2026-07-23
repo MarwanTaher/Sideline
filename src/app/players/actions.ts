@@ -18,6 +18,7 @@ import {
   updatePlayer,
 } from "@/lib/players-admin";
 import { createPlayerAccessToken, revokePlayerAccessTokens } from "@/lib/access-tokens";
+import { revalidateScores } from "@/lib/scores-cache";
 
 export interface PlayerActionState {
   ok: boolean;
@@ -57,6 +58,7 @@ export async function addPlayerAction(
     const name = nameSchema.parse(formData.get("name"));
     const position = positionSchema.parse(formData.get("position"));
     await createPlayer(name, position);
+    revalidateScores();
     revalidatePath("/players");
     revalidatePath("/leaderboard");
     return { ok: true, message: `Added ${name}.` };
@@ -75,6 +77,7 @@ export async function savePlayerAction(
     const position = positionSchema.parse(formData.get("position"));
     const active = formData.get("active") === "on";
     await updatePlayer(playerId, position, active);
+    revalidateScores();
     revalidatePath("/players");
     revalidatePath("/leaderboard");
     return { ok: true, message: "Saved." };
@@ -91,6 +94,7 @@ export async function activatePlayerAction(
     await requireAdmin();
     const playerId = playerIdSchema.parse(formData.get("playerId"));
     await activatePlayer(playerId);
+    revalidateScores();
     revalidatePath("/players");
     revalidatePath("/leaderboard");
     return { ok: true, message: "Player activated." };
@@ -111,6 +115,7 @@ export async function deletePlayerAction(
       return { ok: false, message: 'Type DELETE to confirm removal.' };
     }
     await deletePlayer(playerId);
+    revalidateScores();
     revalidatePath("/players");
     revalidatePath("/leaderboard");
     return { ok: true, message: "Player removed." };
@@ -227,6 +232,7 @@ export async function bulkEditAction(
       const pos = positionSchema.parse(positionChoice);
       await bulkSetPosition(ids, pos);
     }
+    revalidateScores();
     revalidatePath("/players");
     revalidatePath("/leaderboard");
     return { ok: true, message: `Bulk edits applied to ${ids.length} player(s).` };
@@ -246,6 +252,7 @@ export async function bulkRemoveAction(
       return { ok: false, message: "Type DELETE to confirm bulk removal." };
     }
     await bulkDelete(ids);
+    revalidateScores();
     revalidatePath("/players");
     revalidatePath("/leaderboard");
     return { ok: true, message: `Removed ${ids.length} player(s).` };
@@ -265,6 +272,7 @@ export async function importCsvAction(
     const rows = parsePlayersCsv(text);
     if (rows.length === 0) return { ok: false, message: "No valid player rows found." };
     const n = await importPlayers(rows);
+    revalidateScores();
     revalidatePath("/players");
     revalidatePath("/leaderboard");
     return { ok: true, message: `Imported / updated ${n} player(s).` };

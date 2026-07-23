@@ -1,5 +1,13 @@
+import { unstable_cache } from "next/cache";
 import { sqlClient } from "./db";
 import { getPlayerScores, getScoringPolicy } from "./scoring";
+
+/**
+ * Cache tag for all computed-score reads. Score-affecting writes (match close,
+ * stat approval, vote edits, scoring-config changes, roster/player changes)
+ * call `revalidateScores()` to invalidate it. See `scores-cache.ts`.
+ */
+export const SCORES_CACHE_TAG = "scores";
 
 export interface LeaderboardRow {
   id: number;
@@ -74,4 +82,35 @@ export async function getLeaderboard(): Promise<LeaderboardData> {
   rows.sort((a, b) => b.final - a.final);
 
   return { rows, peerWeightPct, statWeightPct, unratedMinMatches };
+}
+
+/**
+ * Cached leaderboard for the hot read paths (dashboard + leaderboard page).
+ * `getPlayerScores()` is a full recompute; caching it behind the `scores` tag
+ * turns "recompute on every load" into "compute once per score-affecting
+ * change". Invalidation is event-driven via `revalidateScores()`, with a long
+ * TTL only as a safety net against a missed invalidation path.
+ */
+export const getCachedLeaderboard = unstable_cache(
+  async (): Promise<LeaderboardData> => getLeaderboard(),
+  ["leaderboard-v1"],
+  { tags: [SCORES_CACHE_TAG], revalidate: 600 },
+);
+
+/** A single player's rank/score from the cached leaderboard (dashboard use). */
+export async function getPlayerRank(playerId: number): Promise<{
+  rank: number;
+  total: number;
+  final: number;
+  ranked: boolean;
+} | null> {
+  const lb = await getCachedLeaderboard();
+  const idx = lb.rows.findIndex((r) => r.id === playerId);
+  if (idx < 0) return null;
+  return {
+    rank: idx + 1,
+    total: lb.rows.length,
+    final: lb.rows[idx].final,
+    ranked: lb.rows[idx].ranked,
+  };
 }

@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime, type MatchdayStatus } from "@/lib/matches";
 import { SectionIcon } from "@/components/section-icon";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const metadata = {
   title: "Matches · Sideline",
@@ -53,10 +54,24 @@ export default async function MatchesPage() {
       </div>
 
       {matches.length === 0 ? (
-        <div className="mt-6 flex flex-col items-center gap-3 rounded-lg bg-neutral-50 px-4 py-10 text-center dark:bg-neutral-900">
-          <SectionIcon name="matches" className="h-12 w-12 opacity-80" />
-          <p className="text-sm text-neutral-500">No matches yet.</p>
-        </div>
+        <EmptyState
+          className="mt-6"
+          title="No matches yet"
+          action={
+            isAdmin ? (
+              <Link
+                href="/matches/new"
+                className="inline-block rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+              >
+                + Create the first match
+              </Link>
+            ) : null
+          }
+        >
+          {isAdmin
+            ? "Create a match to open availability and start collecting responses."
+            : "Check back once an admin schedules the next match."}
+        </EmptyState>
       ) : (
         <ul className="mt-6 space-y-3">
           {matches.map((m) => (

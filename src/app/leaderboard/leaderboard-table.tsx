@@ -12,14 +12,51 @@ function fmt1(n: number): string {
   return n.toFixed(1);
 }
 
+type Movement = { rankDelta: number | null; scoreDelta: number | null };
+
+/** Green ▲ / red ▼ / neutral – for a player's rank change since last match. */
+function MovementCell({ move }: { move: Movement | undefined }) {
+  if (!move || move.rankDelta === null) {
+    return <span className="text-neutral-300 dark:text-neutral-600">—</span>;
+  }
+  const { rankDelta, scoreDelta } = move;
+  const scoreText =
+    scoreDelta != null && Math.abs(scoreDelta) >= 0.05
+      ? ` ${scoreDelta > 0 ? "+" : ""}${scoreDelta.toFixed(1)}`
+      : "";
+  if (rankDelta > 0) {
+    return (
+      <span className="tabular-nums text-emerald-600 dark:text-emerald-400">
+        ▲{rankDelta}
+        <span className="text-neutral-400">{scoreText}</span>
+      </span>
+    );
+  }
+  if (rankDelta < 0) {
+    return (
+      <span className="tabular-nums text-rose-600 dark:text-rose-400">
+        ▼{Math.abs(rankDelta)}
+        <span className="text-neutral-400">{scoreText}</span>
+      </span>
+    );
+  }
+  return (
+    <span className="tabular-nums text-neutral-400">
+      –<span>{scoreText}</span>
+    </span>
+  );
+}
+
 export default function LeaderboardTable({
   rows,
   unratedMinMatches,
   showDetails = true,
+  movement = {},
 }: {
   rows: LeaderboardRow[];
   unratedMinMatches: number;
   showDetails?: boolean;
+  movement?: Record<number, Movement>;
 }) {
   const [position, setPosition] = useState<(typeof POSITIONS)[number]>("All");
   const [minMatches, setMinMatches] = useState<number>(0);
@@ -89,6 +126,7 @@ export default function LeaderboardTable({
               <th scope="col" className="px-3 py-2 font-medium">Pos</th>
               <th scope="col" className="px-3 py-2 text-right font-medium">Matches</th>
               <th scope="col" className="px-3 py-2 font-medium">Status</th>
+              <th scope="col" className="px-3 py-2 font-medium">Move</th>
               {showDetails ? (
                 <>
                   <th scope="col" className="px-3 py-2 text-right font-medium">Peer</th>
@@ -102,7 +140,7 @@ export default function LeaderboardTable({
             {filtered.length === 0 ? (
               <tr>
                 <td
-                  colSpan={showDetails ? 8 : 6}
+                  colSpan={showDetails ? 9 : 7}
                   className="px-3 py-6 text-center text-neutral-500"
                 >
                   No players match the current filters.
@@ -124,6 +162,9 @@ export default function LeaderboardTable({
                     <Badge tone={r.ranked ? "success" : "neutral"} dot>
                       {r.ranked ? "Ranked" : "Unranked"}
                     </Badge>
+                  </td>
+                  <td className="px-3 py-2">
+                    <MovementCell move={movement[r.id]} />
                   </td>
                   {showDetails ? (
                     <>

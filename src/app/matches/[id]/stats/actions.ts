@@ -3,7 +3,17 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { getPlayerStatsState, submitPlayerStats } from "@/lib/stats";
+import {
+  getPlayerStatsState,
+  submitPlayerStats,
+  approveStatsSubmission,
+} from "@/lib/stats";
+import {
+  isAutoApproveTrustedEnabled,
+  isPlayerTrusted,
+} from "@/lib/feature-settings";
+import { revalidateScores } from "@/lib/scores-cache";
+import { notify } from "@/lib/push";
 
 export interface StatsSubmitState {
   ok: boolean;
@@ -42,10 +52,48 @@ export async function submitStatsAction(
       return { ok: false, message: "Stat submissions are closed for this match." };
     }
 
-    await submitPlayerStats(matchId, playerId, goals, assists);
+    const submissionId = await submitPlayerStats(matchId, playerId, goals, assists);
+
+    // Trusted-player fast path: if an admin has enabled auto-approval AND this
+    // player is on the trusted list, approve the submission immediately. The
+    // full audit trail is still written by approveStatsSubmission.
+    let autoApproved = false;
+    if (
+      (await isAutoApproveTrustedEnabled()) &&
+      (await isPlayerTrusted(playerId))
+    ) {
+      const result = await approveStatsSubmission(
+        submissionId,
+        "system:auto-trusted",
+      );
+      if (result) {
+        autoApproved = true;
+        revalidateScores();
+        try {
+          await notify(
+            "stats_approved",
+            {
+              title: "Stats approved \u2705",
+              body: `Your ${goals} goal${goals === 1 ? "" : "s"} and ${assists} assist${assists === 1 ? "" : "s"} were auto-approved.`,
+              url: `/matches/${matchId}/stats`,
+              tag: `stats-approved-${submissionId}`,
+            },
+            { playerIds: [playerId] },
+          );
+        } catch {
+          // ignore push errors
+        }
+      }
+    }
+
     revalidatePath(`/matches/${matchId}/stats`);
     revalidatePath(`/matches/${matchId}`);
-    return { ok: true, message: "Stats submitted for review." };
+    return {
+      ok: true,
+      message: autoApproved
+        ? "Stats submitted and auto-approved."
+        : "Stats submitted for review.",
+    };
   } catch (err) {
     if (err instanceof z.ZodError) {
       return { ok: false, message: err.issues.map((i) => i.message).join(" ") };

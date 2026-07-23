@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { saveScoringConfig } from "@/lib/scoring-config";
+import { revalidateScores } from "@/lib/scores-cache";
 
 export interface ScoringConfigState {
   ok: boolean;
@@ -54,6 +55,7 @@ export async function saveScoringConfigAction(
     await saveScoringConfig(input);
 
     // Scores + awards depend on this policy; refresh their pages.
+    revalidateScores();
     revalidatePath("/scoring");
     revalidatePath("/leaderboard");
     revalidatePath("/awards");

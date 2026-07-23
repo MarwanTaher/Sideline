@@ -11,6 +11,7 @@ import {
   setMatchStatus,
   deleteMatch,
 } from "@/lib/match-admin";
+import { revalidateScores } from "@/lib/scores-cache";
 
 export interface MatchActionState {
   ok: boolean;
@@ -77,6 +78,7 @@ export async function updateMatchSettingsAction(
     const statsScoringEnabled = formData.get("statsScoringEnabled") === "on";
 
     await updateMatchSettings(matchId, { playedOn, matchTime, numTeams, statsScoringEnabled });
+    revalidateScores();
     revalidatePath(`/matches/${matchId}`);
     revalidatePath("/matches");
     return { ok: true, message: "Match settings saved." };
@@ -95,6 +97,7 @@ export async function setMatchdayStatusAction(
     const status = matchdaySchema.parse(String(formData.get("matchdayStatus")));
 
     await setMatchdayStatus(matchId, status);
+    revalidateScores();
     revalidatePath(`/matches/${matchId}`);
     revalidatePath("/matches");
     return { ok: true, message: `Matchday set to ${status}.` };
@@ -138,6 +141,7 @@ export async function deleteMatchAction(
     }
 
     await deleteMatch(matchId);
+    revalidateScores();
     revalidatePath("/matches");
     deleted = true;
   } catch (err) {

@@ -10,7 +10,47 @@ import {
   subscribeThisDevice,
 } from "@/lib/push-client";
 
-const DISMISS_KEY = "sideline_push_prompt_dismissed";
+const SNOOZE_KEY = "sideline_push_prompt_snooze";
+const SNOOZE_DAYS = 7;
+const MAX_SNOOZES = 3;
+
+type SnoozeState = { until: number; count: number };
+
+function readSnooze(): SnoozeState | null {
+  try {
+    const raw = localStorage.getItem(SNOOZE_KEY);
+    if (!raw) {
+      // Migrate the old permanent-dismiss flag into a single snooze so users
+      // who tapped "Not now" once are gently re-asked instead of silenced.
+      if (localStorage.getItem("sideline_push_prompt_dismissed") === "1") {
+        localStorage.removeItem("sideline_push_prompt_dismissed");
+        const migrated = {
+          until: Date.now() + SNOOZE_DAYS * 86_400_000,
+          count: 1,
+        };
+        localStorage.setItem(SNOOZE_KEY, JSON.stringify(migrated));
+        return migrated;
+      }
+      return null;
+    }
+    const parsed = JSON.parse(raw) as Partial<SnoozeState>;
+    return {
+      until: Number(parsed.until) || 0,
+      count: Number(parsed.count) || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** True when the prompt is currently snoozed and shouldn't be shown. */
+function isSnoozed(): boolean {
+  const s = readSnooze();
+  if (!s) return false;
+  // After the last allowed snooze, keep it hidden long-term.
+  if (s.count >= MAX_SNOOZES) return true;
+  return Date.now() < s.until;
+}
 
 type Mode = "hidden" | "enable" | "ios-install" | "done";
 
@@ -22,7 +62,7 @@ export default function NotificationPrompt() {
     let cancelled = false;
 
     async function decide() {
-      if (localStorage.getItem(DISMISS_KEY) === "1") return;
+      if (isSnoozed()) return;
 
       // iOS Safari (not installed) can't do push at all — guide to install.
       if (!pushSupported()) {
@@ -46,7 +86,18 @@ export default function NotificationPrompt() {
   }, []);
 
   function dismiss() {
-    localStorage.setItem(DISMISS_KEY, "1");
+    // Snooze instead of silencing forever: re-surface after a week, up to a cap.
+    const prev = readSnooze();
+    const count = (prev?.count ?? 0) + 1;
+    const next: SnoozeState = {
+      count,
+      until: Date.now() + SNOOZE_DAYS * 86_400_000,
+    };
+    try {
+      localStorage.setItem(SNOOZE_KEY, JSON.stringify(next));
+    } catch {
+      // ignore storage errors
+    }
     setMode("hidden");
   }
 

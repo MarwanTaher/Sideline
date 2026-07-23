@@ -1,6 +1,11 @@
 import { sqlClient } from "@/lib/db";
 import { notify } from "@/lib/push";
 import { deleteGuestsForMatch } from "@/lib/guests";
+import {
+  captureScoreSnapshot,
+  getRatingChangesForMatch,
+  snapshotKeyForMatch,
+} from "@/lib/score-snapshots";
 
 export type MatchdayStatus = "draft" | "active" | "closed";
 export type MatchStatus = "open" | "closed";
@@ -248,6 +253,14 @@ export async function setMatchdayStatus(
   if (status === "closed") {
     // Guests are temporary — remove them when the matchday is closed.
     await deleteGuestsForMatch(matchId);
+    // Snapshot the leaderboard and pull people back with "results are in" +
+    // personalised rating-change nudges. Never let push/snapshot failures
+    // block the status change.
+    try {
+      await sendMatchdayCloseNotifications(matchId);
+    } catch {
+      // ignore snapshot/push errors
+    }
   }
 
   if (status === "active") {
@@ -279,4 +292,50 @@ export async function setMatchStatus(
 /** Delete a match. All match-scoped data is removed via ON DELETE CASCADE. */
 export async function deleteMatch(matchId: number): Promise<void> {
   await sqlClient.query(`DELETE FROM matches WHERE id = $1`, [matchId]);
+}
+
+/**
+ * On matchday close: snapshot the leaderboard, broadcast "results are in", and
+ * send each meaningfully-moved player a personalised rating-change nudge.
+ * Framing is neutral/positive — we never push "you dropped N places".
+ */
+async function sendMatchdayCloseNotifications(matchId: number): Promise<void> {
+  // Capture the leaderboard first so rating-change diffing has fresh data.
+  await captureScoreSnapshot(snapshotKeyForMatch(matchId));
+
+  // "Results are in" — one broadcast per close, gated by the per-type toggle.
+  await notify("results_in", {
+    title: "Results are in \u26bd",
+    body: "Ratings are updated for the latest match \u2014 see how you did.",
+    url: "/leaderboard",
+    tag: `match-${matchId}-results`,
+  });
+
+  // Personalised rating-change nudges (only meaningful moves, ranked players).
+  const changes = await getRatingChangesForMatch(matchId, { minAbsDelta: 1 });
+  await Promise.all(
+    changes.map((c) => {
+      const newVal = c.newFinal.toFixed(1);
+      let body: string;
+      if (c.deltaRank > 0) {
+        const places = c.deltaRank === 1 ? "place" : "places";
+        body = `Your rating is now ${newVal}. You moved up ${c.deltaRank} ${places}. \u2b06\ufe0f`;
+      } else if (c.deltaFinal > 0) {
+        body = `Your rating went up to ${newVal} (+${c.deltaFinal.toFixed(1)}).`;
+      } else {
+        // Neutral framing for flat/negative moves — no discouraging language.
+        body = `Your rating updated to ${newVal}. See your latest breakdown.`;
+      }
+      return notify(
+        "rating_changed",
+        {
+          title: "Your rating changed",
+          body,
+          url: "/leaderboard",
+          tag: `match-${matchId}-rating-${c.playerId}`,
+        },
+        { playerIds: [c.playerId] },
+      );
+    }),
+  );
 }

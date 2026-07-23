@@ -10,6 +10,7 @@ import {
   POSITIONS,
   type Position,
 } from "@/lib/draft";
+import { revalidateScores } from "@/lib/scores-cache";
 
 export interface DraftActionState {
   ok: boolean;
@@ -59,6 +60,7 @@ export async function autoBalanceAction(
     const numTeams = numTeamsSchema.parse(formData.get("numTeams"));
 
     const count = await autoBalanceDraft(matchId, numTeams);
+    revalidateScores();
     revalidatePath(`/matches/${matchId}/draft`);
     revalidatePath(`/matches/${matchId}`);
     return {
@@ -87,6 +89,7 @@ export async function saveDraftAction(
       ? Object.fromEntries(Object.entries(teamNames).map(([k, v]) => [Number(k), v]))
       : undefined;
     await saveDraftAssignments(matchId, assignments, benchPlayerIds, teamNamesMap);
+    revalidateScores();
     revalidatePath(`/matches/${matchId}/draft`);
     revalidatePath(`/matches/${matchId}`);
     return { ok: true, message: "Teams saved." };
@@ -108,6 +111,7 @@ export async function resetDraftAction(
     }
 
     await resetDraft(matchId);
+    revalidateScores();
     revalidatePath(`/matches/${matchId}/draft`);
     revalidatePath(`/matches/${matchId}`);
     return { ok: true, message: "Draft and match data reset." };

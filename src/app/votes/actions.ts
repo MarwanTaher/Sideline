@@ -15,6 +15,7 @@ import {
   type OutlierCandidate,
   type OutlierSensitivity,
 } from "@/lib/vote-admin";
+import { revalidateScores } from "@/lib/scores-cache";
 
 export interface VoteActionState {
   ok: boolean;
@@ -40,6 +41,7 @@ const keySchema = z.object({
 });
 
 function revalidate(): void {
+  revalidateScores();
   revalidatePath("/votes");
   revalidatePath("/leaderboard");
   revalidatePath("/awards");

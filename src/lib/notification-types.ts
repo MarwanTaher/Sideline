@@ -19,6 +19,9 @@ export type NotificationTypeKey =
   | "availability_open"
   | "payment_due"
   | "stats_approved"
+  | "results_in"
+  | "rating_changed"
+  | "waitlist_promoted"
   | "new_player"
   | "guest_request"
   | "guest_decision"
@@ -85,6 +88,36 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     defaultEnabled: true,
     audience: "players",
     audienceOverridable: true,
+    userConfigurable: true,
+  },
+  {
+    key: "results_in",
+    label: "Results are in",
+    description:
+      "Sent to everyone when a matchday is closed and ratings are finalised, nudging them to see how they did.",
+    defaultEnabled: true,
+    audience: "all",
+    audienceOverridable: true,
+    userConfigurable: true,
+  },
+  {
+    key: "rating_changed",
+    label: "Your rating changed",
+    description:
+      "A personalised nudge when a player's rating or rank moves meaningfully after a matchday closes.",
+    defaultEnabled: true,
+    audience: "players",
+    audienceOverridable: false,
+    userConfigurable: true,
+  },
+  {
+    key: "waitlist_promoted",
+    label: "Waitlist spot opened",
+    description:
+      "Sent to a waitlisted player when a spot opens up and they are automatically moved into the match.",
+    defaultEnabled: true,
+    audience: "players",
+    audienceOverridable: false,
     userConfigurable: true,
   },
   {

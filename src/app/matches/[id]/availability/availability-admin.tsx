@@ -6,6 +6,7 @@ import {
   adminSetAvailabilityAction,
   setAvailabilityOpenAction,
   setMaxPlayersAction,
+  setWaitlistAutoPromoteAction,
   type AvailabilityActionState,
 } from "./actions";
 import type { PlayerAvailability } from "@/lib/availability";
@@ -97,6 +98,76 @@ export function MaxPlayersForm({
           Save
         </Button>
       </form>
+      <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+    </div>
+  );
+}
+
+/** #9: global waitlist auto-promotion toggle + current waitlist. */
+export function WaitlistToggle({
+  matchId,
+  enabled,
+  waitlist,
+}: {
+  matchId: number;
+  enabled: boolean;
+  waitlist: { playerId: number; name: string }[];
+}) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(
+    setWaitlistAutoPromoteAction,
+    INITIAL,
+  );
+
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-neutral-500">
+          Waitlist auto-promotion is{" "}
+          <span
+            className={
+              enabled
+                ? "font-semibold text-emerald-600 dark:text-emerald-400"
+                : "font-semibold text-neutral-500"
+            }
+          >
+            {enabled ? "on" : "off"}
+          </span>
+          . When on, players who try to join a full match are waitlisted and
+          promoted automatically (first-in) as spots open, with a push to
+          confirm.
+        </p>
+        <form action={formAction}>
+          <input type="hidden" name="matchId" value={matchId} />
+          <input type="hidden" name="enabled" value={enabled ? "false" : "true"} />
+          <Button
+            type="submit"
+            variant={enabled ? "secondary" : "success"}
+            pending={pending}
+            pendingLabel="Saving…"
+          >
+            {enabled ? "Turn off" : "Turn on"}
+          </Button>
+        </form>
+      </div>
+      {waitlist.length > 0 ? (
+        <div className="mt-3">
+          <h4 className="text-xs font-medium text-neutral-500">
+            Waitlist ({waitlist.length})
+          </h4>
+          <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm">
+            {waitlist.map((w) => (
+              <li key={w.playerId}>{w.name}</li>
+            ))}
+          </ol>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-neutral-400">Waitlist is empty.</p>
+      )}
       <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
     </div>
   );

@@ -11,6 +11,7 @@ import {
   MAX_RATING,
 } from "@/lib/voting";
 import { autoFlagOutliers } from "@/lib/vote-admin";
+import { revalidateScores } from "@/lib/scores-cache";
 
 export interface VoteActionState {
   ok: boolean;
@@ -84,6 +85,7 @@ export async function submitVotesAction(
       // ignore — auto-detection is a background convenience
     }
 
+    revalidateScores();
     revalidatePath(`/matches/${matchId}/vote`);
     revalidatePath(`/matches/${matchId}`);
     revalidatePath("/leaderboard");

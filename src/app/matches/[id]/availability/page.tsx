@@ -7,15 +7,18 @@ import { fmtDate, fmtMatchTime } from "@/lib/matches";
 import {
   getAvailabilityMatch,
   getAvailabilityAllPlayers,
+  getWaitlistPlayers,
   summarize,
   type MatchdayStatus,
   type PlayerAvailability,
 } from "@/lib/availability";
+import { isWaitlistAutoPromoteEnabled } from "@/lib/feature-settings";
 import { AvailabilityControls } from "./availability-controls";
 import {
   AvailabilityOpenToggle,
   MaxPlayersForm,
   AdminPlayerControls,
+  WaitlistToggle,
 } from "./availability-admin";
 import { AddGuestForm, GuestList, AdminAddGuestForm } from "./guest-controls";
 import { listGuests, MAX_GUESTS_PER_HOST, type Guest } from "@/lib/guests";
@@ -119,6 +122,10 @@ export default async function AvailabilityPage({
   const pendingGuests = guests.filter((g) => g.status === "pending");
   const myGuests = myPlayerId == null ? [] : guests.filter((g) => g.hostPlayerId === myPlayerId);
 
+  const [waitlistEnabled, waitlistPlayers] = isAdmin
+    ? await Promise.all([isWaitlistAutoPromoteEnabled(), getWaitlistPlayers(matchId)])
+    : [false, []];
+
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
       <Link
@@ -189,6 +196,14 @@ export default async function AvailabilityPage({
             <AvailabilityOpenToggle matchId={matchId} open={open} />
             <div className="border-t border-black/5 pt-4 dark:border-white/5">
               <MaxPlayersForm matchId={matchId} maxPlayers={match.maxPlayers} />
+            </div>
+            <div className="border-t border-black/5 pt-4 dark:border-white/5">
+              <h3 className="mb-2 text-sm font-medium">Waitlist</h3>
+              <WaitlistToggle
+                matchId={matchId}
+                enabled={waitlistEnabled}
+                waitlist={waitlistPlayers}
+              />
             </div>
             <div className="border-t border-black/5 pt-4 dark:border-white/5">
               <h3 className="mb-2 text-sm font-medium">Set player availability</h3>

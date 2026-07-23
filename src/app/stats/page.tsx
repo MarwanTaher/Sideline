@@ -10,7 +10,18 @@ import {
   listMatchesForStats,
   type StatSubmissionState,
 } from "@/lib/stats";
-import { ReviewRow, BackfillPanel, StatsMatchPicker } from "./review-controls";
+import { getActivePlayers } from "@/lib/awards";
+import {
+  getTrustedPlayerIds,
+  isAutoApproveTrustedEnabled,
+} from "@/lib/feature-settings";
+import {
+  ReviewRow,
+  BackfillPanel,
+  StatsMatchPicker,
+  ApproveAllButton,
+  TrustedSettingsPanel,
+} from "./review-controls";
 import { Badge } from "@/components/ui/badge";
 import { SectionIcon } from "@/components/section-icon";
 
@@ -52,11 +63,15 @@ export default async function StatsReviewPage({
   const parsed = Number(match);
   const selectedMatchId = Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 
-  const [pending, counts, matches] = await Promise.all([
-    getAllPendingSubmissions(),
-    getStatsReviewCounts(),
-    listMatchesForStats(),
-  ]);
+  const [pending, counts, matches, activePlayers, trustedIds, autoApprove] =
+    await Promise.all([
+      getAllPendingSubmissions(),
+      getStatsReviewCounts(),
+      listMatchesForStats(),
+      getActivePlayers(),
+      getTrustedPlayerIds(),
+      isAutoApproveTrustedEnabled(),
+    ]);
 
   const submissions =
     selectedMatchId > 0 ? await getStatsSubmissionStatus(selectedMatchId) : [];
@@ -129,7 +144,10 @@ export default async function StatsReviewPage({
       </section>
 
       <section className="mt-8">
-        <h2 className="text-lg font-semibold tracking-tight">Pending submissions</h2>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold tracking-tight">Pending submissions</h2>
+          {pending.length > 0 ? <ApproveAllButton count={pending.length} /> : null}
+        </div>
         {pending.length === 0 ? (
           <div className="mt-3 flex flex-col items-center gap-3 rounded-lg bg-neutral-50 px-4 py-10 text-center dark:bg-neutral-900">
             <SectionIcon name="stats" className="h-12 w-12 opacity-80" />
@@ -148,6 +166,12 @@ export default async function StatsReviewPage({
           </ul>
         )}
       </section>
+
+      <TrustedSettingsPanel
+        players={activePlayers}
+        trustedIds={trustedIds}
+        autoApprove={autoApprove}
+      />
 
       <BackfillPanel />
     </main>

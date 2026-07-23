@@ -6,6 +6,8 @@ import {
   approveSubmissionAction,
   rejectSubmissionAction,
   backfillStatsAction,
+  approveAllPendingAction,
+  saveTrustedSettingsAction,
   type StatsReviewState,
 } from "./actions";
 import { fmtDate } from "@/lib/format";
@@ -108,6 +110,98 @@ export function ReviewRow({ sub }: { sub: PendingSubmission }) {
         className="mt-2"
       />
     </li>
+  );
+}
+
+export function ApproveAllButton({ count }: { count: number }) {
+  const router = useRouter();
+  const [state, action, pending] = useActionState(approveAllPendingAction, INITIAL);
+
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+
+  return (
+    <form action={action} className="flex flex-col items-end gap-1">
+      <Button
+        type="submit"
+        variant="success"
+        size="sm"
+        pending={pending}
+        pendingLabel="Approving…"
+        disabled={count === 0}
+      >
+        Approve all ({count})
+      </Button>
+      <FeedbackMessage ok={state.ok} message={state.message} />
+    </form>
+  );
+}
+
+export function TrustedSettingsPanel({
+  players,
+  trustedIds,
+  autoApprove,
+}: {
+  players: { id: number; name: string }[];
+  trustedIds: number[];
+  autoApprove: boolean;
+}) {
+  const router = useRouter();
+  const [state, action, pending] = useActionState(saveTrustedSettingsAction, INITIAL);
+
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+
+  const trusted = new Set(trustedIds);
+
+  return (
+    <div className="mt-8 rounded-xl border border-black/10 p-4 dark:border-white/10">
+      <h2 className="text-sm font-semibold">Trusted players</h2>
+      <p className="mt-1 text-xs text-neutral-500">
+        When auto-approval is on, stats submitted by trusted players are approved
+        instantly (with a full audit trail). Stats never affect payments, so this
+        is safe. Leave off to review everything manually.
+      </p>
+      <form action={action} className="mt-3 space-y-3">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            name="autoApprove"
+            defaultChecked={autoApprove}
+            className="h-4 w-4 rounded border-black/25 dark:border-white/25"
+          />
+          Auto-approve stats from trusted players
+        </label>
+        <div className="max-h-56 overflow-y-auto rounded-lg border border-black/10 p-2 dark:border-white/10">
+          {players.length === 0 ? (
+            <p className="px-1 py-2 text-xs text-neutral-500">No active players.</p>
+          ) : (
+            <ul className="space-y-1">
+              {players.map((p) => (
+                <li key={p.id}>
+                  <label className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-black/5 dark:hover:bg-white/5">
+                    <input
+                      type="checkbox"
+                      name="trusted"
+                      value={p.id}
+                      defaultChecked={trusted.has(p.id)}
+                      className="h-4 w-4 rounded border-black/25 dark:border-white/25"
+                    />
+                    {p.name}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <Button type="submit" variant="secondary" size="sm" pending={pending} pendingLabel="Saving…">
+          Save trusted settings
+        </Button>
+      </form>
+      <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+    </div>
   );
 }
 

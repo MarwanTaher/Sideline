@@ -8,9 +8,18 @@ import {
   clearPlayerAvailability,
   getAvailabilityMatch,
   countInPlayers,
+  addToWaitlist,
+  removeFromWaitlist,
+  getWaitlist,
+  promoteWaitlistCandidate,
 } from "@/lib/availability";
 import { setAvailabilityOpen, setMaxPlayers } from "@/lib/match-admin";
 import { deleteGuestsForHost, countGuests } from "@/lib/guests";
+import {
+  isWaitlistAutoPromoteEnabled,
+  setWaitlistAutoPromote,
+} from "@/lib/feature-settings";
+import { notify } from "@/lib/push";
 
 export interface AvailabilityActionState {
   ok: boolean;
@@ -44,6 +53,49 @@ async function requireAdmin(): Promise<void> {
 function revalidateAvailability(matchId: number): void {
   revalidatePath(`/matches/${matchId}/availability`);
   revalidatePath(`/matches/${matchId}/draft`);
+}
+
+/**
+ * Fill any freed spots from the waitlist (first-in fairness), if the admin has
+ * enabled auto-promotion. Each promoted player gets a push so they can confirm
+ * or drop out again — never a silent add.
+ */
+async function runWaitlistPromotion(matchId: number): Promise<void> {
+  if (!(await isWaitlistAutoPromoteEnabled())) return;
+  const match = await getAvailabilityMatch(matchId);
+  if (!match || !match.availabilityOpen) return;
+
+  let guard = 0;
+  while (guard++ < 50) {
+    const list = await getWaitlist(matchId);
+    if (list.length === 0) break;
+
+    const [inCount, guestCount] = await Promise.all([
+      countInPlayers(matchId),
+      countGuests(matchId),
+    ]);
+    if (inCount + guestCount >= match.maxPlayers) break;
+
+    const nextId = list[0];
+    const promoted = await promoteWaitlistCandidate(matchId, nextId);
+    await removeFromWaitlist(matchId, nextId);
+    if (promoted) {
+      try {
+        await notify(
+          "waitlist_promoted",
+          {
+            title: "A spot opened \u2014 you're in \u26bd",
+            body: "A place freed up and you've been moved off the waitlist. Tap to confirm, or set yourself out if you can't make it.",
+            url: `/matches/${matchId}/availability`,
+            tag: `waitlist-${matchId}-${nextId}`,
+          },
+          { playerIds: [nextId] },
+        );
+      } catch {
+        // ignore push errors
+      }
+    }
+  }
 }
 
 export async function setAvailabilityAction(
@@ -87,6 +139,17 @@ export async function setAvailabilityAction(
         countGuests(matchId),
       ]);
       if (inCount + guestCount >= match.maxPlayers) {
+        // Match is full. If the admin has enabled auto-promotion, add the
+        // player to the waitlist instead of turning them away; otherwise keep
+        // the existing "ask an admin" behaviour.
+        if (await isWaitlistAutoPromoteEnabled()) {
+          const spot = await addToWaitlist(matchId, playerId);
+          revalidateAvailability(matchId);
+          return {
+            ok: true,
+            message: `Match is full — you're #${spot} on the waitlist. We'll add you automatically if a spot opens.`,
+          };
+        }
         return {
           ok: false,
           message: `Match is full (${match.maxPlayers} players). Ask an admin if you need in.`,
@@ -98,6 +161,9 @@ export async function setAvailabilityAction(
     if (status === "out") {
       // Guests follow their host — if the host is out, so are their guests.
       await deleteGuestsForHost(matchId, playerId);
+      // Drop them from the waitlist (if present) and fill the freed spot.
+      await removeFromWaitlist(matchId, playerId);
+      await runWaitlistPromotion(matchId);
     }
     revalidateAvailability(matchId);
     return {
@@ -136,6 +202,8 @@ export async function adminSetAvailabilityAction(
     // Guests follow their host off the sheet when the host is no longer IN.
     if (status === "out" || status === "pending") {
       await deleteGuestsForHost(matchId, playerId);
+      await removeFromWaitlist(matchId, playerId);
+      await runWaitlistPromotion(matchId);
     }
     revalidateAvailability(matchId);
     return {
@@ -186,6 +254,37 @@ export async function setMaxPlayersAction(
     await setMaxPlayers(matchId, maxPlayers);
     revalidateAvailability(matchId);
     return { ok: true, message: `Max players set to ${maxPlayers}.` };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
+/**
+ * Admin: turn waitlist auto-promotion on/off (global). When on, players who try
+ * to go IN on a full match are waitlisted and promoted automatically as spots
+ * open; also promotes anyone eligible right away.
+ */
+export async function setWaitlistAutoPromoteAction(
+  _prev: AvailabilityActionState,
+  formData: FormData,
+): Promise<AvailabilityActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const enabled = String(formData.get("enabled")) === "true";
+
+    await setWaitlistAutoPromote(enabled);
+    if (enabled) {
+      // Fill any spots that are already free from the current waitlist.
+      await runWaitlistPromotion(matchId);
+    }
+    revalidateAvailability(matchId);
+    return {
+      ok: true,
+      message: enabled
+        ? "Waitlist auto-promotion on."
+        : "Waitlist auto-promotion off.",
+    };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
   }

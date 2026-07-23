@@ -3,13 +3,14 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
-import { getLeaderboard } from "@/lib/leaderboard";
+import { getPlayerRank } from "@/lib/leaderboard";
 import { getStatsReviewCounts } from "@/lib/stats";
 import { getPlayersAdminData } from "@/lib/players-admin";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SectionIcon } from "@/components/section-icon";
 import NotificationPrompt from "@/components/notification-prompt";
+import InstallPrompt from "@/components/install-prompt";
 
 export const dynamic = "force-dynamic";
 
@@ -39,16 +40,7 @@ export default async function Home() {
     ranked: boolean;
   } | null = null;
   if (playerId != null) {
-    const lb = await getLeaderboard();
-    const idx = lb.rows.findIndex((r) => r.id === playerId);
-    if (idx >= 0) {
-      rankInfo = {
-        rank: idx + 1,
-        total: lb.rows.length,
-        final: lb.rows[idx].final,
-        ranked: lb.rows[idx].ranked,
-      };
-    }
+    rankInfo = await getPlayerRank(playerId);
   }
 
   let adminInfo: { pendingReviews: number; resetRequests: number } | null = null;
@@ -71,6 +63,7 @@ export default async function Home() {
       </p>
 
       <NotificationPrompt />
+      <InstallPrompt />
 
       {playerId != null &&
       nextMatch &&
@@ -91,6 +84,26 @@ export default async function Home() {
               </div>
             </div>
             <span aria-hidden className="text-lg text-emerald-600 dark:text-emerald-400">
+              &rarr;
+            </span>
+          </Card>
+        </Link>
+      ) : playerId != null &&
+        nextMatch &&
+        nextMatch.matchdayStatus === "closed" ? (
+        <Link href="/leaderboard" className="mt-6 block">
+          <Card className="flex items-center justify-between gap-3 border-indigo-500/40 bg-indigo-50/60 transition hover:border-indigo-500/70 dark:bg-indigo-950/20">
+            <div className="flex items-center gap-3">
+              <SectionIcon name="leaderboard" className="h-8 w-8" />
+              <div>
+                <p className="text-sm font-semibold">Results are in</p>
+                <p className="text-sm text-neutral-500">
+                  Ratings for {fmtDate(nextMatch.playedOn)} are final — see where
+                  you landed.
+                </p>
+              </div>
+            </div>
+            <span aria-hidden className="text-lg text-indigo-600 dark:text-indigo-400">
               &rarr;
             </span>
           </Card>

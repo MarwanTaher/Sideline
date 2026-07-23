@@ -1,4 +1,5 @@
-import { getLeaderboard } from "@/lib/leaderboard";
+import { getCachedLeaderboard } from "@/lib/leaderboard";
+import { getLeaderboardMovement } from "@/lib/score-snapshots";
 import { getScoreBreakdown } from "@/lib/score-breakdown";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
@@ -11,16 +12,21 @@ export const metadata = {
   title: "Leaderboard · Sideline",
 };
 
-// Always compute fresh scores (no caching), matching the Streamlit behaviour.
-export const dynamic = "force-dynamic";
-
 export default async function LeaderboardPage({
   searchParams,
 }: {
   searchParams: Promise<{ player?: string }>;
 }) {
-  const { rows, peerWeightPct, statWeightPct, unratedMinMatches } =
-    await getLeaderboard();
+  const [{ rows, peerWeightPct, statWeightPct, unratedMinMatches }, movementMap] =
+    await Promise.all([getCachedLeaderboard(), getLeaderboardMovement()]);
+
+  // Map<number, MovementInfo> isn't reliably serialisable into a client
+  // component — hand it a plain record keyed by player id.
+  const movement: Record<
+    number,
+    { rankDelta: number | null; scoreDelta: number | null }
+  > = {};
+  for (const [id, m] of movementMap) movement[id] = m;
 
   const session = await auth();
   const showDetails = await isAdminView(
@@ -53,9 +59,7 @@ export default async function LeaderboardPage({
       <p className="mt-1 text-sm text-neutral-500">
         Curious how these are worked out?{" "}
         <a
-          href="/how-scores-work.html"
-          target="_blank"
-          rel="noopener noreferrer"
+          href="/leaderboard/how-scoring-works"
           className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-500 dark:text-blue-400"
         >
           See how scores work
@@ -85,6 +89,7 @@ export default async function LeaderboardPage({
         rows={rows}
         unratedMinMatches={unratedMinMatches}
         showDetails={showDetails}
+        movement={movement}
       />
 
       {showDetails ? (

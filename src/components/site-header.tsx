@@ -5,6 +5,7 @@ import MainNav from "@/components/main-nav";
 import MobileNav from "@/components/mobile-nav";
 import { getViewMode } from "@/lib/view-mode";
 import { getLockedTabsForPlayer } from "@/lib/admin-access";
+import { getNavSignals } from "@/lib/nav-signals";
 import { setViewModeAction } from "@/app/actions/view-mode";
 
 export default async function SiteHeader() {
@@ -20,6 +21,8 @@ export default async function SiteHeader() {
     adminView && !isSuper && user?.playerId != null
       ? await getLockedTabsForPlayer(user.playerId)
       : [];
+
+  const navSignals = user ? await getNavSignals() : null;
 
   return (
     <header className="sticky top-0 z-10 border-b border-black/10 bg-white/80 backdrop-blur relative dark:border-white/10 dark:bg-neutral-950/80">
@@ -41,7 +44,7 @@ export default async function SiteHeader() {
         </Link>
 
         <MobileNav>
-          {user ? <MainNav adminView={adminView} isSuper={isSuper} lockedTabs={lockedTabs} /> : null}
+          {user ? <MainNav adminView={adminView} isSuper={isSuper} lockedTabs={lockedTabs} signals={navSignals ?? undefined} /> : null}
 
           {canToggle ? (
             <div
