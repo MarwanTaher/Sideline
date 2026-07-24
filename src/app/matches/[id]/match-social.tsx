@@ -61,7 +61,13 @@ export function MatchSocial({
                     ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                     : "border-black/10 hover:bg-neutral-50 dark:border-white/10 dark:hover:bg-neutral-900"
                 }`}
-                title={canInteract ? "Tap to react" : "Only players in this match can react"}
+                title={
+                  r.reactors.length > 0
+                    ? r.reactors.join(", ")
+                    : canInteract
+                      ? "Tap to react"
+                      : "Only players in this match can react"
+                }
               >
                 <span className="text-base leading-none">{r.emoji}</span>
                 {r.count > 0 ? <span className="text-xs font-medium">{r.count}</span> : null}
@@ -69,6 +75,19 @@ export function MatchSocial({
             </form>
           ))}
         </div>
+        {/* Who reacted — reactions are attributed, not anonymous. */}
+        {reactions.some((r) => r.reactors.length > 0) ? (
+          <ul className="mt-3 space-y-1">
+            {reactions
+              .filter((r) => r.reactors.length > 0)
+              .map((r) => (
+                <li key={r.emoji} className="flex items-start gap-2 text-xs text-neutral-500 dark:text-neutral-400">
+                  <span className="text-sm leading-none">{r.emoji}</span>
+                  <span className="min-w-0">{r.reactors.join(", ")}</span>
+                </li>
+              ))}
+          </ul>
+        ) : null}
         {reactState.message ? (
           <p className="mt-2 text-xs text-red-600 dark:text-red-400">{reactState.message}</p>
         ) : null}

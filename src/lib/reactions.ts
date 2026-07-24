@@ -15,6 +15,8 @@ export type ReactionSummaryItem = {
   emoji: string;
   count: number;
   mine: boolean;
+  /** Names of the players who reacted with this emoji, alphabetical. */
+  reactors: string[];
 };
 
 function isAllowed(emoji: string): emoji is ReactionEmoji {
@@ -71,14 +73,16 @@ export async function getReactionSummary(
   viewerId: number | null,
 ): Promise<ReactionSummaryItem[]> {
   const rows = (await sqlClient.query(
-    `SELECT emoji,
+    `SELECT mr.emoji,
             COUNT(*) AS count,
-            BOOL_OR(player_id = $2) AS mine
-       FROM match_reactions
-      WHERE match_id = $1
-      GROUP BY emoji`,
+            BOOL_OR(mr.player_id = $2) AS mine,
+            ARRAY_AGG(p.name ORDER BY p.name) AS reactors
+       FROM match_reactions mr
+       JOIN players p ON p.id = mr.player_id
+      WHERE mr.match_id = $1
+      GROUP BY mr.emoji`,
     [matchId, viewerId ?? -1],
-  )) as Array<{ emoji: string; count: number; mine: boolean }>;
+  )) as Array<{ emoji: string; count: number; mine: boolean; reactors: string[] }>;
 
   const byEmoji = new Map(rows.map((r) => [r.emoji, r]));
   return REACTION_EMOJIS.map((emoji) => {
@@ -87,6 +91,7 @@ export async function getReactionSummary(
       emoji,
       count: r ? Number(r.count) : 0,
       mine: r ? Boolean(r.mine) : false,
+      reactors: r ? r.reactors : [],
     };
   });
 }
