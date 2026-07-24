@@ -85,6 +85,7 @@ async function AdminSection({ matchId }: { matchId: number }) {
     paymentMobile: "",
     paymentMethod: "",
     paymentNote: "",
+    payLink: "",
     paymentsActive: false,
   };
 

@@ -58,8 +58,11 @@ export async function autoBalanceAction(
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
     const numTeams = numTeamsSchema.parse(formData.get("numTeams"));
+    // A "re-roll" passes a seed to shuffle near-equal players into new sides.
+    const reroll = formData.get("reroll") === "1";
+    const seed = reroll ? (Date.now() & 0x7fffffff) || 1 : undefined;
 
-    const count = await autoBalanceDraft(matchId, numTeams);
+    const count = await autoBalanceDraft(matchId, numTeams, seed);
     revalidateScores();
     revalidatePath(`/matches/${matchId}/draft`);
     revalidatePath(`/matches/${matchId}`);
@@ -68,7 +71,9 @@ export async function autoBalanceAction(
       message:
         count === 0
           ? "No available players to draft."
-          : `Auto-balanced ${count} players into ${numTeams} teams.`,
+          : reroll
+            ? `Re-rolled ${count} players into ${numTeams} new balanced teams.`
+            : `Auto-balanced ${count} players into ${numTeams} teams.`,
     };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };

@@ -68,6 +68,7 @@ export async function saveDetailsAction(
       mobile: String(formData.get("mobile") ?? ""),
       method: String(formData.get("method") ?? ""),
       note: String(formData.get("note") ?? ""),
+      payLink: String(formData.get("payLink") ?? ""),
     });
     revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: "Payment details saved." };

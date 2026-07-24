@@ -281,6 +281,7 @@ async function insertPaymentsIfMissing(matchId: number, playerIds: number[]): Pr
 export async function autoBalanceDraft(
   matchId: number,
   numTeams: number,
+  seed?: number,
 ): Promise<number> {
   const state = await getDraftState(matchId);
   if (!state) throw new Error(`Match ${matchId} not found`);
@@ -289,9 +290,21 @@ export async function autoBalanceDraft(
   if (pool.length === 0) return 0;
 
   // Rank by score descending; ties broken by player id for determinism.
+  // With a `seed` (re-roll), nudge each score by a small deterministic jitter
+  // so players of near-equal rating can swap ranks. Teams stay balanced —
+  // only close-rated players reorder — but the sides differ each re-roll.
+  const jitter = (playerId: number): number => {
+    if (!seed) return 0;
+    // Deterministic pseudo-random in [-1, 1], scaled to a ±1.5 point window.
+    let h = (Math.imul(seed ^ 0x9e3779b1, playerId + 0x85ebca6b) ^ (seed + playerId)) >>> 0;
+    h = (h ^ (h >>> 15)) >>> 0;
+    return ((h / 0xffffffff) * 2 - 1) * 1.5;
+  };
+
   const rankedIds = [...pool]
-    .sort((a, b) => b.score - a.score || a.playerId - b.playerId)
-    .map((p) => p.playerId);
+    .map((p) => ({ id: p.playerId, s: p.score + jitter(p.playerId) }))
+    .sort((a, b) => b.s - a.s || a.id - b.id)
+    .map((p) => p.id);
 
   const posByPlayer = new Map<number, Position>(
     pool.map((p) => [p.playerId, p.positionPlayed ?? p.preferredPosition]),

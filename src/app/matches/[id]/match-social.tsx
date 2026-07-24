@@ -1,0 +1,144 @@
+"use client";
+
+import { useActionState } from "react";
+import type { ReactionSummaryItem } from "@/lib/reactions";
+import type { MotmTallyRow } from "@/lib/motm";
+import { ShareButton } from "@/components/share-button";
+import { reactAction, castMotmAction, type SocialActionState } from "./social/actions";
+
+const INITIAL: SocialActionState = { ok: false, message: "" };
+
+export interface MatchSocialProps {
+  matchId: number;
+  canInteract: boolean;
+  reactions: ReactionSummaryItem[];
+  motmTally: MotmTallyRow[];
+  motmCandidates: { playerId: number; name: string }[];
+  myMotmVote: number | null;
+  motmVoteCount: number;
+  shareText: string;
+  shareUrl: string;
+  icsHref: string;
+}
+
+export function MatchSocial({
+  matchId,
+  canInteract,
+  reactions,
+  motmTally,
+  motmCandidates,
+  myMotmVote,
+  motmVoteCount,
+  shareText,
+  shareUrl,
+  icsHref,
+}: MatchSocialProps) {
+  const [reactState, reactFormAction, reactPending] = useActionState(reactAction, INITIAL);
+  const [motmState, motmFormAction, motmPending] = useActionState(castMotmAction, INITIAL);
+
+  const totalReactions = reactions.reduce((a, r) => a + r.count, 0);
+
+  return (
+    <section className="mt-10">
+      <h2 className="text-lg font-semibold tracking-tight">Match hub</h2>
+
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <ShareButton text={shareText} title="Match result" url={shareUrl} />
+        <a
+          href={icsHref}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:bg-neutral-50 dark:border-white/15 dark:text-neutral-300 dark:hover:bg-neutral-900"
+        >
+          📅 Add to calendar
+        </a>
+      </div>
+
+      {/* Reactions — bounded banter; discussion lives in the WhatsApp group. */}
+      <div className="mt-6">
+        <div className="flex items-baseline justify-between">
+          <h3 className="text-sm font-semibold">Reactions</h3>
+          <span className="text-xs text-neutral-400">{totalReactions} total</span>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {reactions.map((r) => (
+            <form key={r.emoji} action={reactFormAction}>
+              <input type="hidden" name="matchId" value={matchId} />
+              <input type="hidden" name="emoji" value={r.emoji} />
+              <button
+                type="submit"
+                disabled={!canInteract || reactPending}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-sm transition disabled:opacity-50 ${
+                  r.mine
+                    ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                    : "border-black/10 hover:bg-neutral-50 dark:border-white/10 dark:hover:bg-neutral-900"
+                }`}
+                title={canInteract ? "Tap to react" : "Only players in this match can react"}
+              >
+                <span className="text-base leading-none">{r.emoji}</span>
+                {r.count > 0 ? <span className="text-xs font-medium">{r.count}</span> : null}
+              </button>
+            </form>
+          ))}
+        </div>
+        {reactState.message ? (
+          <p className="mt-2 text-xs text-red-600 dark:text-red-400">{reactState.message}</p>
+        ) : null}
+      </div>
+
+      {/* Man of the Match */}
+      <div className="mt-6">
+        <div className="flex items-baseline justify-between">
+          <h3 className="text-sm font-semibold">Man of the Match</h3>
+          <span className="text-xs text-neutral-400">{motmVoteCount} vote{motmVoteCount === 1 ? "" : "s"}</span>
+        </div>
+
+        {canInteract && motmCandidates.length > 0 ? (
+          <form action={motmFormAction} className="mt-2 flex flex-wrap items-center gap-2">
+            <input type="hidden" name="matchId" value={matchId} />
+            <select
+              name="votedForId"
+              defaultValue={myMotmVote ?? ""}
+              className="rounded border border-black/15 bg-transparent px-2 py-1.5 text-sm dark:border-white/15"
+            >
+              <option value="" disabled>
+                Pick a player…
+              </option>
+              {motmCandidates.map((c) => (
+                <option key={c.playerId} value={c.playerId}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              disabled={motmPending}
+              className="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white transition hover:bg-neutral-700 disabled:opacity-50 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+            >
+              {myMotmVote != null ? "Change vote" : "Vote"}
+            </button>
+          </form>
+        ) : null}
+        {motmState.message ? (
+          <p className={`mt-2 text-xs ${motmState.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"}`}>
+            {motmState.message}
+          </p>
+        ) : null}
+
+        {motmTally.length > 0 ? (
+          <ul className="mt-3 space-y-1">
+            {motmTally.map((t, i) => (
+              <li key={t.playerId} className="flex items-center gap-2 text-sm">
+                {i === 0 ? <span>🏆</span> : <span className="w-4 text-center text-neutral-400">{i + 1}</span>}
+                <span className={i === 0 ? "font-semibold" : ""}>{t.name}</span>
+                <span className="ml-auto text-xs text-neutral-400">
+                  {t.votes} vote{t.votes === 1 ? "" : "s"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-neutral-500">No MOTM votes yet.</p>
+        )}
+      </div>
+    </section>
+  );
+}

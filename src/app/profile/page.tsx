@@ -11,7 +11,13 @@ import ChangePassword from "./change-password";
 import ProfileDetails from "./profile-details";
 import NotificationsToggle from "./notifications-toggle";
 import NotificationPreferences from "./notification-preferences";
+import YourSeason from "./your-season";
+import AchievementsGrid from "./achievements-grid";
+import ChemistryPanel from "./chemistry-panel";
 import { getPlayerContact } from "@/lib/player-profile";
+import { getPlayerSeason } from "@/lib/player-trends";
+import { getPlayerAchievements } from "@/lib/achievements";
+import { getChemistry } from "@/lib/chemistry";
 
 export const metadata = {
   title: "Profile · Sideline",
@@ -66,6 +72,12 @@ export default async function ProfilePage() {
     }),
   ]);
 
+  const [season, achievements, chemistry] = await Promise.all([
+    getPlayerSeason(pid),
+    getPlayerAchievements(pid),
+    getChemistry(pid, { minShared: 3 }),
+  ]);
+
   const displayName = contact?.name ?? session.user.name ?? "Player";
 
   return (
@@ -83,6 +95,24 @@ export default async function ProfilePage() {
             photoUrl={contact?.photoUrl ?? null}
           />
         </section>
+
+        {/* Your season: form, trends, highlights */}
+        <Card title="Your season">
+          <YourSeason season={season} />
+        </Card>
+
+        {/* Badges you can earn */}
+        <Card title="Badges">
+          <AchievementsGrid
+            earned={achievements}
+            progress={{ appearances: season.appearances, goals: season.goals }}
+          />
+        </Card>
+
+        {/* Chemistry & head-to-head */}
+        <Card title="Chemistry & head-to-head">
+          <ChemistryPanel report={chemistry} />
+        </Card>
 
         {/* Achievements: badges + awards */}
         <Card title="Achievements">

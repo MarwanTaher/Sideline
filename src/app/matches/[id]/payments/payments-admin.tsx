@@ -111,6 +111,20 @@ function DetailsForm({ matchId, meta }: { matchId: number; meta: PaymentMeta }) 
           <span className="font-medium">Additional note (optional)</span>
           <input type="text" name="note" defaultValue={meta.paymentNote} className={inputCls} />
         </label>
+        <label className="block text-sm sm:col-span-2">
+          <span className="font-medium">Payment link (optional)</span>
+          <input
+            type="url"
+            name="payLink"
+            inputMode="url"
+            placeholder="https://revolut.me/…  or  https://paypal.me/…"
+            defaultValue={meta.payLink}
+            className={inputCls}
+          />
+          <span className="mt-1 block text-xs text-neutral-500">
+            Players get a one-tap “Pay now” button. Ask them to add their name as the reference.
+          </span>
+        </label>
       </div>
       <Button type="submit" className="mt-3" pending={pending} pendingLabel="Saving…">
         Save payment details

@@ -137,7 +137,7 @@ function MatchCard({ m, showHeader = true }: { m: PlayerPaymentMatch; showHeader
         </div>
       ) : null}
 
-      {m.paymentName || m.paymentMobile || m.paymentMethod || m.paymentNote ? (
+      {m.paymentName || m.paymentMobile || m.paymentMethod || m.paymentNote || m.payLink ? (
         <div className="mt-3 rounded-xl bg-black/[0.03] p-3 dark:bg-white/[0.04]">
           <p className="text-sm font-medium">Where to send it</p>
           <div className="mt-2 space-y-1">
@@ -145,7 +145,18 @@ function MatchCard({ m, showHeader = true }: { m: PlayerPaymentMatch; showHeader
             <DetailRow label="Mobile" value={m.paymentMobile} />
             <DetailRow label="Method" value={m.paymentMethod} />
             <DetailRow label="Note" value={m.paymentNote} />
+            <DetailRow label="Reference" value={`Match ${m.matchId} · your name`} />
           </div>
+          {m.payLink ? (
+            <a
+              href={m.payLink}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
+            >
+              Pay {total} now
+            </a>
+          ) : null}
         </div>
       ) : null}
     </div>

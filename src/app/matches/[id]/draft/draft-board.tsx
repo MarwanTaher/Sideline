@@ -255,6 +255,16 @@ export function DraftBoard({ matchId, numTeams, players, canEdit }: DraftBoardPr
             >
               {autoPending ? "Balancing…" : "Auto-balance"}
             </button>
+            <button
+              type="submit"
+              name="reroll"
+              value="1"
+              disabled={busy}
+              title="Keep it balanced, but shuffle near-equal players into different sides"
+              className="rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 disabled:opacity-50 dark:border-white/15 dark:hover:bg-white/5"
+            >
+              Re-roll
+            </button>
           </form>
 
           <form action={saveFormAction}>

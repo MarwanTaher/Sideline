@@ -1,12 +1,13 @@
 import { sqlClient } from "@/lib/db";
 import { notify } from "@/lib/push";
 import { deleteGuestsForMatch } from "@/lib/guests";
+import { syncAchievements } from "@/lib/achievements";
+import { assignMatchToActiveSeason } from "@/lib/seasons";
 import {
   captureScoreSnapshot,
   getRatingChangesForMatch,
   snapshotKeyForMatch,
 } from "@/lib/score-snapshots";
-
 export type MatchdayStatus = "draft" | "active" | "closed";
 export type MatchStatus = "open" | "closed";
 
@@ -140,6 +141,14 @@ export async function createMatch(input: CreateMatchInput): Promise<number> {
   );
   const rows = raw as { id: number }[];
   const matchId = Number(rows[0].id);
+
+  // Tag the match with the active season (if one exists) so season stats and
+  // the archive stay accurate. Never let this block match creation.
+  try {
+    await assignMatchToActiveSeason(matchId);
+  } catch {
+    // ignore — seasons are optional
+  }
 
   // Ask everyone to mark their availability for the new match. Never let a
   // push failure block match creation.
@@ -337,5 +346,28 @@ async function sendMatchdayCloseNotifications(matchId: number): Promise<void> {
         { playerIds: [c.playerId] },
       );
     }),
+  );
+
+  // Award any newly-earned achievements and celebrate the unlock. Grouped per
+  // player so someone unlocking two badges gets one tidy nudge.
+  const unlocked = await syncAchievements(matchId);
+  const byPlayer = new Map<number, string[]>();
+  for (const u of unlocked) {
+    if (!byPlayer.has(u.playerId)) byPlayer.set(u.playerId, []);
+    byPlayer.get(u.playerId)!.push(`${u.def.emoji} ${u.def.label}`);
+  }
+  await Promise.all(
+    [...byPlayer.entries()].map(([playerId, badges]) =>
+      notify(
+        "achievement_unlocked",
+        {
+          title: badges.length === 1 ? "Achievement unlocked!" : "Achievements unlocked!",
+          body: badges.join(" \u00b7 "),
+          url: "/profile",
+          tag: `match-${matchId}-achievements-${playerId}`,
+        },
+        { playerIds: [playerId] },
+      ),
+    ),
   );
 }

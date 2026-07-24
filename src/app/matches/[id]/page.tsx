@@ -4,9 +4,14 @@ import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchDetail, fmtDate, fmtMatchTime, isPlayerInMatch, type MatchdayStatus } from "@/lib/matches";
 import { getMatchAdmin } from "@/lib/match-admin";
+import { getReactionSummary } from "@/lib/reactions";
+import { getMotmTally, getMotmVote, getMotmVoteCount } from "@/lib/motm";
+import { getMatchDigest, buildDigestShareText } from "@/lib/match-digest";
+import { getBaseUrl } from "@/lib/site-url";
 import { MatchSettings } from "./match-settings";
 import { MatchNav } from "./match-nav";
 import { TeamsView } from "./teams-view";
+import { MatchSocial } from "./match-social";
 
 export const metadata = {
   title: "Match · Sideline",
@@ -49,6 +54,29 @@ export default async function MatchDetailPage({
     redirect("/matches");
   }
   const adminMatch = isAdmin ? await getMatchAdmin(matchId) : null;
+
+  // Social hub data (reactions, MOTM, share). Rostered players may interact.
+  const canInteract = isMember;
+  const rosterCandidates = match.teams
+    .flatMap((t) => t.players)
+    .filter((p) => p.playerId > 0)
+    .map((p) => ({ playerId: p.playerId, name: p.name }))
+    .filter((p, i, arr) => arr.findIndex((x) => x.playerId === p.playerId) === i)
+    .filter((p) => p.playerId !== viewerPlayerId);
+  const hasRoster = match.teams.some((t) => t.players.length > 0);
+
+  const [reactions, motmTally, myMotmVote, motmVoteCount, digest, baseUrl] =
+    await Promise.all([
+      getReactionSummary(matchId, viewerPlayerId ?? null),
+      getMotmTally(matchId),
+      viewerPlayerId != null ? getMotmVote(matchId, viewerPlayerId) : Promise.resolve(null),
+      getMotmVoteCount(matchId),
+      getMatchDigest(matchId),
+      getBaseUrl(),
+    ]);
+  const shareUrl = baseUrl ? `${baseUrl}/share/match/${matchId}` : "";
+  const shareText = digest ? buildDigestShareText(digest, shareUrl) : "";
+  const icsHref = `/api/matches/${matchId}/calendar`;
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
@@ -139,6 +167,21 @@ export default async function MatchDetailPage({
           </div>
         )}
       </section>
+
+      {(isAdmin || isMember) && hasRoster ? (
+        <MatchSocial
+          matchId={match.id}
+          canInteract={canInteract}
+          reactions={reactions}
+          motmTally={motmTally}
+          motmCandidates={rosterCandidates}
+          myMotmVote={myMotmVote}
+          motmVoteCount={motmVoteCount}
+          shareText={shareText}
+          shareUrl={shareUrl}
+          icsHref={icsHref}
+        />
+      ) : null}
 
       {adminMatch ? <MatchSettings match={adminMatch} /> : null}
     </main>

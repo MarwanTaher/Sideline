@@ -18,6 +18,7 @@ import {
 } from "./actions";
 import { POSITIONS } from "@/lib/positions";
 import type { PlayerRow, ResetRequestRow } from "@/lib/players-admin";
+import { ShareButton } from "@/components/share-button";
 
 const INITIAL: PlayerActionState = { ok: false, message: "" };
 
@@ -47,9 +48,19 @@ function Banner({ state }: { state: PlayerActionState }) {
     >
       <div>{state.message}</div>
       {state.link && (
-        <code className="mt-1 block break-all rounded bg-black/5 px-2 py-1 text-xs dark:bg-white/10">
-          {state.link}
-        </code>
+        <>
+          <code className="mt-1 block break-all rounded bg-black/5 px-2 py-1 text-xs dark:bg-white/10">
+            {state.link}
+          </code>
+          <div className="mt-2">
+            <ShareButton
+              text={`You're invited to join us on Sideline. Tap your personal sign-in link to get started:\n${state.link}`}
+              title="Invite to Sideline"
+              url={state.link}
+              label="Share invite on WhatsApp"
+            />
+          </div>
+        </>
       )}
     </div>
   );

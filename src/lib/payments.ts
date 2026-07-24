@@ -9,6 +9,7 @@ export interface PaymentMeta {
   paymentMobile: string;
   paymentMethod: string;
   paymentNote: string;
+  payLink: string;
   paymentsActive: boolean;
 }
 
@@ -55,6 +56,7 @@ interface MetaRow {
   payment_mobile: string;
   payment_method: string;
   payment_note: string;
+  pay_link: string;
   payments_active: number;
 }
 
@@ -66,6 +68,7 @@ export async function getPaymentMeta(matchId: number): Promise<PaymentMeta | nul
             COALESCE(payment_mobile, '') AS payment_mobile,
             COALESCE(payment_method, '') AS payment_method,
             COALESCE(payment_note, '') AS payment_note,
+            COALESCE(pay_link, '') AS pay_link,
             COALESCE(payments_active, 0) AS payments_active
      FROM matches WHERE id = $1`,
     [matchId],
@@ -80,6 +83,7 @@ export async function getPaymentMeta(matchId: number): Promise<PaymentMeta | nul
     paymentMobile: r.payment_mobile,
     paymentMethod: r.payment_method,
     paymentNote: r.payment_note,
+    payLink: r.pay_link,
     paymentsActive: Number(r.payments_active) === 1,
   };
 }
@@ -201,11 +205,18 @@ export async function savePaymentTotal(matchId: number, total: number): Promise<
 
 export async function savePaymentDetails(
   matchId: number,
-  details: { name: string; mobile: string; method: string; note: string },
+  details: { name: string; mobile: string; method: string; note: string; payLink: string },
 ): Promise<void> {
   await sqlClient.query(
-    `UPDATE matches SET payment_name = $1, payment_mobile = $2, payment_method = $3, payment_note = $4 WHERE id = $5`,
-    [details.name.trim(), details.mobile.trim(), details.method.trim(), details.note.trim(), matchId],
+    `UPDATE matches SET payment_name = $1, payment_mobile = $2, payment_method = $3, payment_note = $4, pay_link = $5 WHERE id = $6`,
+    [
+      details.name.trim(),
+      details.mobile.trim(),
+      details.method.trim(),
+      details.note.trim(),
+      details.payLink.trim(),
+      matchId,
+    ],
   );
 }
 
@@ -279,6 +290,7 @@ export interface PlayerPaymentMatch {
   paymentMobile: string;
   paymentMethod: string;
   paymentNote: string;
+  payLink: string;
   totalPayment: number;
   share: number;
   inRoster: boolean;
@@ -315,6 +327,7 @@ async function buildPlayerPaymentMatch(
     paymentMobile: meta.paymentMobile,
     paymentMethod: meta.paymentMethod,
     paymentNote: meta.paymentNote,
+    payLink: meta.payLink,
     totalPayment: meta.totalPayment,
     share: summary.sharePerPlayer,
     inRoster: Boolean(mine),

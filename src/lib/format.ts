@@ -12,3 +12,14 @@ export function fmtDate(d: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(d));
   return m ? `${m[3]}-${m[2]}-${m[1]}` : String(d);
 }
+
+/**
+ * Reduce a full name to "First L." for public sharing so we never leak full
+ * identities on the read-only summary card.
+ */
+export function shortenName(name: string): string {
+  const parts = String(name).trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "";
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} ${parts[parts.length - 1][0].toUpperCase()}.`;
+}
