@@ -3,7 +3,9 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getVotingState, votingOpen, type MatchdayStatus } from "@/lib/voting";
+import { getMotmTally, getMotmVote, getMotmVoteCount } from "@/lib/motm";
 import { VoteForm } from "./vote-form";
+import { MotmVote } from "./motm-vote";
 import { MatchNav } from "../match-nav";
 
 export const metadata = {
@@ -73,6 +75,13 @@ export default async function VotePage({
 
   const open = votingOpen(state.matchdayStatus);
 
+  const [motmTally, myMotmVote, motmVoteCount] = await Promise.all([
+    getMotmTally(matchId),
+    getMotmVote(matchId, playerId),
+    getMotmVoteCount(matchId),
+  ]);
+  const motmCandidates = state.ballot.map((b) => ({ playerId: b.playerId, name: b.name }));
+
   let notice: string | null = null;
   if (state.matchdayStatus === "draft") {
     notice = "The matchday hasn't started yet. Voting opens once the admin activates it.";
@@ -109,6 +118,17 @@ export default async function VotePage({
           matchId={matchId}
           ballot={state.ballot}
           hasVotedBefore={state.hasVotedBefore}
+        />
+      ) : null}
+
+      {state.voterInRoster || motmTally.length > 0 ? (
+        <MotmVote
+          matchId={matchId}
+          candidates={motmCandidates}
+          myVote={myMotmVote}
+          tally={motmTally}
+          voteCount={motmVoteCount}
+          canVote={open && state.voterInRoster}
         />
       ) : null}
     </main>
