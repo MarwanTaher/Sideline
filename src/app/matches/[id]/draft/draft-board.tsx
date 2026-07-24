@@ -94,6 +94,7 @@ export function DraftBoard({ matchId, numTeams, players, canEdit }: DraftBoardPr
   const [positions, setPositions] = useState<Record<number, Position>>(initial.positions);
   const [activeId, setActiveId] = useState<number | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [view, setView] = useState<"field" | "list">("field");
 
   // Resync local board whenever the server data changes (auto-balance / reset / save).
   useEffect(() => {
@@ -289,6 +290,46 @@ export function DraftBoard({ matchId, numTeams, players, canEdit }: DraftBoardPr
         </p>
       ) : null}
 
+      {/* View switcher: field (drag & drop) vs. a compact reading list. */}
+      <div className="mt-4 inline-flex rounded-lg border border-black/10 p-0.5 text-sm dark:border-white/10">
+        <button
+          type="button"
+          onClick={() => setView("field")}
+          className={`rounded-md px-3 py-1 font-medium transition ${
+            view === "field"
+              ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
+              : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+          }`}
+        >
+          Field
+        </button>
+        <button
+          type="button"
+          onClick={() => setView("list")}
+          className={`rounded-md px-3 py-1 font-medium transition ${
+            view === "list"
+              ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
+              : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+          }`}
+        >
+          List
+        </button>
+      </div>
+      {view === "list" && canEdit ? (
+        <p className="mt-1 text-xs text-neutral-400">
+          List view is read-only — switch to Field to drag players between teams.
+        </p>
+      ) : null}
+
+      {view === "list" ? (
+        <ListView
+          teamKeys={teamKeys}
+          benchIds={columns[BENCH] ?? []}
+          columns={columns}
+          playerMap={playerMap}
+          positions={positions}
+        />
+      ) : (
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
@@ -331,6 +372,7 @@ export function DraftBoard({ matchId, numTeams, players, canEdit }: DraftBoardPr
           ) : null}
         </DragOverlay>
       </DndContext>
+      )}
 
       {canEdit ? (
         <form
@@ -370,6 +412,83 @@ interface ColumnProps {
   canEdit: boolean;
   onPositionChange: (playerId: number, pos: Position) => void;
 }
+
+interface ListViewProps {
+  teamKeys: string[];
+  benchIds: number[];
+  columns: ColumnMap;
+  playerMap: Map<number, DraftPlayer>;
+  positions: Record<number, Position>;
+}
+
+function ListView({ teamKeys, benchIds, columns, playerMap, positions }: ListViewProps) {
+  function ListSection({ id, title, ids }: { id: string; title: string; ids: number[] }) {
+    const total = ids.reduce((sum, pid) => sum + (playerMap.get(pid)?.score ?? 0), 0);
+    const avg = ids.length ? total / ids.length : 0;
+    return (
+      <div className="rounded-xl border border-black/10 dark:border-white/10">
+        <div className="flex items-baseline justify-between border-b border-black/5 px-3 py-2 dark:border-white/5">
+          <h3 className="text-sm font-semibold">
+            {title} <span className="font-normal text-neutral-400">({ids.length})</span>
+          </h3>
+          {ids.length > 0 && id !== BENCH ? (
+            <span className="text-xs text-neutral-400">avg {avg.toFixed(1)}</span>
+          ) : null}
+        </div>
+        {ids.length === 0 ? (
+          <p className="px-3 py-3 text-xs text-neutral-400">
+            {id === BENCH ? "Everyone is assigned." : "No players."}
+          </p>
+        ) : (
+          <ol className="divide-y divide-black/5 dark:divide-white/5">
+            {ids.map((pid, i) => {
+              const player = playerMap.get(pid);
+              if (!player) return null;
+              return (
+                <li key={pid} className="flex items-center gap-2 px-3 py-2 text-sm">
+                  <span className="w-4 text-center text-xs text-neutral-400">{i + 1}</span>
+                  {player.isGuest ? (
+                    <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
+                      Guest
+                    </span>
+                  ) : null}
+                  <span className="flex-1 truncate font-medium">
+                    {player.name}
+                    {player.isGuest && player.hostName ? (
+                      <span className="font-normal text-neutral-400"> · {player.hostName}</span>
+                    ) : null}
+                  </span>
+                  <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500 dark:bg-neutral-800">
+                    {positions[pid] ?? "MID"}
+                  </span>
+                  <span className="w-8 text-right tabular-nums text-xs text-neutral-400">
+                    {player.score.toFixed(1)}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {teamKeys.map((key) => (
+        <ListSection
+          key={key}
+          id={key}
+          title={`Team ${teamNoFromKey(key)}`}
+          ids={columns[key] ?? []}
+        />
+      ))}
+      <ListSection id={BENCH} title="Bench" ids={benchIds} />
+    </div>
+  );
+}
+
+
 
 function Column({
   id,
