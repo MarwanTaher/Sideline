@@ -27,7 +27,7 @@ export default function ChangePassword() {
           <input type="password" name="current" autoComplete="current-password" className={inputCls} />
         </label>
         <label className="block text-sm">
-          <span className="font-medium">New password (min 6 characters)</span>
+          <span className="font-medium">New password (min 8 characters)</span>
           <input type="password" name="password" autoComplete="new-password" className={inputCls} />
         </label>
         <label className="block text-sm">

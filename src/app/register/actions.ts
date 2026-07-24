@@ -1,12 +1,14 @@
 "use server";
 
 import { z } from "zod";
+import { headers } from "next/headers";
 import {
   createSelfRegisteredPlayer,
   DuplicateNameError,
 } from "@/lib/players-admin";
 import { setPlayerPassword } from "@/lib/password-reset";
 import { notify } from "@/lib/push";
+import { rateLimit } from "@/lib/rate-limit";
 
 export interface RegisterState {
   ok: boolean;
@@ -21,7 +23,7 @@ const nameSchema = z
 const positionSchema = z.enum(["GK", "DEF", "MID", "FWD"]);
 const passwordSchema = z
   .string()
-  .min(6, "Password must be at least 6 characters.")
+    .min(8, "Password must be at least 8 characters.")
   .max(200, "Password is too long.");
 
 /**
@@ -34,6 +36,17 @@ export async function registerAction(
   formData: FormData,
 ): Promise<RegisterState> {
   try {
+    // Throttle sign-ups per client to prevent scripted account flooding.
+    const h = await headers();
+    const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+    const { allowed } = await rateLimit(`register:${ip}`, 5, 3600);
+    if (!allowed) {
+      return {
+        ok: false,
+        message: "Too many sign-ups from this device. Please try again later.",
+      };
+    }
+
     const name = nameSchema.parse(formData.get("name"));
     const position = positionSchema.parse(formData.get("position"));
     const password = passwordSchema.parse(formData.get("password"));

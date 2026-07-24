@@ -4,6 +4,7 @@ import { and, eq } from "drizzle-orm";
 import { db, schema } from "@/lib/db";
 import { verifyPassword } from "@/lib/password";
 import { resolvePlayerFromAccessToken } from "@/lib/access-tokens";
+import { rateLimit } from "@/lib/rate-limit";
 
 export type UserRole = "super" | "admin" | "player";
 
@@ -70,6 +71,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         // admin login.
         const playerId = Number(identifier);
         if (!Number.isInteger(playerId)) return null;
+
+        // Throttle password attempts per account to blunt brute-force /
+        // credential-stuffing. Failing open is handled inside rateLimit().
+        const { allowed } = await rateLimit(`login:${playerId}`, 8, 60);
+        if (!allowed) return null;
 
         const credRows = await db
           .select()

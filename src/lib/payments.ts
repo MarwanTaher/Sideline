@@ -31,23 +31,6 @@ export interface PaymentSummary {
   changeCollected: number;
 }
 
-export interface MatchOption {
-  id: number;
-  label: string;
-}
-
-interface MatchRow {
-  id: number;
-  played_on: string;
-}
-
-export async function listMatchesForPayments(): Promise<MatchOption[]> {
-  const raw = (await sqlClient.query(
-    `SELECT id, played_on FROM matches ORDER BY id DESC`,
-  )) as unknown as MatchRow[];
-  return raw.map((m) => ({ id: m.id, label: `Match ${m.id} (${fmtDate(m.played_on)})` }));
-}
-
 interface MetaRow {
   id: number;
   played_on: string;
@@ -351,27 +334,3 @@ export async function getPlayerPaymentForMatch(
   return view;
 }
 
-/**
- * Every match with self-service payments open that the player is involved in
- * (on the roster, or hosting a guest), with their own share, paid status and
- * their guests' paid status.
- */
-export async function getPlayerPaymentMatches(playerId: number): Promise<PlayerPaymentMatch[]> {
-  const matchRows = (await sqlClient.query(
-    `SELECT DISTINCT m.id
-       FROM matches m
-       LEFT JOIN match_players mp ON mp.match_id = m.id AND mp.player_id = $1
-       LEFT JOIN match_guests mg ON mg.match_id = m.id AND mg.host_player_id = $1 AND mg.status = 'approved'
-      WHERE COALESCE(m.payments_active, 0) = 1
-        AND (mp.player_id IS NOT NULL OR mg.host_player_id IS NOT NULL)
-      ORDER BY m.id DESC`,
-    [playerId],
-  )) as unknown as { id: number }[];
-
-  const result: PlayerPaymentMatch[] = [];
-  for (const { id } of matchRows) {
-    const view = await buildPlayerPaymentMatch(id, playerId);
-    if (view) result.push(view);
-  }
-  return result;
-}

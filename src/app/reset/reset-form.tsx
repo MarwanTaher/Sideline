@@ -34,7 +34,7 @@ export default function ResetForm({ token, name }: { token: string; name: string
         <span className="font-medium text-neutral-900 dark:text-neutral-100">{name}</span>.
       </p>
       <label className="block text-sm">
-        <span className="font-medium">New password (min 6 characters)</span>
+        <span className="font-medium">New password (min 8 characters)</span>
         <input type="password" name="password" className={inputCls} />
       </label>
       <label className="block text-sm">

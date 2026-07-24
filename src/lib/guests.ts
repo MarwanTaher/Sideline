@@ -73,23 +73,6 @@ export async function listGuests(matchId: number): Promise<Guest[]> {
   return rows.map(mapRow);
 }
 
-/** Guests brought by one host for a match. */
-export async function listGuestsForHost(
-  matchId: number,
-  hostPlayerId: number,
-): Promise<Guest[]> {
-  const rows = (await sqlClient.query(
-    `SELECT g.id, g.match_id, g.host_player_id, p.name AS host_name, g.name,
-            g.position, g.skill, g.team_no, g.paid, g.status, g.created_at
-       FROM match_guests g
-       JOIN players p ON p.id = g.host_player_id
-      WHERE g.match_id = $1 AND g.host_player_id = $2
-      ORDER BY g.created_at`,
-    [matchId, hostPlayerId],
-  )) as unknown as GuestRow[];
-  return rows.map(mapRow);
-}
-
 export class GuestError extends Error {}
 
 interface AddGuestInput {

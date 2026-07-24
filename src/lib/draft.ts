@@ -22,9 +22,6 @@ export type MatchStatus = "open" | "closed";
 export function guestToDraftId(guestId: number): number {
   return -guestId;
 }
-export function isGuestDraftId(draftId: number): boolean {
-  return draftId < 0;
-}
 export function draftIdToGuestId(draftId: number): number {
   return -draftId;
 }

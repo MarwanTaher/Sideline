@@ -13,8 +13,4 @@ export function waMeUrl(text: string): string {
   return `https://wa.me/?text=${encodeURIComponent(text)}`;
 }
 
-/** Build a `wa.me` link addressed to a specific phone number (digits only). */
-export function waMePhoneUrl(phone: string, text: string): string {
-  const digits = phone.replace(/[^0-9]/g, "");
-  return `https://wa.me/${digits}?text=${encodeURIComponent(text)}`;
-}
+

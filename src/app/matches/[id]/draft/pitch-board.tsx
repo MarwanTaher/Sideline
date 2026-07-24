@@ -111,6 +111,7 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
   const [flip, setFlip] = useState(false);
   const [showScores, setShowScores] = useState(true);
   const [showPhotos, setShowPhotos] = useState(true);
+  const [view, setView] = useState<"field" | "list">("field");
   const [teamNames, setTeamNames] = useState<Record<number, string>>(initialTeamNames ?? {});
 
   function renameTeam(teamNo: number, name: string) {
@@ -235,6 +236,22 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
               <p className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500">
                 Display
               </p>
+              <div className="mt-3 inline-flex w-full rounded-lg border border-white/10 p-0.5">
+                {(["field", "list"] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setView(v)}
+                    className={`flex-1 rounded-md px-3 py-1 text-xs font-semibold capitalize transition ${
+                      view === v
+                        ? "bg-white/10 text-neutral-100"
+                        : "text-neutral-400 hover:text-neutral-200"
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
               <div className="mt-3 space-y-1">
                 <Toggle label="Display formation" checked={showFormation} onChange={setShowFormation} />
                 <Toggle label="Player ratings" checked={showScores} onChange={setShowScores} />
@@ -304,6 +321,9 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
 
           {/* -------- Pitches -------- */}
           <div className="min-w-0 flex-1">
+            {view === "list" ? (
+              <TeamList teamNos={teamNos} byTeam={byTeam} bench={bench} teamNames={teamNames} />
+            ) : (
             <div
               className={`grid gap-5 ${teamNos.length >= 3 ? "xl:grid-cols-3" : "lg:grid-cols-2"}`}
             >
@@ -340,6 +360,7 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
                 );
               })}
             </div>
+            )}
           </div>
         </div>
 
@@ -375,6 +396,103 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
           </button>
         </form>
       ) : null}
+    </div>
+  );
+}
+
+/* ------------------------------ Team list ------------------------------- */
+
+interface TeamListProps {
+  teamNos: number[];
+  byTeam: Map<number, Record<Position, DraftPlayer[]>>;
+  bench: DraftPlayer[];
+  teamNames: Record<number, string>;
+}
+
+/** Compact, read-only list alternative to the pitch view. */
+function TeamList({ teamNos, byTeam, bench, teamNames }: TeamListProps) {
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+      {teamNos.map((n) => {
+        const byPos = byTeam.get(n)!;
+        const all = ROW_ORDER.flatMap((pos) => byPos[pos].map((p) => ({ p, pos })));
+        const count = all.length;
+        const avg = count > 0 ? all.reduce((s, x) => s + x.p.score, 0) / count : 0;
+        return (
+          <TeamListCard
+            key={n}
+            title={teamNames[n] ?? `Team ${n}`}
+            rows={all}
+            count={count}
+            avg={avg}
+          />
+        );
+      })}
+      <TeamListCard
+        title="Bench"
+        rows={bench.map((p) => ({ p, pos: (p.positionPlayed ?? p.preferredPosition) as Position }))}
+        count={bench.length}
+        avg={null}
+      />
+    </div>
+  );
+}
+
+function TeamListCard({
+  title,
+  rows,
+  count,
+  avg,
+}: {
+  title: string;
+  rows: { p: DraftPlayer; pos: Position }[];
+  count: number;
+  avg: number | null;
+}) {
+  return (
+    <div
+      className="overflow-hidden rounded-2xl border"
+      style={{ borderColor: `${BRAND}66`, backgroundColor: "#0b0d0b" }}
+    >
+      <div className="flex items-baseline justify-between border-b border-white/10 px-3 py-2">
+        <h3 className="text-sm font-semibold text-neutral-100">
+          {title} <span className="font-normal text-neutral-500">({count})</span>
+        </h3>
+        {avg != null && count > 0 ? (
+          <span className="text-xs text-neutral-500">avg {avg.toFixed(1)}</span>
+        ) : null}
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-3 py-3 text-xs text-neutral-500">No players.</p>
+      ) : (
+        <ol className="divide-y divide-white/5">
+          {rows.map(({ p, pos }, i) => (
+            <li key={p.playerId} className="flex items-center gap-2 px-3 py-2 text-sm">
+              <span className="w-4 text-center text-xs text-neutral-600">{i + 1}</span>
+              <span
+                className="w-9 rounded px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase text-neutral-300"
+                style={{ backgroundColor: `${BRAND}22` }}
+              >
+                {pos}
+              </span>
+              {p.isGuest ? (
+                <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-300">
+                  Guest
+                </span>
+              ) : null}
+              <span className="flex-1 truncate font-medium text-neutral-100">
+                {p.name}
+                {p.isGuest && p.hostName ? (
+                  <span className="font-normal text-neutral-500"> · {p.hostName}</span>
+                ) : null}
+              </span>
+              <span className="w-8 text-right tabular-nums text-xs text-neutral-400">
+                {p.score.toFixed(1)}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
     </div>
   );
 }

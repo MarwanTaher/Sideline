@@ -154,33 +154,6 @@ async function queryPlayerSubsRespectingPrefs(
   )) as Row[];
 }
 
-/** Send a notification to every subscription belonging to the given players. */
-export async function sendPushToPlayers(
-  playerIds: number[],
-  payload: PushPayload,
-): Promise<void> {
-  if (!ensureConfigured() || playerIds.length === 0) return;
-  if (!(await isPushEnabled())) return;
-
-  await dispatch(await rowsToSubscriptions(await queryPlayerSubs(playerIds)), payload);
-}
-
-/** Send a notification to all stored subscriptions. */
-export async function sendPushToAll(payload: PushPayload): Promise<void> {
-  if (!ensureConfigured()) return;
-  if (!(await isPushEnabled())) return;
-
-  await dispatch(await rowsToSubscriptions(await queryAllSubs()), payload);
-}
-
-/** Send a notification to every active admin (players linked in `admins`). */
-export async function sendPushToAdmins(payload: PushPayload): Promise<void> {
-  if (!ensureConfigured()) return;
-  if (!(await isPushEnabled())) return;
-
-  await dispatch(await rowsToSubscriptions(await queryAdminSubs()), payload);
-}
-
 // ---------------------------------------------------------------------------
 // Per-type configuration & the notify() dispatcher
 // ---------------------------------------------------------------------------
@@ -301,19 +274,6 @@ export async function notify(
 // ---------------------------------------------------------------------------
 // Per-user preferences & device management
 // ---------------------------------------------------------------------------
-
-/** Read a player's opt-outs as a map of typeKey -> enabled. */
-export async function getPlayerPreferences(
-  playerId: number,
-): Promise<Record<string, boolean>> {
-  const rows = (await sqlClient.query(
-    `SELECT type_key, enabled FROM push_preferences WHERE player_id = $1`,
-    [playerId],
-  )) as Array<{ type_key: string; enabled: number }>;
-  const map: Record<string, boolean> = {};
-  for (const r of rows) map[r.type_key] = r.enabled !== 0;
-  return map;
-}
 
 export async function setPlayerPreference(
   playerId: number,

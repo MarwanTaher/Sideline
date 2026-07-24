@@ -36,10 +36,6 @@ export const ACHIEVEMENTS: AchievementDef[] = [
 
 const ACHIEVEMENT_BY_KEY = new Map(ACHIEVEMENTS.map((a) => [a.key, a]));
 
-export function getAchievementDef(key: string): AchievementDef | undefined {
-  return ACHIEVEMENT_BY_KEY.get(key);
-}
-
 export type EarnedAchievement = {
   key: string;
   def: AchievementDef;
@@ -159,24 +155,6 @@ export async function syncAchievements(matchId?: number): Promise<NewlyUnlocked[
     }
   }
   return unlocked;
-}
-
-/** Achievements a player has earned, newest first. */
-export async function getPlayerAchievements(playerId: number): Promise<EarnedAchievement[]> {
-  const rows = (await sqlClient.query(
-    `SELECT achievement_key, detail, awarded_at
-       FROM player_achievements
-      WHERE player_id = $1
-      ORDER BY awarded_at DESC`,
-    [playerId],
-  )) as Array<{ achievement_key: string; detail: string; awarded_at: string }>;
-  const out: EarnedAchievement[] = [];
-  for (const r of rows) {
-    const def = ACHIEVEMENT_BY_KEY.get(r.achievement_key);
-    if (!def) continue;
-    out.push({ key: r.achievement_key, def, awardedAt: String(r.awarded_at), detail: String(r.detail ?? "") });
-  }
-  return out;
 }
 
 /**

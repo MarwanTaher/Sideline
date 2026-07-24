@@ -19,7 +19,7 @@ export interface ChangePasswordState {
 const schema = z
   .object({
     current: z.string(),
-    password: z.string().min(6, "New password must be at least 6 characters."),
+    password: z.string().min(8, "New password must be at least 8 characters."),
     confirm: z.string(),
   })
   .refine((d) => d.password === d.confirm, {

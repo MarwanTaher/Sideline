@@ -78,7 +78,7 @@ export default function RegisterForm() {
                 name="password"
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
                 autoComplete="new-password"
                 className={inputCls}
               />
@@ -90,7 +90,7 @@ export default function RegisterForm() {
                 name="confirm"
                 type="password"
                 required
-                minLength={6}
+                minLength={8}
                 autoComplete="new-password"
                 className={inputCls}
               />

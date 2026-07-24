@@ -130,15 +130,15 @@ export async function consumeResetToken(
 /**
  * Self-service password change for a signed-in player. Verifies the current
  * password against `player_credentials`; if no credentials exist yet, allows
- * setting an initial password. New password must be at least 6 characters.
+ * setting an initial password. New password must be at least 8 characters.
  */
 export async function changePlayerPassword(
   playerId: number,
   currentPassword: string,
   newPassword: string,
 ): Promise<{ ok: boolean; message: string }> {
-  if (newPassword.length < 6) {
-    return { ok: false, message: "New password must be at least 6 characters." };
+  if (newPassword.length < 8) {
+    return { ok: false, message: "New password must be at least 8 characters." };
   }
 
   const rows = (await sqlClient.query(

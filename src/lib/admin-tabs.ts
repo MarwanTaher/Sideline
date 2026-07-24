@@ -20,10 +20,3 @@ export type AdminTabKey = (typeof ADMIN_TABS)[number]["key"];
 export const ADMIN_TAB_KEYS: readonly AdminTabKey[] = ADMIN_TABS.map(
   (t) => t.key,
 );
-
-export function isAdminTabKey(value: unknown): value is AdminTabKey {
-  return (
-    typeof value === "string" &&
-    (ADMIN_TAB_KEYS as readonly string[]).includes(value)
-  );
-}
