@@ -1,4 +1,4 @@
-import type { PlayerSeason, SeriesPoint, MatchResult } from "@/lib/player-trends";
+import type { PlayerSeason, SeriesPoint } from "@/lib/player-trends";
 
 /** Inline SVG line sparkline — no chart library, tiny bundle. */
 function Sparkline({ points, height = 40 }: { points: SeriesPoint[]; height?: number }) {
@@ -43,12 +43,6 @@ function GoalBars({ points }: { points: SeriesPoint[] }) {
   );
 }
 
-const RESULT_STYLES: Record<MatchResult, string> = {
-  W: "bg-emerald-500 text-white",
-  D: "bg-neutral-400 text-white",
-  L: "bg-red-400 text-white",
-};
-
 export default function YourSeason({ season }: { season: PlayerSeason }) {
   if (season.appearances === 0) {
     return <p className="text-sm text-neutral-500">Play a match to start building your season.</p>;
@@ -82,30 +76,6 @@ export default function YourSeason({ season }: { season: PlayerSeason }) {
           </div>
         ))}
       </div>
-
-      {season.form.length > 0 ? (
-        <div className="mt-4">
-          <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Recent form</p>
-          <div className="mt-1.5 flex items-center gap-1.5">
-            {season.form.map((r, i) => (
-              <span
-                key={i}
-                className={`flex h-6 w-6 items-center justify-center rounded text-xs font-bold ${RESULT_STYLES[r]}`}
-              >
-                {r}
-              </span>
-            ))}
-            <span className="ml-1 text-[11px] text-neutral-400">oldest → latest</span>
-          </div>
-          <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-400">
-            Your last {season.form.length} result{season.form.length === 1 ? "" : "s"}:{" "}
-            <span className="font-semibold text-emerald-600 dark:text-emerald-400">W</span> win ·{" "}
-            <span className="font-semibold text-neutral-500">D</span> draw ·{" "}
-            <span className="font-semibold text-red-500">L</span> loss. Results come from the goals
-            recorded on each match, so they only appear once stats are entered.
-          </p>
-        </div>
-      ) : null}
 
       {season.hasEnoughData && season.ratingSeries.length >= 2 ? (
         <div className="mt-4">
