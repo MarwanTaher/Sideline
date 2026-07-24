@@ -178,3 +178,44 @@ export async function getPlayerAchievements(playerId: number): Promise<EarnedAch
   }
   return out;
 }
+
+/**
+ * Achievements a player currently qualifies for, computed live from play data
+ * and merged with any persisted award timestamps. This makes badges appear
+ * immediately (e.g. the Debut badge after a first match) without waiting for a
+ * matchday-close sync — the persisted table is only used for the "awarded on"
+ * date and unlock notifications.
+ */
+export async function getPlayerAchievementsLive(playerId: number): Promise<EarnedAchievement[]> {
+  const [earnedMap, persistedRows] = await Promise.all([
+    computeEarnedKeys(),
+    sqlClient.query(
+      `SELECT achievement_key, detail, awarded_at
+         FROM player_achievements WHERE player_id = $1`,
+      [playerId],
+    ) as unknown as Promise<Array<{ achievement_key: string; detail: string; awarded_at: string }>>,
+  ]);
+
+  const persisted = new Map(
+    persistedRows.map((r) => [
+      r.achievement_key,
+      { awardedAt: String(r.awarded_at), detail: String(r.detail ?? "") },
+    ]),
+  );
+
+  const keys = earnedMap.get(playerId) ?? new Set<string>();
+  const out: EarnedAchievement[] = [];
+  // Preserve the catalog order so the grid is stable and grouped by category.
+  for (const def of ACHIEVEMENTS) {
+    if (!keys.has(def.key)) continue;
+    const p = persisted.get(def.key);
+    out.push({
+      key: def.key,
+      def,
+      awardedAt: p?.awardedAt ?? "",
+      detail: p?.detail ?? "",
+    });
+  }
+  return out;
+}
+

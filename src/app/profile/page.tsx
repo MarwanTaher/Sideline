@@ -16,7 +16,7 @@ import AchievementsGrid from "./achievements-grid";
 import ChemistryPanel from "./chemistry-panel";
 import { getPlayerContact } from "@/lib/player-profile";
 import { getPlayerSeason } from "@/lib/player-trends";
-import { getPlayerAchievements } from "@/lib/achievements";
+import { getPlayerAchievementsLive } from "@/lib/achievements";
 import { getChemistry } from "@/lib/chemistry";
 
 export const metadata = {
@@ -74,7 +74,7 @@ export default async function ProfilePage() {
 
   const [season, achievements, chemistry] = await Promise.all([
     getPlayerSeason(pid),
-    getPlayerAchievements(pid),
+    getPlayerAchievementsLive(pid),
     getChemistry(pid, { minShared: 3 }),
   ]);
 

@@ -2,7 +2,6 @@ import { sqlClient } from "@/lib/db";
 import { notify } from "@/lib/push";
 import { deleteGuestsForMatch } from "@/lib/guests";
 import { syncAchievements } from "@/lib/achievements";
-import { assignMatchToActiveSeason } from "@/lib/seasons";
 import {
   captureScoreSnapshot,
   getRatingChangesForMatch,
@@ -141,14 +140,6 @@ export async function createMatch(input: CreateMatchInput): Promise<number> {
   );
   const rows = raw as { id: number }[];
   const matchId = Number(rows[0].id);
-
-  // Tag the match with the active season (if one exists) so season stats and
-  // the archive stay accurate. Never let this block match creation.
-  try {
-    await assignMatchToActiveSeason(matchId);
-  } catch {
-    // ignore — seasons are optional
-  }
 
   // Ask everyone to mark their availability for the new match. Never let a
   // push failure block match creation.

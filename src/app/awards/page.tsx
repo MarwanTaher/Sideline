@@ -96,7 +96,6 @@ export default async function AwardsPage({
         items={[
           { href: "/leaderboard", label: "Leaderboard" },
           { href: "/awards", label: "Awards" },
-          { href: "/seasons", label: "Seasons" },
         ]}
       />
       <div className="flex items-center gap-3">

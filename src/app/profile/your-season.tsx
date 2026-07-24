@@ -86,7 +86,7 @@ export default function YourSeason({ season }: { season: PlayerSeason }) {
       {season.form.length > 0 ? (
         <div className="mt-4">
           <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Recent form</p>
-          <div className="mt-1.5 flex gap-1.5">
+          <div className="mt-1.5 flex items-center gap-1.5">
             {season.form.map((r, i) => (
               <span
                 key={i}
@@ -95,7 +95,15 @@ export default function YourSeason({ season }: { season: PlayerSeason }) {
                 {r}
               </span>
             ))}
+            <span className="ml-1 text-[11px] text-neutral-400">oldest → latest</span>
           </div>
+          <p className="mt-1.5 text-[11px] leading-relaxed text-neutral-400">
+            Your last {season.form.length} result{season.form.length === 1 ? "" : "s"}:{" "}
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">W</span> win ·{" "}
+            <span className="font-semibold text-neutral-500">D</span> draw ·{" "}
+            <span className="font-semibold text-red-500">L</span> loss. Results come from the goals
+            recorded on each match, so they only appear once stats are entered.
+          </p>
         </div>
       ) : null}
 
