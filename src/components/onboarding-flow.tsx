@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { SectionIcon } from "@/components/section-icon";
-import { subscribeThisDevice, pushSupported } from "@/lib/push-client";
+import { subscribeThisDevice, pushSupported, getExistingSubscription } from "@/lib/push-client";
 
 const DONE_KEY = "sideline_onboarded_v1";
 
@@ -38,7 +38,28 @@ export default function OnboardingFlow({ show }: { show: boolean }) {
     } catch {
       return;
     }
-    setVisible(true);
+    // A device that already has push enabled has clearly been set up before —
+    // skip the intro and remember it so we don't ask again.
+    let cancelled = false;
+    getExistingSubscription()
+      .then((sub) => {
+        if (cancelled) return;
+        if (sub) {
+          try {
+            localStorage.setItem(DONE_KEY, "1");
+          } catch {
+            // ignore storage errors
+          }
+          return;
+        }
+        setVisible(true);
+      })
+      .catch(() => {
+        if (!cancelled) setVisible(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [show]);
 
   function finish() {
