@@ -75,31 +75,28 @@ export async function addGuestAction(
       throw new GuestError("Select a host player.");
     }
 
-    // Admin adds are auto-approved and count immediately; player submissions are
-    // pending until an admin approves them, so they do not reserve a spot and
-    // are not subject to the full-match check here.
-    const status = isAdmin ? "approved" : "pending";
-
-    await addGuest({ matchId, hostPlayerId, name, position, skillKey, status });
+    // Every guest starts as a pending request that an admin must explicitly
+    // approve before it counts toward the roster, draft, or payments. Even when
+    // an admin adds a guest on behalf of a player it is not auto-approved — the
+    // admin confirms it with the Approve action — so the approval workflow is
+    // always visible and auditable, and pending guests never reserve a spot or
+    // hit the full-match check here.
+    await addGuest({ matchId, hostPlayerId, name, position, skillKey, status: "pending" });
     revalidateGuestPaths(matchId);
 
-    if (status === "pending") {
-      const cleanName = name.trim() || "a guest";
-      const hostName = session.user.name || "A player";
-      try {
-        await notify("guest_request", {
-          title: "Guest request \u{1f91d}",
-          body: `${hostName} wants to bring ${cleanName} \u2014 approve or decline.`,
-          url: `/matches/${matchId}/availability`,
-          tag: `match-${matchId}-guest-request`,
-        });
-      } catch {
-        // ignore push errors
-      }
-      return { ok: true, message: "Guest request submitted for admin approval." };
+    const cleanName = name.trim() || "a guest";
+    const hostName = session.user.name || "A player";
+    try {
+      await notify("guest_request", {
+        title: "Guest request \u{1f91d}",
+        body: `${hostName} wants to bring ${cleanName} \u2014 approve or decline.`,
+        url: `/matches/${matchId}/availability`,
+        tag: `match-${matchId}-guest-request`,
+      });
+    } catch {
+      // ignore push errors
     }
-
-    return { ok: true, message: "Guest added." };
+    return { ok: true, message: "Guest request submitted for admin approval." };
   } catch (err) {
     return fail(err);
   }
