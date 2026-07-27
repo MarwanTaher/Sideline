@@ -10,6 +10,7 @@ import {
   listMatchesForReview,
   reviewCounts,
 } from "@/lib/vote-admin";
+import { getMotmTally, getMotmVoteDetails } from "@/lib/motm";
 import { VotesAdmin } from "./votes-admin";
 import { SectionIcon } from "@/components/section-icon";
 
@@ -47,6 +48,14 @@ export default async function VotesPage({
   const submissions =
     selectedMatchId > 0 ? await getVoteSubmissionStatus(selectedMatchId) : [];
 
+  const [motmTally, motmVotes] =
+    selectedMatchId > 0
+      ? await Promise.all([
+          getMotmTally(selectedMatchId),
+          getMotmVoteDetails(selectedMatchId),
+        ])
+      : [[], []];
+
   return (
     <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-10">
       <div className="flex items-center gap-3">
@@ -65,6 +74,8 @@ export default async function VotesPage({
         audit={audit}
         participants={participants}
         submissions={submissions}
+        motmTally={motmTally}
+        motmVotes={motmVotes}
       />
     </main>
   );

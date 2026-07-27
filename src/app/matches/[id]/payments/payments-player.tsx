@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useActionState } from "react";
+import { useEffect, useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import {
   playerSetPaidAction,
@@ -28,6 +28,38 @@ function DetailRow({ label, value }: { label: string; value: string }) {
     <div className="flex justify-between gap-3 text-sm">
       <span className="text-neutral-500">{label}</span>
       <span className="text-right font-medium">{value}</span>
+    </div>
+  );
+}
+
+function CopyDetailRow({ label, value }: { label: string; value: string }) {
+  const [copied, setCopied] = useState(false);
+  if (!value) return null;
+
+  async function handleCopy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard unavailable — leave the number visible for manual copy.
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className="text-neutral-500">{label}</span>
+      <span className="flex items-center gap-2">
+        <span className="text-right font-medium">{value}</span>
+        <button
+          type="button"
+          onClick={handleCopy}
+          className="rounded-md border border-black/15 px-2 py-0.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-50 dark:border-white/15 dark:text-neutral-300 dark:hover:bg-neutral-900"
+          title="Copy number"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+      </span>
     </div>
   );
 }
@@ -142,7 +174,7 @@ function MatchCard({ m, showHeader = true }: { m: PlayerPaymentMatch; showHeader
           <p className="text-sm font-medium">Where to send it</p>
           <div className="mt-2 space-y-1">
             <DetailRow label="Recipient" value={m.paymentName} />
-            <DetailRow label="Mobile" value={m.paymentMobile} />
+            <CopyDetailRow label="Mobile" value={m.paymentMobile} />
             <DetailRow label="Method" value={m.paymentMethod} />
             <DetailRow label="Note" value={m.paymentNote} />
             <DetailRow label="Reference" value={`Match ${m.matchId} · your name`} />

@@ -23,12 +23,13 @@ import type {
   VoteReviewRow,
   VoteSubmissionRow,
 } from "@/lib/vote-admin";
+import type { MotmTallyRow, MotmVoteDetailRow } from "@/lib/motm";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
 
 const INITIAL: VoteActionState = { ok: false, message: "" };
 
-const TABS = ["Votes Table", "Submissions", "Edit Vote", "Add Vote", "Auto-flag", "Change Log"] as const;
+const TABS = ["Votes Table", "Submissions", "MOTM Votes", "Edit Vote", "Add Vote", "Auto-flag", "Change Log"] as const;
 type Tab = (typeof TABS)[number];
 
 function Banner({ state }: { state: VoteActionState }) {
@@ -504,6 +505,78 @@ function scopeBadge(scope: string) {
   );
 }
 
+function MotmPanel({
+  selectedMatchId,
+  tally,
+  votes,
+}: {
+  selectedMatchId: number;
+  tally: MotmTallyRow[];
+  votes: MotmVoteDetailRow[];
+}) {
+  if (selectedMatchId <= 0) {
+    return (
+      <p className="text-sm text-neutral-500">
+        Select a match above to review its Man of the Match votes.
+      </p>
+    );
+  }
+  if (tally.length === 0) {
+    return <p className="text-sm text-neutral-500">No MOTM votes for this match yet.</p>;
+  }
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-semibold">Tally</h3>
+        <DataTable className="mt-2">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs text-neutral-500">
+              <tr>
+                <th scope="col" className="py-2 pr-4">#</th>
+                <th scope="col" className="py-2 pr-4">Player</th>
+                <th scope="col" className="py-2 pr-4">Votes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {tally.map((t, i) => (
+                <tr key={t.playerId} className="border-t border-black/5 dark:border-white/5">
+                  <td className="py-2 pr-4">{i === 0 ? "🏆" : i + 1}</td>
+                  <td className={`py-2 pr-4 ${i === 0 ? "font-semibold" : ""}`}>{t.name}</td>
+                  <td className="py-2 pr-4">{t.votes}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DataTable>
+      </div>
+
+      <div>
+        <h3 className="text-sm font-semibold">Ballots</h3>
+        <DataTable className="mt-2">
+          <table className="w-full text-sm">
+            <thead className="text-left text-xs text-neutral-500">
+              <tr>
+                <th scope="col" className="py-2 pr-4">Voter</th>
+                <th scope="col" className="py-2 pr-4">Voted for</th>
+                <th scope="col" className="py-2 pr-4">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {votes.map((v, i) => (
+                <tr key={i} className="border-t border-black/5 dark:border-white/5">
+                  <td className="py-2 pr-4">{v.voterName}</td>
+                  <td className="py-2 pr-4">{v.votedForName}</td>
+                  <td className="py-2 pr-4 text-xs text-neutral-500">{v.createdAt}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </DataTable>
+      </div>
+    </div>
+  );
+}
+
 export function VotesAdmin({
   matches,
   selectedMatchId,
@@ -512,6 +585,8 @@ export function VotesAdmin({
   audit,
   participants,
   submissions,
+  motmTally,
+  motmVotes,
 }: {
   matches: MatchOption[];
   selectedMatchId: number;
@@ -520,6 +595,8 @@ export function VotesAdmin({
   audit: VoteAuditRow[];
   participants: ParticipantOption[];
   submissions: VoteSubmissionRow[];
+  motmTally: MotmTallyRow[];
+  motmVotes: MotmVoteDetailRow[];
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("Votes Table");
@@ -616,6 +693,9 @@ export function VotesAdmin({
         {tab === "Edit Vote" ? <EditPanel votes={votes} /> : null}
         {tab === "Submissions" ? (
           <SubmissionsPanel selectedMatchId={selectedMatchId} submissions={submissions} />
+        ) : null}
+        {tab === "MOTM Votes" ? (
+          <MotmPanel selectedMatchId={selectedMatchId} tally={motmTally} votes={motmVotes} />
         ) : null}
         {tab === "Add Vote" ? <AddPanel matchId={selectedMatchId} participants={participants} /> : null}
         {tab === "Auto-flag" ? <AutoFlagPanel matches={matches} selectedMatchId={selectedMatchId} /> : null}

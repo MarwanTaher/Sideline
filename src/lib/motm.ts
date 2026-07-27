@@ -89,3 +89,29 @@ export async function getMotmVoteCount(matchId: number): Promise<number> {
   )) as Array<{ n: number }>;
   return rows.length ? Number(rows[0].n) : 0;
 }
+
+export type MotmVoteDetailRow = {
+  voterName: string;
+  votedForName: string;
+  createdAt: string;
+};
+
+/** Individual MOTM ballots for a match (who voted for whom) — admin review. */
+export async function getMotmVoteDetails(matchId: number): Promise<MotmVoteDetailRow[]> {
+  const rows = (await sqlClient.query(
+    `SELECT voter.name AS voter_name,
+            pick.name AS voted_for_name,
+            v.created_at AS created_at
+       FROM match_motm_votes v
+       JOIN players voter ON voter.id = v.voter_id
+       JOIN players pick ON pick.id = v.voted_for_id
+      WHERE v.match_id = $1
+      ORDER BY pick.name ASC, voter.name ASC`,
+    [matchId],
+  )) as Array<{ voter_name: string; voted_for_name: string; created_at: string }>;
+  return rows.map((r) => ({
+    voterName: String(r.voter_name),
+    votedForName: String(r.voted_for_name),
+    createdAt: String(r.created_at ?? ""),
+  }));
+}

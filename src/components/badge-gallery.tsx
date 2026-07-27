@@ -5,6 +5,7 @@ const BADGE_IMAGE_BY_AWARD: Record<AwardType, string> = {
   top_scorer: "TS.png",
   top_goal_contribution: "TGC.png",
   top_defender: "TD.png",
+  top_performer: "MOTM2.png",
   motm: "MOTM.png",
 };
 
@@ -32,7 +33,7 @@ export default function BadgeGallery({
         </p>
       )}
 
-      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="mt-4 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
         {AWARD_TYPES.map((awardType) => {
           const count = counts?.[awardType] ?? 0;
           const earned = count > 0;

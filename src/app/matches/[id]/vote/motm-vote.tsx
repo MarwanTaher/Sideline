@@ -13,6 +13,8 @@ export interface MotmVoteProps {
   tally: MotmTallyRow[];
   voteCount: number;
   canVote: boolean;
+  /** Only admins see the running tally; players vote blind. */
+  showResults: boolean;
 }
 
 export function MotmVote({
@@ -22,6 +24,7 @@ export function MotmVote({
   tally,
   voteCount,
   canVote,
+  showResults,
 }: MotmVoteProps) {
   const [state, action, pending] = useActionState(castMotmAction, INITIAL);
 
@@ -29,9 +32,11 @@ export function MotmVote({
     <section className="mt-8 rounded-2xl border border-black/10 p-5 dark:border-white/10">
       <div className="flex items-baseline justify-between">
         <h2 className="text-lg font-semibold tracking-tight">Man of the Match</h2>
-        <span className="text-xs text-neutral-400">
-          {voteCount} vote{voteCount === 1 ? "" : "s"}
-        </span>
+        {showResults ? (
+          <span className="text-xs text-neutral-400">
+            {voteCount} vote{voteCount === 1 ? "" : "s"}
+          </span>
+        ) : null}
       </div>
       <p className="mt-1 text-sm text-neutral-500">
         Pick the one player who stood out — separate from your ratings above.
@@ -71,25 +76,31 @@ export function MotmVote({
         </p>
       ) : null}
 
-      {tally.length > 0 ? (
-        <ul className="mt-3 space-y-1">
-          {tally.map((t, i) => (
-            <li key={t.playerId} className="flex items-center gap-2 text-sm">
-              {i === 0 ? (
-                <span>🏆</span>
-              ) : (
-                <span className="w-4 text-center text-neutral-400">{i + 1}</span>
-              )}
-              <span className={i === 0 ? "font-semibold" : ""}>{t.name}</span>
-              <span className="ml-auto text-xs text-neutral-400">
-                {t.votes} vote{t.votes === 1 ? "" : "s"}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className="mt-2 text-sm text-neutral-500">No MOTM votes yet.</p>
-      )}
+      {showResults ? (
+        tally.length > 0 ? (
+          <ul className="mt-3 space-y-1">
+            {tally.map((t, i) => (
+              <li key={t.playerId} className="flex items-center gap-2 text-sm">
+                {i === 0 ? (
+                  <span>🏆</span>
+                ) : (
+                  <span className="w-4 text-center text-neutral-400">{i + 1}</span>
+                )}
+                <span className={i === 0 ? "font-semibold" : ""}>{t.name}</span>
+                <span className="ml-auto text-xs text-neutral-400">
+                  {t.votes} vote{t.votes === 1 ? "" : "s"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 text-sm text-neutral-500">No MOTM votes yet.</p>
+        )
+      ) : myVote != null ? (
+        <p className="mt-3 text-sm text-neutral-500">
+          Your vote is in. Results stay hidden until the admin shares them.
+        </p>
+      ) : null}
     </section>
   );
 }

@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test:scoring": "node --env-file=.env.local --import tsx tests/scoring.golden.test.ts",
     "test:scoring:update": "node --env-file=.env.local --import tsx tests/dump_golden.ts",
-    "test:awards": "node --env-file=.env.local --import tsx tests/awards.golden.test.ts"
+    "test:awards": "node --env-file=.env.local --import tsx tests/awards.golden.test.ts",
+    "test:awards:update": "node --env-file=.env.local --import tsx tests/dump_awards_golden.ts"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

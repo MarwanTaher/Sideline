@@ -3,9 +3,10 @@ import { sqlClient } from "./db";
 /**
  * Direct TypeScript port of the read/compute path of `src/awards.py`.
  *
- * Computes the four award types (Top Scorer, Top Goal Contribution, Top
- * Defender, Man of the Match) for a match or overall scope, then layers admin
- * overrides on top — identical logic and SQL to the Streamlit engine.
+ * Computes the award types (Top Scorer, Top Goal Contribution, Top Defender,
+ * Top Performer, Man of the Match) for a match or overall scope, then layers
+ * admin overrides on top. Top Performer is the highest peer rating; Man of the
+ * Match is the winner of the explicit MOTM peer vote.
  *
  * Includes the read/compute path plus the override write path
  * (`setAwardOverride`/`clearAwardOverride`); authorization is enforced by the
@@ -15,18 +16,21 @@ import { sqlClient } from "./db";
 export const AWARD_TOP_SCORER = "top_scorer";
 export const AWARD_TOP_ASSISTS = "top_goal_contribution";
 export const AWARD_TOP_DEFENDER = "top_defender";
+export const AWARD_TOP_PERFORMER = "top_performer";
 export const AWARD_MOTM = "motm";
 
 export type AwardType =
   | typeof AWARD_TOP_SCORER
   | typeof AWARD_TOP_ASSISTS
   | typeof AWARD_TOP_DEFENDER
+  | typeof AWARD_TOP_PERFORMER
   | typeof AWARD_MOTM;
 
 export const AWARD_TYPES: AwardType[] = [
   AWARD_TOP_SCORER,
   AWARD_TOP_ASSISTS,
   AWARD_TOP_DEFENDER,
+  AWARD_TOP_PERFORMER,
   AWARD_MOTM,
 ];
 
@@ -34,6 +38,7 @@ export const AWARD_LABELS: Record<AwardType, string> = {
   [AWARD_TOP_SCORER]: "Top Scorer",
   [AWARD_TOP_ASSISTS]: "Top Goal Contribution",
   [AWARD_TOP_DEFENDER]: "Top Defender",
+  [AWARD_TOP_PERFORMER]: "Top Performer",
   [AWARD_MOTM]: "Man of the Match",
 };
 
@@ -163,7 +168,21 @@ async function computedMatchAwards(
     .filter((r) => String(r.assigned_position ?? "").toUpperCase() === "DEF")
     .map(toWinner);
 
-  return buildBlocks(scorerRows, assistRows, peerRows, defenderRows);
+  // Man of the Match: winner of the explicit MOTM peer vote for this match.
+  const motmRaw = (await sqlClient.query(
+    `
+    SELECT p.id AS player_id, p.name, p.preferred_position,
+           COUNT(*) AS metric_value
+    FROM match_motm_votes mv
+    JOIN players p ON p.id = mv.voted_for_id
+    WHERE mv.match_id = $1
+    GROUP BY p.id, p.name, p.preferred_position
+    `,
+    [mid],
+  )) as RawWinnerRow[];
+  const motmRows = motmRaw.map(toWinner);
+
+  return buildBlocks(scorerRows, assistRows, peerRows, defenderRows, motmRows);
 }
 
 async function computedOverallAwards(
@@ -213,7 +232,20 @@ async function computedOverallAwards(
     (r) => r.preferred_position === "DEF",
   );
 
-  return buildBlocks(scorerRows, assistRows, peerRows, defenderRows);
+  // Man of the Match overall: total MOTM votes received across all matches.
+  const motmRaw = (await sqlClient.query(
+    `
+    SELECT p.id AS player_id, p.name, p.preferred_position,
+           COUNT(*) AS metric_value
+    FROM match_motm_votes mv
+    JOIN players p ON p.id = mv.voted_for_id
+    WHERE p.active = 1
+    GROUP BY p.id, p.name, p.preferred_position
+    `,
+  )) as RawWinnerRow[];
+  const motmRows = motmRaw.map(toWinner);
+
+  return buildBlocks(scorerRows, assistRows, peerRows, defenderRows, motmRows);
 }
 
 function buildBlocks(
@@ -221,6 +253,7 @@ function buildBlocks(
   assistRows: AwardWinner[],
   peerRows: AwardWinner[],
   defenderRows: AwardWinner[],
+  motmRows: AwardWinner[],
 ): Record<AwardType, AwardBlock> {
   const base = (
     winners: AwardWinner[],
@@ -238,7 +271,8 @@ function buildBlocks(
     [AWARD_TOP_SCORER]: base(scorerRows, "Goals"),
     [AWARD_TOP_ASSISTS]: base(assistRows, "Assists"),
     [AWARD_TOP_DEFENDER]: base(defenderRows, "Peer Avg"),
-    [AWARD_MOTM]: base(peerRows, "Peer Avg"),
+    [AWARD_TOP_PERFORMER]: base(peerRows, "Peer Avg"),
+    [AWARD_MOTM]: base(motmRows, "Votes"),
   };
 }
 
@@ -389,6 +423,7 @@ export async function getPlayerBadgeCounts(
     [AWARD_TOP_SCORER]: 0,
     [AWARD_TOP_ASSISTS]: 0,
     [AWARD_TOP_DEFENDER]: 0,
+    [AWARD_TOP_PERFORMER]: 0,
     [AWARD_MOTM]: 0,
   };
 

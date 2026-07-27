@@ -121,7 +121,7 @@ export default async function VotePage({
         />
       ) : null}
 
-      {state.voterInRoster || motmTally.length > 0 ? (
+      {state.voterInRoster || isAdmin ? (
         <MotmVote
           matchId={matchId}
           candidates={motmCandidates}
@@ -129,6 +129,7 @@ export default async function VotePage({
           tally={motmTally}
           voteCount={motmVoteCount}
           canVote={open && state.voterInRoster}
+          showResults={isAdmin}
         />
       ) : null}
     </main>
