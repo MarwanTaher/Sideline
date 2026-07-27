@@ -5,7 +5,7 @@ const BADGE_IMAGE_BY_AWARD: Record<AwardType, string> = {
   top_scorer: "TS.png",
   top_goal_contribution: "TGC.png",
   top_defender: "TD.png",
-  top_performer: "MOTM2.png",
+  top_performer: "TP.png",
   motm: "MOTM.png",
 };
 
