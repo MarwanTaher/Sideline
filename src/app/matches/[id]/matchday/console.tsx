@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useTransition,
 } from "react";
@@ -15,6 +16,7 @@ import type {
   RoundGoal,
   PersonRef,
   DayTally as DayTallyRow,
+  Scorekeeper,
 } from "@/lib/matchday";
 import {
   createRoundAction,
@@ -22,8 +24,11 @@ import {
   deleteRoundAction,
   timerAction as timerServerAction,
   addGoalAction,
+  updateGoalAction,
   deleteGoalAction,
   syncStatsAction,
+  addScorekeeperAction,
+  removeScorekeeperAction,
 } from "./actions";
 
 // ── Team themes (graphics) ──────────────────────────────────────────────────
@@ -86,6 +91,29 @@ function recomputeScore(r: MatchRound): MatchRound {
   return { ...r, scoreA, scoreB };
 }
 
+/** Suggest the next round: winner stays, bring in the team that has waited longest. */
+function suggestTeams(rounds: MatchRound[], teamNumbers: number[]): [number, number] {
+  const fallback: [number, number] = [teamNumbers[0], teamNumbers[1] ?? teamNumbers[0]];
+  if (teamNumbers.length < 2) return fallback;
+  const last = rounds.reduce<MatchRound | null>(
+    (m, r) => (!m || r.roundNo > m.roundNo ? r : m),
+    null,
+  );
+  if (!last) return fallback;
+  const winner = last.scoreA >= last.scoreB ? last.teamA : last.teamB;
+  const loser = winner === last.teamA ? last.teamB : last.teamA;
+  if (teamNumbers.length === 2) return [winner, loser];
+  const lastPlayed = new Map<number, number>();
+  for (const r of rounds) {
+    lastPlayed.set(r.teamA, Math.max(lastPlayed.get(r.teamA) ?? 0, r.roundNo));
+    lastPlayed.set(r.teamB, Math.max(lastPlayed.get(r.teamB) ?? 0, r.roundNo));
+  }
+  const bench = teamNumbers
+    .filter((t) => t !== winner && t !== loser)
+    .sort((a, b) => (lastPlayed.get(a) ?? 0) - (lastPlayed.get(b) ?? 0) || a - b);
+  return [winner, bench[0] ?? loser];
+}
+
 /** Server/client clock-skew corrected "now" in the server epoch. */
 function useServerNow(serverNowMs: number): () => number {
   const [offset, setOffset] = useState(0);
@@ -103,7 +131,95 @@ function useTick(active: boolean): void {
   }, [active]);
 }
 
-// ── Avatar ─────────────────────────────────────────────────────────────────
+// ── Sound + haptic cues ─────────────────────────────────────────────────────
+
+interface Cues {
+  enabled: boolean;
+  toggle: () => void;
+  goal: () => void;
+  whistle: () => void;
+}
+function useCues(): Cues {
+  const [enabled, setEnabled] = useState(true);
+  const ctxRef = useRef<AudioContext | null>(null);
+
+  useEffect(() => {
+    try {
+      if (localStorage.getItem("matchday:sound") === "off") setEnabled(false);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const toggle = useCallback(() => {
+    setEnabled((e) => {
+      const next = !e;
+      try {
+        localStorage.setItem("matchday:sound", next ? "on" : "off");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
+
+  const vibrate = useCallback((pattern: number | number[]) => {
+    try {
+      if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+        navigator.vibrate(pattern);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const tone = useCallback(
+    (steps: { f: number; t: number; d: number }[]) => {
+      if (!enabled || typeof window === "undefined") return;
+      try {
+        const Ctor =
+          window.AudioContext ??
+          (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+        if (!Ctor) return;
+        const ctx = ctxRef.current ?? new Ctor();
+        ctxRef.current = ctx;
+        if (ctx.state === "suspended") void ctx.resume();
+        for (const s of steps) {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = "sine";
+          osc.frequency.value = s.f;
+          gain.gain.setValueAtTime(0.0001, ctx.currentTime + s.t);
+          gain.gain.exponentialRampToValueAtTime(0.25, ctx.currentTime + s.t + 0.01);
+          gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + s.t + s.d);
+          osc.connect(gain).connect(ctx.destination);
+          osc.start(ctx.currentTime + s.t);
+          osc.stop(ctx.currentTime + s.t + s.d + 0.02);
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    [enabled],
+  );
+
+  const goal = useCallback(() => {
+    vibrate([40, 30, 80]);
+    tone([
+      { f: 660, t: 0, d: 0.12 },
+      { f: 880, t: 0.12, d: 0.18 },
+    ]);
+  }, [tone, vibrate]);
+
+  const whistle = useCallback(() => {
+    vibrate(220);
+    tone([{ f: 1200, t: 0, d: 0.35 }]);
+  }, [tone, vibrate]);
+
+  return { enabled, toggle, goal, whistle };
+}
+
+// ── Avatar + pitch ───────────────────────────────────────────────────────────
 
 function Avatar({
   name,
@@ -158,16 +274,24 @@ function PitchBackdrop() {
 export function MatchdayConsole({
   matchId,
   initial,
+  isAdmin,
+  scorekeepers,
+  assignablePlayers,
 }: {
   matchId: number;
   initial: ConsoleData;
+  isAdmin: boolean;
+  scorekeepers: Scorekeeper[];
+  assignablePlayers: Scorekeeper[];
 }) {
   const { teams, teamNames } = initial;
   const teamNumbers = teams.map((t) => t.teamNo);
 
   const [rounds, setRounds] = useState<MatchRound[]>(initial.rounds);
   const [error, setError] = useState("");
+  const [watch, setWatch] = useState(false);
   const [, startTransition] = useTransition();
+  const cues = useCues();
 
   const rosterByTeam = useMemo(() => {
     const map = new Map<number, MatchTeamPlayer[]>();
@@ -181,13 +305,40 @@ export function MatchdayConsole({
     return map;
   }, [teams]);
   const photoOf = useCallback(
-    (ref: PersonRef) => photoIndex.get(keyOfRef(ref)) ?? null,
+    (ref: PersonRef | null) => (ref ? photoIndex.get(keyOfRef(ref)) ?? null : null),
     [photoIndex],
   );
 
   const nowFn = useServerNow(initial.serverNowMs);
   const anyRunning = rounds.some((r) => r.running);
   useTick(anyRunning);
+
+  // Persisted last pairing (only used before any round exists).
+  const [persistedPair, setPersistedPair] = useState<[number, number] | null>(null);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(`matchday:lastPair:${matchId}`);
+      if (raw) {
+        const p = JSON.parse(raw);
+        if (Array.isArray(p) && p.length === 2) setPersistedPair([Number(p[0]), Number(p[1])]);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [matchId]);
+
+  const suggested = useMemo<[number, number]>(() => {
+    if (rounds.length > 0) return suggestTeams(rounds, teamNumbers);
+    if (
+      persistedPair &&
+      teamNumbers.includes(persistedPair[0]) &&
+      teamNumbers.includes(persistedPair[1]) &&
+      persistedPair[0] !== persistedPair[1]
+    ) {
+      return persistedPair;
+    }
+    return [teamNumbers[0], teamNumbers[1] ?? teamNumbers[0]];
+  }, [rounds, teamNumbers, persistedPair]);
 
   const run = useCallback(
     (fn: () => Promise<{ ok: boolean; message: string }>, onFail?: () => void) => {
@@ -215,6 +366,11 @@ export function MatchdayConsole({
         return;
       }
       setError("");
+      try {
+        localStorage.setItem(`matchday:lastPair:${matchId}`, JSON.stringify([teamA, teamB]));
+      } catch {
+        /* ignore */
+      }
       const tempId = -Date.now();
       const nextNo = (rounds.reduce((m, r) => Math.max(m, r.roundNo), 0) || 0) + 1;
       const temp: MatchRound = {
@@ -263,13 +419,20 @@ export function MatchdayConsole({
   );
 
   const handleAddGoal = useCallback(
-    (round: MatchRound, teamNo: number, scorer: MatchTeamPlayer, assist: MatchTeamPlayer | null) => {
+    (
+      round: MatchRound,
+      teamNo: number,
+      scorer: MatchTeamPlayer | null,
+      assist: MatchTeamPlayer | null,
+      isOwnGoal: boolean,
+    ) => {
       setError("");
+      cues.goal();
       const tempId = -Date.now();
-      const sref = refFromPlayer(scorer);
+      const sref = scorer ? refFromPlayer(scorer) : null;
       const aref = assist ? refFromPlayer(assist) : null;
       const goal: RoundGoal = {
-        id: tempId, roundId: round.id, teamNo, scorer: sref, assist: aref,
+        id: tempId, roundId: round.id, teamNo, scorer: sref, assist: aref, isOwnGoal,
         createdAt: new Date().toISOString(),
       };
       setRounds((prev) =>
@@ -279,8 +442,9 @@ export function MatchdayConsole({
         async () => {
           const res = await addGoalAction({
             matchId, roundId: round.id, teamNo,
-            scorerPlayerId: sref.playerId, scorerGuestId: sref.guestId,
+            scorerPlayerId: sref?.playerId ?? null, scorerGuestId: sref?.guestId ?? null,
             assistPlayerId: aref?.playerId ?? null, assistGuestId: aref?.guestId ?? null,
+            isOwnGoal,
           });
           if (res.ok && res.goalId) {
             const realId = res.goalId;
@@ -302,6 +466,50 @@ export function MatchdayConsole({
           ),
       );
     },
+    [matchId, run, cues],
+  );
+
+  const handleUpdateGoal = useCallback(
+    (roundId: number, goalId: number, scorer: MatchTeamPlayer, assist: MatchTeamPlayer | null) => {
+      setError("");
+      const sref = refFromPlayer(scorer);
+      const aref = assist ? refFromPlayer(assist) : null;
+      let prevGoal: RoundGoal | undefined;
+      setRounds((prev) =>
+        prev.map((r) => {
+          if (r.id !== roundId) return r;
+          return {
+            ...r,
+            goals: r.goals.map((g) => {
+              if (g.id !== goalId) return g;
+              prevGoal = g;
+              return { ...g, scorer: sref, assist: aref, isOwnGoal: false };
+            }),
+          };
+        }),
+      );
+      if (goalId > 0) {
+        run(
+          () =>
+            updateGoalAction({
+              matchId, goalId,
+              scorerPlayerId: sref.playerId, scorerGuestId: sref.guestId,
+              assistPlayerId: aref?.playerId ?? null, assistGuestId: aref?.guestId ?? null,
+            }),
+          () => {
+            if (prevGoal) {
+              setRounds((prev) =>
+                prev.map((r) =>
+                  r.id === roundId
+                    ? { ...r, goals: r.goals.map((g) => (g.id === goalId ? prevGoal! : g)) }
+                    : r,
+                ),
+              );
+            }
+          },
+        );
+      }
+    },
     [matchId, run],
   );
 
@@ -317,6 +525,7 @@ export function MatchdayConsole({
 
   const handleEndRound = useCallback(
     (roundId: number) => {
+      cues.whistle();
       const now = nowFn();
       setRounds((prev) =>
         prev.map((r) => {
@@ -327,7 +536,7 @@ export function MatchdayConsole({
       );
       if (roundId > 0) run(() => endRoundAction(matchId, roundId));
     },
-    [matchId, nowFn, run],
+    [matchId, nowFn, run, cues],
   );
 
   const handleDeleteRound = useCallback(
@@ -341,18 +550,54 @@ export function MatchdayConsole({
   const tally = useMemo(() => deriveTally(rounds), [rounds]);
   const orderedRounds = [...rounds].reverse();
 
+  const cardProps = (round: MatchRound) => ({
+    round,
+    teamNames,
+    rosterA: rosterByTeam.get(round.teamA) ?? [],
+    rosterB: rosterByTeam.get(round.teamB) ?? [],
+    nowFn,
+    photoOf,
+    onTimer: handleTimer,
+    onAddGoal: handleAddGoal,
+    onUpdateGoal: handleUpdateGoal,
+    onDeleteGoal: handleDeleteGoal,
+    onEndRound: handleEndRound,
+    onDeleteRound: handleDeleteRound,
+  });
+
+  // ── Watch mode: focus a single round with huge controls ──
+  if (watch) {
+    const focus =
+      rounds.filter((r) => r.status === "active").sort((a, b) => b.roundNo - a.roundNo)[0] ??
+      [...rounds].sort((a, b) => b.roundNo - a.roundNo)[0];
+    return (
+      <div className="space-y-4">
+        <TopBar watch={watch} onWatch={setWatch} cues={cues} />
+        {error ? <ErrorBar message={error} onClose={() => setError("")} /> : null}
+        {focus ? (
+          <RoundCard key={focus.id} watch {...cardProps(focus)} />
+        ) : (
+          <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-neutral-500 dark:border-white/15">
+            No rounds yet — leave watch mode to start one.
+          </p>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      {error ? (
-        <div className="flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
-          <span>{error}</span>
-          <button onClick={() => setError("")} className="text-lg leading-none" aria-label="Dismiss">
-            ×
-          </button>
-        </div>
-      ) : null}
+      <TopBar watch={watch} onWatch={setWatch} cues={cues} />
 
-      <NewRoundBar teamNumbers={teamNumbers} teamNames={teamNames} onStart={handleCreateRound} />
+      {error ? <ErrorBar message={error} onClose={() => setError("")} /> : null}
+
+      <NewRoundBar
+        key={`${suggested[0]}-${suggested[1]}`}
+        teamNumbers={teamNumbers}
+        teamNames={teamNames}
+        suggested={suggested}
+        onStart={handleCreateRound}
+      />
 
       {orderedRounds.length === 0 ? (
         <p className="rounded-xl border border-dashed border-black/15 p-6 text-center text-sm text-neutral-500 dark:border-white/15">
@@ -361,25 +606,21 @@ export function MatchdayConsole({
       ) : (
         <div className="space-y-5">
           {orderedRounds.map((round) => (
-            <RoundCard
-              key={round.id}
-              round={round}
-              teamNames={teamNames}
-              rosterA={rosterByTeam.get(round.teamA) ?? []}
-              rosterB={rosterByTeam.get(round.teamB) ?? []}
-              nowFn={nowFn}
-              photoOf={photoOf}
-              onTimer={handleTimer}
-              onAddGoal={handleAddGoal}
-              onDeleteGoal={handleDeleteGoal}
-              onEndRound={handleEndRound}
-              onDeleteRound={handleDeleteRound}
-            />
+            <RoundCard key={round.id} {...cardProps(round)} />
           ))}
         </div>
       )}
 
       <DayTally tally={tally} matchId={matchId} photoOf={photoOf} onError={setError} />
+
+      {isAdmin ? (
+        <ScorekeeperPanel
+          matchId={matchId}
+          initialScorekeepers={scorekeepers}
+          assignablePlayers={assignablePlayers}
+          onError={setError}
+        />
+      ) : null}
     </div>
   );
 }
@@ -388,10 +629,12 @@ function deriveTally(rounds: MatchRound[]): DayTallyRow[] {
   const map = new Map<string, DayTallyRow>();
   for (const r of rounds) {
     for (const g of r.goals) {
-      const sk = keyOfRef(g.scorer);
-      const s = map.get(sk) ?? { key: sk, name: g.scorer.name, goals: 0, assists: 0 };
-      s.goals += 1;
-      map.set(sk, s);
+      if (g.scorer) {
+        const sk = keyOfRef(g.scorer);
+        const s = map.get(sk) ?? { key: sk, name: g.scorer.name, goals: 0, assists: 0 };
+        s.goals += 1;
+        map.set(sk, s);
+      }
       if (g.assist) {
         const ak = keyOfRef(g.assist);
         const a = map.get(ak) ?? { key: ak, name: g.assist.name, goals: 0, assists: 0 };
@@ -405,19 +648,67 @@ function deriveTally(rounds: MatchRound[]): DayTallyRow[] {
   );
 }
 
+function ErrorBar({ message, onClose }: { message: string; onClose: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-700 dark:text-red-300">
+      <span>{message}</span>
+      <button onClick={onClose} className="text-lg leading-none" aria-label="Dismiss">
+        ×
+      </button>
+    </div>
+  );
+}
+
+function TopBar({
+  watch,
+  onWatch,
+  cues,
+}: {
+  watch: boolean;
+  onWatch: (v: boolean) => void;
+  cues: Cues;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-2">
+      <button
+        type="button"
+        onClick={cues.toggle}
+        aria-pressed={cues.enabled}
+        className="rounded-full border border-black/15 px-3 py-1.5 text-sm font-medium transition hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+      >
+        {cues.enabled ? "🔊 Sound" : "🔇 Muted"}
+      </button>
+      <button
+        type="button"
+        onClick={() => onWatch(!watch)}
+        aria-pressed={watch}
+        className={`rounded-full px-3 py-1.5 text-sm font-medium transition ${
+          watch
+            ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
+            : "border border-black/15 hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+        }`}
+      >
+        {watch ? "⌚ Exit watch" : "⌚ Watch mode"}
+      </button>
+    </div>
+  );
+}
+
 // ── New round bar ─────────────────────────────────────────────────────────
 
 function NewRoundBar({
   teamNumbers,
   teamNames,
+  suggested,
   onStart,
 }: {
   teamNumbers: number[];
   teamNames: Record<number, string>;
+  suggested: [number, number];
   onStart: (a: number, b: number) => void;
 }) {
-  const [teamA, setTeamA] = useState(teamNumbers[0]);
-  const [teamB, setTeamB] = useState(teamNumbers[1] ?? teamNumbers[0]);
+  const [teamA, setTeamA] = useState(suggested[0]);
+  const [teamB, setTeamB] = useState(suggested[1]);
   return (
     <div className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -456,11 +747,34 @@ function NewRoundBar({
           Start round
         </button>
       </div>
+      <p className="mt-2 text-xs text-neutral-500">Suggested next-up — winner stays on.</p>
     </div>
   );
 }
 
 // ── Round card ─────────────────────────────────────────────────────────────
+
+interface RoundCardProps {
+  round: MatchRound;
+  teamNames: Record<number, string>;
+  rosterA: MatchTeamPlayer[];
+  rosterB: MatchTeamPlayer[];
+  nowFn: () => number;
+  photoOf: (ref: PersonRef | null) => string | null;
+  onTimer: (roundId: number, a: "start" | "pause" | "reset") => void;
+  onAddGoal: (
+    round: MatchRound,
+    teamNo: number,
+    scorer: MatchTeamPlayer | null,
+    assist: MatchTeamPlayer | null,
+    isOwnGoal: boolean,
+  ) => void;
+  onUpdateGoal: (roundId: number, goalId: number, scorer: MatchTeamPlayer, assist: MatchTeamPlayer | null) => void;
+  onDeleteGoal: (roundId: number, goalId: number) => void;
+  onEndRound: (roundId: number) => void;
+  onDeleteRound: (roundId: number) => void;
+  watch?: boolean;
+}
 
 function RoundCard({
   round,
@@ -471,22 +785,12 @@ function RoundCard({
   photoOf,
   onTimer,
   onAddGoal,
+  onUpdateGoal,
   onDeleteGoal,
   onEndRound,
   onDeleteRound,
-}: {
-  round: MatchRound;
-  teamNames: Record<number, string>;
-  rosterA: MatchTeamPlayer[];
-  rosterB: MatchTeamPlayer[];
-  nowFn: () => number;
-  photoOf: (ref: PersonRef) => string | null;
-  onTimer: (roundId: number, a: "start" | "pause" | "reset") => void;
-  onAddGoal: (round: MatchRound, teamNo: number, scorer: MatchTeamPlayer, assist: MatchTeamPlayer | null) => void;
-  onDeleteGoal: (roundId: number, goalId: number) => void;
-  onEndRound: (roundId: number) => void;
-  onDeleteRound: (roundId: number) => void;
-}) {
+  watch = false,
+}: RoundCardProps) {
   const themeA = themeFor(round.teamA);
   const themeB = themeFor(round.teamB);
   const isDone = round.status === "done";
@@ -494,6 +798,12 @@ function RoundCard({
     round.running && round.startedAtMs != null ? round.elapsedMs + (nowFn() - round.startedAtMs) : round.elapsedMs;
 
   const [picker, setPicker] = useState<number | null>(null); // teamNo whose picker is open
+  const [editing, setEditing] = useState<number | null>(null); // goalId being edited
+
+  const editingGoal = editing != null ? round.goals.find((g) => g.id === editing) ?? null : null;
+
+  const timerSize = watch ? "text-7xl sm:text-8xl" : "text-5xl sm:text-6xl";
+  const scoreSize = watch ? "text-6xl sm:text-7xl" : "text-4xl sm:text-5xl";
 
   return (
     <div className="overflow-hidden rounded-2xl border border-black/10 shadow-sm dark:border-white/10">
@@ -514,7 +824,7 @@ function RoundCard({
                 <span className={`h-3 w-3 rounded-full ${themeA.dot}`} />
               </div>
             </div>
-            <div className="flex items-center gap-2 text-4xl font-black tabular-nums sm:text-5xl">
+            <div className={`flex items-center gap-2 font-black tabular-nums ${scoreSize}`}>
               <span>{round.scoreA}</span>
               <span className="text-white/40">:</span>
               <span>{round.scoreB}</span>
@@ -530,7 +840,7 @@ function RoundCard({
           {/* Timer */}
           <div className="mt-4 flex flex-col items-center gap-3">
             <div
-              className={`rounded-2xl px-6 py-2 text-5xl font-black tabular-nums sm:text-6xl ${
+              className={`rounded-2xl px-6 py-2 font-black tabular-nums ${timerSize} ${
                 round.running ? "bg-emerald-500/20 text-emerald-300" : "bg-white/10 text-white"
               }`}
             >
@@ -560,26 +870,73 @@ function RoundCard({
       <div className="p-4">
         {!isDone ? (
           <div className="grid gap-3 sm:grid-cols-2">
-            <GoalButton theme={themeA} label={teamLabel(round.teamA, teamNames)} onClick={() => setPicker(picker === round.teamA ? null : round.teamA)} active={picker === round.teamA} />
-            <GoalButton theme={themeB} label={teamLabel(round.teamB, teamNames)} onClick={() => setPicker(picker === round.teamB ? null : round.teamB)} active={picker === round.teamB} />
+            <GoalButton
+              theme={themeA}
+              label={teamLabel(round.teamA, teamNames)}
+              onClick={() => {
+                setEditing(null);
+                setPicker(picker === round.teamA ? null : round.teamA);
+              }}
+              active={picker === round.teamA}
+            />
+            <GoalButton
+              theme={themeB}
+              label={teamLabel(round.teamB, teamNames)}
+              onClick={() => {
+                setEditing(null);
+                setPicker(picker === round.teamB ? null : round.teamB);
+              }}
+              active={picker === round.teamB}
+            />
           </div>
         ) : null}
 
         {picker != null && !isDone ? (
           <GoalPicker
-            teamNo={picker}
             teamName={teamLabel(picker, teamNames)}
             theme={themeFor(picker)}
             roster={picker === round.teamA ? rosterA : rosterB}
+            submitLabel="⚽ Log goal"
+            allowOwnGoal
+            onOwnGoal={() => {
+              onAddGoal(round, picker, null, null, true);
+              setPicker(null);
+            }}
             onCancel={() => setPicker(null)}
             onConfirm={(scorer, assist) => {
-              onAddGoal(round, picker, scorer, assist);
+              onAddGoal(round, picker, scorer, assist, false);
               setPicker(null);
             }}
           />
         ) : null}
 
-        <GoalLog round={round} teamNames={teamNames} photoOf={photoOf} onDelete={onDeleteGoal} />
+        {editingGoal && editingGoal.scorer ? (
+          <GoalPicker
+            teamName={`Edit goal · ${teamLabel(editingGoal.teamNo, teamNames)}`}
+            theme={themeFor(editingGoal.teamNo)}
+            roster={editingGoal.teamNo === round.teamA ? rosterA : rosterB}
+            submitLabel="Save changes"
+            initialScorerKey={keyOfRef(editingGoal.scorer)}
+            initialAssistKey={editingGoal.assist ? keyOfRef(editingGoal.assist) : undefined}
+            onCancel={() => setEditing(null)}
+            onConfirm={(scorer, assist) => {
+              onUpdateGoal(round.id, editingGoal.id, scorer, assist);
+              setEditing(null);
+            }}
+          />
+        ) : null}
+
+        <GoalLog
+          round={round}
+          teamNames={teamNames}
+          photoOf={photoOf}
+          canEdit={!isDone}
+          onEdit={(goalId) => {
+            setPicker(null);
+            setEditing(editing === goalId ? null : goalId);
+          }}
+          onDelete={onDeleteGoal}
+        />
 
         <div className="mt-4 flex items-center gap-3 border-t border-black/5 pt-3 dark:border-white/5">
           {!isDone ? (
@@ -650,27 +1007,44 @@ function GoalButton({
 }
 
 function GoalPicker({
-  teamNo,
   teamName,
   theme,
   roster,
+  submitLabel,
+  allowOwnGoal = false,
+  initialScorerKey,
+  initialAssistKey,
+  onOwnGoal,
   onCancel,
   onConfirm,
 }: {
-  teamNo: number;
   teamName: string;
   theme: Theme;
   roster: MatchTeamPlayer[];
+  submitLabel: string;
+  allowOwnGoal?: boolean;
+  initialScorerKey?: string;
+  initialAssistKey?: string;
+  onOwnGoal?: () => void;
   onCancel: () => void;
   onConfirm: (scorer: MatchTeamPlayer, assist: MatchTeamPlayer | null) => void;
 }) {
-  const [scorer, setScorer] = useState<MatchTeamPlayer | null>(null);
-  const [assist, setAssist] = useState<MatchTeamPlayer | null>(null);
+  const findByKey = useCallback(
+    (key?: string) => (key ? roster.find((p) => personValue(p) === key) ?? null : null),
+    [roster],
+  );
+  const [scorer, setScorer] = useState<MatchTeamPlayer | null>(() => findByKey(initialScorerKey));
+  const [assist, setAssist] = useState<MatchTeamPlayer | null>(() => findByKey(initialAssistKey));
 
   if (roster.length === 0) {
     return (
       <div className="mt-3 rounded-xl border border-dashed border-black/15 p-4 text-sm text-neutral-500 dark:border-white/15">
         {teamName} has no drafted players yet.
+        {allowOwnGoal && onOwnGoal ? (
+          <button onClick={onOwnGoal} className="ml-2 font-semibold underline">
+            Log own goal
+          </button>
+        ) : null}
         <button onClick={onCancel} className="ml-2 underline">
           Close
         </button>
@@ -711,15 +1085,24 @@ function GoalPicker({
         ))}
       </div>
 
-      <div className="mt-4 flex items-center gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
           type="button"
           disabled={!scorer}
           onClick={() => scorer && onConfirm(scorer, assist)}
           className={`flex-1 rounded-2xl px-4 py-4 text-lg font-bold text-white transition active:scale-[0.98] disabled:opacity-40 ${theme.solid}`}
         >
-          ⚽ Log goal
+          {submitLabel}
         </button>
+        {allowOwnGoal && onOwnGoal ? (
+          <button
+            type="button"
+            onClick={onOwnGoal}
+            className="rounded-2xl border border-black/15 px-4 py-4 text-base font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+          >
+            Own goal
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={onCancel}
@@ -728,7 +1111,6 @@ function GoalPicker({
           Cancel
         </button>
       </div>
-      <span className="sr-only">Team {teamNo}</span>
     </div>
   );
 }
@@ -772,11 +1154,15 @@ function GoalLog({
   round,
   teamNames,
   photoOf,
+  canEdit,
+  onEdit,
   onDelete,
 }: {
   round: MatchRound;
   teamNames: Record<number, string>;
-  photoOf: (ref: PersonRef) => string | null;
+  photoOf: (ref: PersonRef | null) => string | null;
+  canEdit: boolean;
+  onEdit: (goalId: number) => void;
   onDelete: (roundId: number, goalId: number) => void;
 }) {
   if (round.goals.length === 0) {
@@ -786,15 +1172,25 @@ function GoalLog({
     <ul className="mt-4 space-y-2">
       {round.goals.map((g) => {
         const theme = themeFor(g.teamNo);
+        const title = g.isOwnGoal ? "Own goal" : g.scorer?.name ?? "Unknown";
         return (
           <li
             key={g.id}
             className="flex items-center gap-3 rounded-xl bg-black/[0.03] px-3 py-2 text-sm dark:bg-white/[0.04]"
           >
-            <Avatar name={g.scorer.name} photoUrl={photoOf(g.scorer)} theme={theme} className="h-9 w-9" />
+            {g.isOwnGoal || !g.scorer ? (
+              <span
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-base dark:bg-neutral-700"
+                aria-hidden="true"
+              >
+                ⚽
+              </span>
+            ) : (
+              <Avatar name={g.scorer.name} photoUrl={photoOf(g.scorer)} theme={theme} className="h-9 w-9" />
+            )}
             <div className="min-w-0 flex-1">
               <p className="truncate font-semibold">
-                {g.scorer.name}
+                {title}
                 <span className={`ml-2 inline-block h-2 w-2 rounded-full ${theme.dot}`} />
               </p>
               {g.assist ? (
@@ -803,6 +1199,15 @@ function GoalLog({
                 <p className="truncate text-xs text-neutral-400">{teamLabel(g.teamNo, teamNames)}</p>
               )}
             </div>
+            {canEdit && !g.isOwnGoal && g.scorer ? (
+              <button
+                onClick={() => onEdit(g.id)}
+                aria-label="Edit goal"
+                className="rounded-lg px-2 py-2 text-neutral-400 transition hover:text-neutral-900 dark:hover:text-neutral-100"
+              >
+                ✎
+              </button>
+            ) : null}
             <button
               onClick={() => onDelete(round.id, g.id)}
               aria-label="Remove goal"
@@ -827,7 +1232,7 @@ function DayTally({
 }: {
   tally: DayTallyRow[];
   matchId: number;
-  photoOf: (ref: PersonRef) => string | null;
+  photoOf: (ref: PersonRef | null) => string | null;
   onError: (msg: string) => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -888,9 +1293,117 @@ function DayTally({
       )}
       <p className="mt-3 text-xs text-neutral-500">
         Sync writes each roster player&apos;s goals and assists into this match&apos;s stats, feeding the
-        leaderboard and awards. Guests appear in the live log but not in season stats.
+        leaderboard and awards. Own goals and guests appear in the live log but not in season stats.
       </p>
       {note ? <p className="mt-2 text-sm text-emerald-600 dark:text-emerald-400">{note}</p> : null}
+    </div>
+  );
+}
+
+// ── Scorekeeper management (admin only) ──────────────────────────────────────
+
+function ScorekeeperPanel({
+  matchId,
+  initialScorekeepers,
+  assignablePlayers,
+  onError,
+}: {
+  matchId: number;
+  initialScorekeepers: Scorekeeper[];
+  assignablePlayers: Scorekeeper[];
+  onError: (msg: string) => void;
+}) {
+  const [list, setList] = useState<Scorekeeper[]>(initialScorekeepers);
+  const [pick, setPick] = useState<number | "">("");
+  const [, startTransition] = useTransition();
+
+  const assignedIds = useMemo(() => new Set(list.map((s) => s.playerId)), [list]);
+  const options = assignablePlayers.filter((p) => !assignedIds.has(p.playerId));
+
+  const add = useCallback(
+    (playerId: number) => {
+      const player = assignablePlayers.find((p) => p.playerId === playerId);
+      if (!player) return;
+      setList((prev) => [...prev, player].sort((a, b) => a.name.localeCompare(b.name)));
+      setPick("");
+      startTransition(async () => {
+        const res = await addScorekeeperAction(matchId, playerId);
+        if (!res.ok) {
+          onError(res.message);
+          setList((prev) => prev.filter((s) => s.playerId !== playerId));
+        }
+      });
+    },
+    [assignablePlayers, matchId, onError],
+  );
+
+  const remove = useCallback(
+    (playerId: number) => {
+      const prevList = list;
+      setList((prev) => prev.filter((s) => s.playerId !== playerId));
+      startTransition(async () => {
+        const res = await removeScorekeeperAction(matchId, playerId);
+        if (!res.ok) {
+          onError(res.message);
+          setList(prevList);
+        }
+      });
+    },
+    [list, matchId, onError],
+  );
+
+  return (
+    <div className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
+      <h2 className="text-base font-bold">Scorekeepers</h2>
+      <p className="mt-1 text-xs text-neutral-500">
+        Let specific players run this matchday console without giving them admin rights.
+      </p>
+
+      {list.length > 0 ? (
+        <ul className="mt-3 flex flex-wrap gap-2">
+          {list.map((s) => (
+            <li
+              key={s.playerId}
+              className="flex items-center gap-2 rounded-full bg-black/[0.04] py-1 pl-1 pr-2 text-sm dark:bg-white/[0.06]"
+            >
+              <Avatar name={s.name} photoUrl={s.photoUrl} theme={THEMES[0]} className="h-7 w-7" />
+              <span className="font-medium">{s.name}</span>
+              <button
+                onClick={() => remove(s.playerId)}
+                aria-label={`Remove ${s.name}`}
+                className="rounded-full px-1 text-neutral-400 transition hover:text-red-600"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm text-neutral-500">No scorekeepers yet — only admins can score.</p>
+      )}
+
+      <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+        <select
+          value={pick}
+          onChange={(e) => setPick(e.target.value === "" ? "" : Number(e.target.value))}
+          className="flex-1 rounded-xl border border-black/15 bg-transparent px-3 py-2.5 text-sm dark:border-white/15"
+        >
+          <option value="">Add a scorekeeper…</option>
+          {options.map((p) => (
+            <option key={p.playerId} value={p.playerId}>
+              {p.name}
+            </option>
+          ))}
+        </select>
+        <button
+          type="button"
+          disabled={pick === ""}
+          onClick={() => pick !== "" && add(pick)}
+          className="rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-neutral-700 disabled:opacity-40 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+        >
+          Add
+        </button>
+      </div>
     </div>
   );
 }

@@ -30,8 +30,10 @@ export interface RoundGoal {
   id: number;
   roundId: number;
   teamNo: number;
-  scorer: PersonRef;
+  /** Null for an own goal (counts for the team, credited to no player). */
+  scorer: PersonRef | null;
   assist: PersonRef | null;
+  isOwnGoal: boolean;
   createdAt: string;
 }
 
@@ -94,6 +96,7 @@ interface GoalRow {
   assist_guest_id: number | null;
   scorer_name: string | null;
   assist_name: string | null;
+  is_own_goal: number;
   created_at: string;
 }
 
@@ -141,6 +144,7 @@ export async function getMatchdayConsole(
             rg.assist_player_id, rg.assist_guest_id,
             COALESCE(sp.name, sg.name) AS scorer_name,
             COALESCE(ap.name, ag.name) AS assist_name,
+            rg.is_own_goal,
             rg.created_at
        FROM round_goals rg
        LEFT JOIN players sp ON sp.id = rg.scorer_player_id
@@ -156,8 +160,8 @@ export async function getMatchdayConsole(
   const tallyMap = new Map<string, DayTally>();
 
   for (const g of goalRows) {
+    const isOwnGoal = Number(g.is_own_goal) === 1;
     const scorer = personRef(g.scorer_player_id, g.scorer_guest_id, g.scorer_name);
-    if (!scorer) continue;
     const assist = personRef(g.assist_player_id, g.assist_guest_id, g.assist_name);
     const goal: RoundGoal = {
       id: Number(g.id),
@@ -165,15 +169,18 @@ export async function getMatchdayConsole(
       teamNo: Number(g.team_no),
       scorer,
       assist,
+      isOwnGoal,
       createdAt: String(g.created_at),
     };
     if (!goalsByRound.has(goal.roundId)) goalsByRound.set(goal.roundId, []);
     goalsByRound.get(goal.roundId)!.push(goal);
 
-    const sKey = personKey(scorer);
-    const sTally = tallyMap.get(sKey) ?? { key: sKey, name: scorer.name, goals: 0, assists: 0 };
-    sTally.goals += 1;
-    tallyMap.set(sKey, sTally);
+    if (scorer) {
+      const sKey = personKey(scorer);
+      const sTally = tallyMap.get(sKey) ?? { key: sKey, name: scorer.name, goals: 0, assists: 0 };
+      sTally.goals += 1;
+      tallyMap.set(sKey, sTally);
+    }
     if (assist) {
       const aKey = personKey(assist);
       const aTally = tallyMap.get(aKey) ?? { key: aKey, name: assist.name, goals: 0, assists: 0 };
@@ -320,11 +327,13 @@ export interface AddGoalInput {
   scorerGuestId: number | null;
   assistPlayerId: number | null;
   assistGuestId: number | null;
+  isOwnGoal?: boolean;
 }
 
 /** Log a goal in a round. Returns the new goal id. */
 export async function addGoal(input: AddGoalInput): Promise<number> {
-  if (input.scorerPlayerId == null && input.scorerGuestId == null) {
+  const ownGoal = input.isOwnGoal === true;
+  if (!ownGoal && input.scorerPlayerId == null && input.scorerGuestId == null) {
     throw new MatchdayError("Pick who scored.");
   }
 
@@ -343,20 +352,60 @@ export async function addGoal(input: AddGoalInput): Promise<number> {
   const inserted = (await sqlClient.query(
     `INSERT INTO round_goals(round_id, match_id, team_no,
                              scorer_player_id, scorer_guest_id,
-                             assist_player_id, assist_guest_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+                             assist_player_id, assist_guest_id, is_own_goal)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
      RETURNING id`,
     [
       input.roundId,
       Number(round.match_id),
       input.teamNo,
+      ownGoal ? null : input.scorerPlayerId,
+      ownGoal ? null : input.scorerGuestId,
+      ownGoal ? null : input.assistPlayerId,
+      ownGoal ? null : input.assistGuestId,
+      ownGoal ? 1 : 0,
+    ],
+  )) as unknown as { id: number }[];
+  return Number(inserted[0].id);
+}
+
+export interface UpdateGoalInput {
+  goalId: number;
+  scorerPlayerId: number | null;
+  scorerGuestId: number | null;
+  assistPlayerId: number | null;
+  assistGuestId: number | null;
+}
+
+/** Correct who scored / assisted an already-logged (non-own) goal. */
+export async function updateGoal(input: UpdateGoalInput): Promise<void> {
+  if (input.scorerPlayerId == null && input.scorerGuestId == null) {
+    throw new MatchdayError("Pick who scored.");
+  }
+  const rows = (await sqlClient.query(
+    `SELECT rg.match_id, r.status
+       FROM round_goals rg
+       JOIN match_rounds r ON r.id = rg.round_id
+      WHERE rg.id = $1`,
+    [input.goalId],
+  )) as unknown as { match_id: number; status: string }[];
+  const row = rows[0];
+  if (!row) throw new MatchdayError("Goal not found.");
+  await requireMatchOpen(Number(row.match_id));
+  await sqlClient.query(
+    `UPDATE round_goals
+        SET scorer_player_id = $2, scorer_guest_id = $3,
+            assist_player_id = $4, assist_guest_id = $5,
+            is_own_goal = 0
+      WHERE id = $1`,
+    [
+      input.goalId,
       input.scorerPlayerId,
       input.scorerGuestId,
       input.assistPlayerId,
       input.assistGuestId,
     ],
-  )) as unknown as { id: number }[];
-  return Number(inserted[0].id);
+  );
 }
 
 /** Remove a logged goal (e.g. tapped by mistake). */
@@ -408,4 +457,89 @@ export async function syncMatchdayToStats(matchId: number): Promise<number> {
   );
 
   return rows.length;
+}
+
+// ── Scorekeepers ────────────────────────────────────────────────────────────
+//
+// Admins can delegate live scoring for a specific match to trusted players
+// ("scorekeepers") without granting them admin rights. A scorekeeper may run
+// the whole console for that match; only admins can manage the scorekeeper list.
+
+export interface Scorekeeper {
+  playerId: number;
+  name: string;
+  photoUrl: string | null;
+}
+
+/** Players currently allowed to keep score for a match. */
+export async function listScorekeepers(matchId: number): Promise<Scorekeeper[]> {
+  const rows = (await sqlClient.query(
+    `SELECT p.id, p.name, p.photo_url
+       FROM match_scorekeepers ms
+       JOIN players p ON p.id = ms.player_id
+      WHERE ms.match_id = $1
+      ORDER BY p.name`,
+    [matchId],
+  )) as unknown as { id: number; name: string; photo_url: string | null }[];
+  return rows.map((r) => ({
+    playerId: Number(r.id),
+    name: r.name,
+    photoUrl: r.photo_url ?? null,
+  }));
+}
+
+/** Active players an admin can pick from when assigning scorekeepers. */
+export async function listAssignablePlayers(): Promise<Scorekeeper[]> {
+  const rows = (await sqlClient.query(
+    `SELECT id, name, photo_url
+       FROM players
+      WHERE active = 1
+      ORDER BY name`,
+    [],
+  )) as unknown as { id: number; name: string; photo_url: string | null }[];
+  return rows.map((r) => ({
+    playerId: Number(r.id),
+    name: r.name,
+    photoUrl: r.photo_url ?? null,
+  }));
+}
+
+/** Grant a player scorekeeper access for a match (idempotent). */
+export async function addScorekeeper(matchId: number, playerId: number): Promise<void> {
+  await sqlClient.query(
+    `INSERT INTO match_scorekeepers(match_id, player_id)
+     VALUES ($1, $2)
+     ON CONFLICT (match_id, player_id) DO NOTHING`,
+    [matchId, playerId],
+  );
+}
+
+/** Revoke a player's scorekeeper access for a match. */
+export async function removeScorekeeper(matchId: number, playerId: number): Promise<void> {
+  await sqlClient.query(
+    `DELETE FROM match_scorekeepers WHERE match_id = $1 AND player_id = $2`,
+    [matchId, playerId],
+  );
+}
+
+/** Whether a player is a scorekeeper for a match. */
+export async function isScorekeeper(matchId: number, playerId: number): Promise<boolean> {
+  const rows = (await sqlClient.query(
+    `SELECT 1 FROM match_scorekeepers WHERE match_id = $1 AND player_id = $2 LIMIT 1`,
+    [matchId, playerId],
+  )) as unknown as unknown[];
+  return rows.length > 0;
+}
+
+/**
+ * Whether the current viewer may run the matchday console for a match: real
+ * admins/supers always can; other players can only if assigned as scorekeepers.
+ */
+export async function canRunMatchday(
+  matchId: number,
+  viewer: { role?: string | null; playerId?: number | null },
+): Promise<boolean> {
+  if (viewer.role === "admin" || viewer.role === "super") return true;
+  if (viewer.playerId == null) return false;
+  return isScorekeeper(matchId, viewer.playerId);
 }

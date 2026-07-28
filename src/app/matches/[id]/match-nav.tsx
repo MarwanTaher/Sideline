@@ -19,10 +19,12 @@ function TabLabel({ icon, text }: { icon: SectionIconName; text: string }) {
 export function MatchNav({
   matchId,
   isAdmin,
+  canScore = false,
   className = "mt-4",
 }: {
   matchId: number;
   isAdmin: boolean;
+  canScore?: boolean;
   className?: string;
 }) {
   const items = [
@@ -31,11 +33,11 @@ export function MatchNav({
     { href: `/matches/${matchId}/vote`, label: <TabLabel icon="votes" text="Rate players" /> },
     { href: `/matches/${matchId}/stats`, label: <TabLabel icon="stats" text="Stats" /> },
     { href: `/matches/${matchId}/payments`, label: <TabLabel icon="payments" text="Payments" /> },
+    ...(isAdmin || canScore
+      ? [{ href: `/matches/${matchId}/matchday`, label: <TabLabel icon="scoring" text="Matchday" /> }]
+      : []),
     ...(isAdmin
-      ? [
-          { href: `/matches/${matchId}/matchday`, label: <TabLabel icon="scoring" text="Matchday" /> },
-          { href: `/matches/${matchId}/draft`, label: <TabLabel icon="draft" text="Draft" /> },
-        ]
+      ? [{ href: `/matches/${matchId}/draft`, label: <TabLabel icon="draft" text="Draft" /> }]
       : []),
   ];
   return <SubNav items={items} ariaLabel="Match sections" className={className} />;

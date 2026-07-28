@@ -3,7 +3,13 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { fmtDate, fmtMatchTime, getMatchDetail } from "@/lib/matches";
-import { getMatchdayConsole } from "@/lib/matchday";
+import {
+  getMatchdayConsole,
+  canRunMatchday,
+  listScorekeepers,
+  listAssignablePlayers,
+  type Scorekeeper,
+} from "@/lib/matchday";
 import { MatchNav } from "../match-nav";
 import { MatchdayConsole } from "./console";
 
@@ -28,13 +34,26 @@ export default async function MatchdayPage({
   const isAdmin = await isAdminView(
     session.user.role === "admin" || session.user.role === "super",
   );
-  if (!isAdmin) redirect(`/matches/${matchId}`);
+  const canScore = await canRunMatchday(matchId, {
+    role: session.user.role,
+    playerId: session.user.playerId ?? null,
+  });
+  if (!isAdmin && !canScore) redirect(`/matches/${matchId}`);
 
   const match = await getMatchDetail(matchId);
   if (!match) notFound();
 
   const consoleData = await getMatchdayConsole(matchId);
   if (!consoleData) notFound();
+
+  let scorekeepers: Scorekeeper[] = [];
+  let assignablePlayers: Scorekeeper[] = [];
+  if (isAdmin) {
+    [scorekeepers, assignablePlayers] = await Promise.all([
+      listScorekeepers(matchId),
+      listAssignablePlayers(),
+    ]);
+  }
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
@@ -45,7 +64,7 @@ export default async function MatchdayPage({
         ← Match {matchId}
       </Link>
 
-      <MatchNav matchId={matchId} isAdmin={isAdmin} />
+      <MatchNav matchId={matchId} isAdmin={isAdmin} canScore={canScore} />
 
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">Matchday console</h1>
       <p className="mt-1 text-sm text-neutral-500">
@@ -60,7 +79,13 @@ export default async function MatchdayPage({
         </p>
       ) : (
         <div className="mt-6">
-          <MatchdayConsole matchId={matchId} initial={consoleData} />
+          <MatchdayConsole
+            matchId={matchId}
+            initial={consoleData}
+            isAdmin={isAdmin}
+            scorekeepers={scorekeepers}
+            assignablePlayers={assignablePlayers}
+          />
         </div>
       )}
     </main>

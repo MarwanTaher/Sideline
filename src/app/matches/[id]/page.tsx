@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchDetail, fmtDate, fmtMatchTime, isPlayerInMatch, type MatchdayStatus } from "@/lib/matches";
 import { getMatchAdmin } from "@/lib/match-admin";
+import { canRunMatchday } from "@/lib/matchday";
 import { getReactionSummary } from "@/lib/reactions";
 import { getMatchDigest, buildDigestShareText } from "@/lib/match-digest";
 import { getBaseUrl } from "@/lib/site-url";
@@ -53,6 +54,9 @@ export default async function MatchDetailPage({
     redirect("/matches");
   }
   const adminMatch = isAdmin ? await getMatchAdmin(matchId) : null;
+  const canScore =
+    isAdmin ||
+    (await canRunMatchday(matchId, { role, playerId: viewerPlayerId ?? null }));
 
   // Social hub data (reactions, share). Rostered players may interact.
   const canInteract = isMember;
@@ -107,7 +111,7 @@ export default async function MatchDetailPage({
         ))}
       </div>
 
-      <MatchNav matchId={match.id} isAdmin={isAdmin} />
+      <MatchNav matchId={match.id} isAdmin={isAdmin} canScore={canScore} />
 
       <div className="mt-3">
         <Link

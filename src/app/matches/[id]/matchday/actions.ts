@@ -9,8 +9,12 @@ import {
   deleteRound,
   setRoundTimer,
   addGoal,
+  updateGoal,
   deleteGoal,
   syncMatchdayToStats,
+  addScorekeeper,
+  removeScorekeeper,
+  canRunMatchday,
   MatchdayError,
 } from "@/lib/matchday";
 
@@ -38,11 +42,24 @@ function fail(err: unknown): ActionResult {
   return { ok: false, message: err instanceof Error ? err.message : "Something went wrong." };
 }
 
+/** Admins and assigned scorekeepers may run the console for this match. */
+async function requireCanScore(matchId: number): Promise<void> {
+  const session = await auth();
+  const allowed = await canRunMatchday(matchId, {
+    role: session?.user?.role,
+    playerId: session?.user?.playerId ?? null,
+  });
+  if (!allowed) {
+    throw new MatchdayError("You do not have access to this matchday console.");
+  }
+}
+
+/** Only real admins may manage the scorekeeper list. */
 async function requireAdmin(): Promise<void> {
   const session = await auth();
   const role = session?.user?.role;
   if (role !== "admin" && role !== "super") {
-    throw new MatchdayError("Only admins can run the matchday console.");
+    throw new MatchdayError("Only admins can manage scorekeepers.");
   }
 }
 
@@ -57,8 +74,8 @@ export async function createRoundAction(
   teamB: number,
 ): Promise<CreateRoundResult> {
   try {
-    await requireAdmin();
     const mid = idSchema.parse(matchId);
+    await requireCanScore(mid);
     const a = teamSchema.parse(teamA);
     const b = teamSchema.parse(teamB);
     const round = await createRound(mid, a, b);
@@ -75,8 +92,8 @@ export async function createRoundAction(
 
 export async function endRoundAction(matchId: number, roundId: number): Promise<ActionResult> {
   try {
-    await requireAdmin();
     const mid = idSchema.parse(matchId);
+    await requireCanScore(mid);
     await endRound(idSchema.parse(roundId));
     revalidate(mid);
     return { ok: true, message: "" };
@@ -87,8 +104,8 @@ export async function endRoundAction(matchId: number, roundId: number): Promise<
 
 export async function deleteRoundAction(matchId: number, roundId: number): Promise<ActionResult> {
   try {
-    await requireAdmin();
     const mid = idSchema.parse(matchId);
+    await requireCanScore(mid);
     await deleteRound(idSchema.parse(roundId));
     revalidate(mid);
     return { ok: true, message: "" };
@@ -103,8 +120,8 @@ export async function timerAction(
   action: "start" | "pause" | "reset",
 ): Promise<ActionResult> {
   try {
-    await requireAdmin();
     const mid = idSchema.parse(matchId);
+    await requireCanScore(mid);
     await setRoundTimer(idSchema.parse(roundId), timerActionSchema.parse(action));
     revalidate(mid);
     return { ok: true, message: "" };
@@ -121,10 +138,11 @@ export async function addGoalAction(input: {
   scorerGuestId: number | null;
   assistPlayerId: number | null;
   assistGuestId: number | null;
+  isOwnGoal?: boolean;
 }): Promise<AddGoalResult> {
   try {
-    await requireAdmin();
     const mid = idSchema.parse(input.matchId);
+    await requireCanScore(mid);
     const goalId = await addGoal({
       roundId: idSchema.parse(input.roundId),
       teamNo: teamSchema.parse(input.teamNo),
@@ -132,6 +150,7 @@ export async function addGoalAction(input: {
       scorerGuestId: nullableIdSchema.parse(input.scorerGuestId),
       assistPlayerId: nullableIdSchema.parse(input.assistPlayerId),
       assistGuestId: nullableIdSchema.parse(input.assistGuestId),
+      isOwnGoal: input.isOwnGoal === true,
     });
     revalidate(mid);
     return { ok: true, message: "", goalId };
@@ -140,10 +159,35 @@ export async function addGoalAction(input: {
   }
 }
 
+export async function updateGoalAction(input: {
+  matchId: number;
+  goalId: number;
+  scorerPlayerId: number | null;
+  scorerGuestId: number | null;
+  assistPlayerId: number | null;
+  assistGuestId: number | null;
+}): Promise<ActionResult> {
+  try {
+    const mid = idSchema.parse(input.matchId);
+    await requireCanScore(mid);
+    await updateGoal({
+      goalId: idSchema.parse(input.goalId),
+      scorerPlayerId: nullableIdSchema.parse(input.scorerPlayerId),
+      scorerGuestId: nullableIdSchema.parse(input.scorerGuestId),
+      assistPlayerId: nullableIdSchema.parse(input.assistPlayerId),
+      assistGuestId: nullableIdSchema.parse(input.assistGuestId),
+    });
+    revalidate(mid);
+    return { ok: true, message: "" };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
 export async function deleteGoalAction(matchId: number, goalId: number): Promise<ActionResult> {
   try {
-    await requireAdmin();
     const mid = idSchema.parse(matchId);
+    await requireCanScore(mid);
     await deleteGoal(idSchema.parse(goalId));
     revalidate(mid);
     return { ok: true, message: "" };
@@ -154,13 +198,43 @@ export async function deleteGoalAction(matchId: number, goalId: number): Promise
 
 export async function syncStatsAction(matchId: number): Promise<ActionResult> {
   try {
-    await requireAdmin();
     const mid = idSchema.parse(matchId);
+    await requireCanScore(mid);
     const n = await syncMatchdayToStats(mid);
     revalidate(mid);
     revalidatePath(`/matches/${mid}/stats`);
     revalidatePath("/leaderboard");
     return { ok: true, message: `Synced ${n} player${n === 1 ? "" : "s"} to match stats.` };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function addScorekeeperAction(
+  matchId: number,
+  playerId: number,
+): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const mid = idSchema.parse(matchId);
+    await addScorekeeper(mid, idSchema.parse(playerId));
+    revalidate(mid);
+    return { ok: true, message: "" };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function removeScorekeeperAction(
+  matchId: number,
+  playerId: number,
+): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const mid = idSchema.parse(matchId);
+    await removeScorekeeper(mid, idSchema.parse(playerId));
+    revalidate(mid);
+    return { ok: true, message: "" };
   } catch (err) {
     return fail(err);
   }
