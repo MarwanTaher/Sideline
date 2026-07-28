@@ -31,7 +31,12 @@ export function MatchNav({
     { href: `/matches/${matchId}/vote`, label: <TabLabel icon="votes" text="Rate players" /> },
     { href: `/matches/${matchId}/stats`, label: <TabLabel icon="stats" text="Stats" /> },
     { href: `/matches/${matchId}/payments`, label: <TabLabel icon="payments" text="Payments" /> },
-    ...(isAdmin ? [{ href: `/matches/${matchId}/draft`, label: <TabLabel icon="draft" text="Draft" /> }] : []),
+    ...(isAdmin
+      ? [
+          { href: `/matches/${matchId}/matchday`, label: <TabLabel icon="scoring" text="Matchday" /> },
+          { href: `/matches/${matchId}/draft`, label: <TabLabel icon="draft" text="Draft" /> },
+        ]
+      : []),
   ];
   return <SubNav items={items} ariaLabel="Match sections" className={className} />;
 }
