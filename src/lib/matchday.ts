@@ -234,12 +234,12 @@ async function requireMatchOpen(matchId: number): Promise<void> {
   }
 }
 
-/** Start a new round between two teams. Returns the new round id. */
+/** Start a new round between two teams. Returns the new round id + number. */
 export async function createRound(
   matchId: number,
   teamA: number,
   teamB: number,
-): Promise<number> {
+): Promise<{ id: number; roundNo: number }> {
   if (teamA === teamB) throw new MatchdayError("Pick two different teams.");
   await requireMatchOpen(matchId);
 
@@ -255,7 +255,7 @@ export async function createRound(
      RETURNING id`,
     [matchId, roundNo, teamA, teamB],
   )) as unknown as { id: number }[];
-  return Number(inserted[0].id);
+  return { id: Number(inserted[0].id), roundNo };
 }
 
 /** Mark a round finished (stops its timer). */

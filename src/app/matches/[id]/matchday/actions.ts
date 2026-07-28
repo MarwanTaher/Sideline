@@ -14,16 +14,23 @@ import {
   MatchdayError,
 } from "@/lib/matchday";
 
-export interface MatchdayActionState {
+export interface ActionResult {
   ok: boolean;
   message: string;
+}
+export interface CreateRoundResult extends ActionResult {
+  round?: { id: number; roundNo: number; teamA: number; teamB: number };
+}
+export interface AddGoalResult extends ActionResult {
+  goalId?: number;
 }
 
 const idSchema = z.coerce.number().int().positive();
 const teamSchema = z.coerce.number().int();
+const nullableIdSchema = z.coerce.number().int().positive().nullable();
 const timerActionSchema = z.enum(["start", "pause", "reset"]);
 
-function fail(err: unknown): MatchdayActionState {
+function fail(err: unknown): ActionResult {
   if (err instanceof z.ZodError) {
     return { ok: false, message: err.issues.map((i) => i.message).join(" ") };
   }
@@ -39,140 +46,119 @@ async function requireAdmin(): Promise<void> {
   }
 }
 
+/** Light revalidation so a fresh visit / other device sees current data. */
 function revalidate(matchId: number): void {
   revalidatePath(`/matches/${matchId}/matchday`);
-  revalidatePath(`/matches/${matchId}`);
-}
-
-/** Parse "p:<id>" | "g:<id>" | "" into a player/guest id pair. */
-function parsePerson(raw: unknown): { playerId: number | null; guestId: number | null } {
-  const s = String(raw ?? "").trim();
-  if (s === "") return { playerId: null, guestId: null };
-  const [kind, idStr] = s.split(":");
-  const id = idSchema.parse(idStr);
-  if (kind === "p") return { playerId: id, guestId: null };
-  if (kind === "g") return { playerId: null, guestId: id };
-  throw new MatchdayError("Invalid player selection.");
 }
 
 export async function createRoundAction(
-  _prev: MatchdayActionState,
-  formData: FormData,
-): Promise<MatchdayActionState> {
+  matchId: number,
+  teamA: number,
+  teamB: number,
+): Promise<CreateRoundResult> {
   try {
     await requireAdmin();
-    const matchId = idSchema.parse(formData.get("matchId"));
-    const teamA = teamSchema.parse(formData.get("teamA"));
-    const teamB = teamSchema.parse(formData.get("teamB"));
-    await createRound(matchId, teamA, teamB);
-    revalidate(matchId);
-    return { ok: true, message: "Round started." };
+    const mid = idSchema.parse(matchId);
+    const a = teamSchema.parse(teamA);
+    const b = teamSchema.parse(teamB);
+    const round = await createRound(mid, a, b);
+    revalidate(mid);
+    return {
+      ok: true,
+      message: "",
+      round: { id: round.id, roundNo: round.roundNo, teamA: a, teamB: b },
+    };
   } catch (err) {
     return fail(err);
   }
 }
 
-export async function endRoundAction(
-  _prev: MatchdayActionState,
-  formData: FormData,
-): Promise<MatchdayActionState> {
+export async function endRoundAction(matchId: number, roundId: number): Promise<ActionResult> {
   try {
     await requireAdmin();
-    const matchId = idSchema.parse(formData.get("matchId"));
-    const roundId = idSchema.parse(formData.get("roundId"));
-    await endRound(roundId);
-    revalidate(matchId);
-    return { ok: true, message: "Round ended." };
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-export async function deleteRoundAction(
-  _prev: MatchdayActionState,
-  formData: FormData,
-): Promise<MatchdayActionState> {
-  try {
-    await requireAdmin();
-    const matchId = idSchema.parse(formData.get("matchId"));
-    const roundId = idSchema.parse(formData.get("roundId"));
-    await deleteRound(roundId);
-    revalidate(matchId);
-    return { ok: true, message: "Round deleted." };
-  } catch (err) {
-    return fail(err);
-  }
-}
-
-export async function timerAction(
-  _prev: MatchdayActionState,
-  formData: FormData,
-): Promise<MatchdayActionState> {
-  try {
-    await requireAdmin();
-    const matchId = idSchema.parse(formData.get("matchId"));
-    const roundId = idSchema.parse(formData.get("roundId"));
-    const action = timerActionSchema.parse(formData.get("timerAction"));
-    await setRoundTimer(roundId, action);
-    revalidate(matchId);
+    const mid = idSchema.parse(matchId);
+    await endRound(idSchema.parse(roundId));
+    revalidate(mid);
     return { ok: true, message: "" };
   } catch (err) {
     return fail(err);
   }
 }
 
-export async function addGoalAction(
-  _prev: MatchdayActionState,
-  formData: FormData,
-): Promise<MatchdayActionState> {
+export async function deleteRoundAction(matchId: number, roundId: number): Promise<ActionResult> {
   try {
     await requireAdmin();
-    const matchId = idSchema.parse(formData.get("matchId"));
-    const roundId = idSchema.parse(formData.get("roundId"));
-    const teamNo = teamSchema.parse(formData.get("teamNo"));
-    const scorer = parsePerson(formData.get("scorer"));
-    const assist = parsePerson(formData.get("assist"));
-    await addGoal({
-      roundId,
-      teamNo,
-      scorerPlayerId: scorer.playerId,
-      scorerGuestId: scorer.guestId,
-      assistPlayerId: assist.playerId,
-      assistGuestId: assist.guestId,
+    const mid = idSchema.parse(matchId);
+    await deleteRound(idSchema.parse(roundId));
+    revalidate(mid);
+    return { ok: true, message: "" };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function timerAction(
+  matchId: number,
+  roundId: number,
+  action: "start" | "pause" | "reset",
+): Promise<ActionResult> {
+  try {
+    await requireAdmin();
+    const mid = idSchema.parse(matchId);
+    await setRoundTimer(idSchema.parse(roundId), timerActionSchema.parse(action));
+    revalidate(mid);
+    return { ok: true, message: "" };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function addGoalAction(input: {
+  matchId: number;
+  roundId: number;
+  teamNo: number;
+  scorerPlayerId: number | null;
+  scorerGuestId: number | null;
+  assistPlayerId: number | null;
+  assistGuestId: number | null;
+}): Promise<AddGoalResult> {
+  try {
+    await requireAdmin();
+    const mid = idSchema.parse(input.matchId);
+    const goalId = await addGoal({
+      roundId: idSchema.parse(input.roundId),
+      teamNo: teamSchema.parse(input.teamNo),
+      scorerPlayerId: nullableIdSchema.parse(input.scorerPlayerId),
+      scorerGuestId: nullableIdSchema.parse(input.scorerGuestId),
+      assistPlayerId: nullableIdSchema.parse(input.assistPlayerId),
+      assistGuestId: nullableIdSchema.parse(input.assistGuestId),
     });
-    revalidate(matchId);
-    return { ok: true, message: "Goal logged." };
+    revalidate(mid);
+    return { ok: true, message: "", goalId };
   } catch (err) {
     return fail(err);
   }
 }
 
-export async function deleteGoalAction(
-  _prev: MatchdayActionState,
-  formData: FormData,
-): Promise<MatchdayActionState> {
+export async function deleteGoalAction(matchId: number, goalId: number): Promise<ActionResult> {
   try {
     await requireAdmin();
-    const matchId = idSchema.parse(formData.get("matchId"));
-    const goalId = idSchema.parse(formData.get("goalId"));
-    await deleteGoal(goalId);
-    revalidate(matchId);
-    return { ok: true, message: "Goal removed." };
+    const mid = idSchema.parse(matchId);
+    await deleteGoal(idSchema.parse(goalId));
+    revalidate(mid);
+    return { ok: true, message: "" };
   } catch (err) {
     return fail(err);
   }
 }
 
-export async function syncStatsAction(
-  _prev: MatchdayActionState,
-  formData: FormData,
-): Promise<MatchdayActionState> {
+export async function syncStatsAction(matchId: number): Promise<ActionResult> {
   try {
     await requireAdmin();
-    const matchId = idSchema.parse(formData.get("matchId"));
-    const n = await syncMatchdayToStats(matchId);
-    revalidate(matchId);
-    revalidatePath(`/matches/${matchId}/stats`);
+    const mid = idSchema.parse(matchId);
+    const n = await syncMatchdayToStats(mid);
+    revalidate(mid);
+    revalidatePath(`/matches/${mid}/stats`);
     revalidatePath("/leaderboard");
     return { ok: true, message: `Synced ${n} player${n === 1 ? "" : "s"} to match stats.` };
   } catch (err) {
