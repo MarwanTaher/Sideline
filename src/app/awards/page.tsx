@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import {
@@ -22,6 +23,11 @@ export const metadata = {
 
 // Awards are recomputed from live data on every request (no caching).
 export const dynamic = "force-dynamic";
+
+interface Thresholds {
+  minMatchVotes: number;
+  minOverallVotes: number;
+}
 
 /** Mirror Streamlit _render_awards_scope metric text formatting. */
 function metricText(metricLabel: string, values: (number | null)[]): string {
@@ -57,36 +63,14 @@ export default async function AwardsPage({
         : null;
   }
 
-  const thresholds = {
+  const thresholds: Thresholds = {
     minMatchVotes: settings.matchMinValidVotes,
     minOverallVotes: settings.overallMinValidVotes,
   };
 
-  const payload =
-    scope === "overall" || matchId !== null
-      ? await getAwards(scope, matchId, thresholds)
-      : null;
-
   const playerId = session?.user?.playerId ?? null;
-  const badgeCounts = playerId
-    ? await getPlayerBadgeCounts(Number(playerId), thresholds)
-    : null;
-
   const role = session?.user?.role;
   const isAdmin = await isAdminView(role === "admin" || role === "super");
-  const activePlayers = isAdmin && payload ? await getActivePlayers() : [];
-  const overrideItems: OverrideItem[] =
-    isAdmin && payload
-      ? AWARD_TYPES.map((awardType) => {
-          const block = payload.awards[awardType];
-          return {
-            awardType,
-            label: block.award_label,
-            currentWinnerIds: block.winners.map((w) => Number(w.player_id)),
-            isOverride: block.source === "override",
-          };
-        })
-      : [];
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
@@ -113,64 +97,130 @@ export default async function AwardsPage({
         votes = {settings.overallMinValidVotes}
       </p>
 
-      {scope === "match" && matches.length === 0 ? (
-        <p className="mt-6 rounded-lg bg-neutral-50 px-4 py-6 text-center text-sm text-neutral-500 dark:bg-neutral-900">
-          No matches available yet.
-        </p>
-      ) : (
-        <DataTable className="mt-4 rounded-xl border border-black/10 dark:border-white/10">
-          <table className="w-full text-sm">
-            <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500 dark:bg-neutral-900">
-              <tr>
-                <th scope="col" className="px-4 py-2 font-medium">Award</th>
-                <th scope="col" className="px-4 py-2 font-medium">Winner(s)</th>
-                <th scope="col" className="px-4 py-2 font-medium">Metric</th>
-                {isAdmin ? (
-                  <th scope="col" className="px-4 py-2 font-medium">Source</th>
-                ) : null}
-              </tr>
-            </thead>
-            <tbody>
-              {payload &&
-                AWARD_TYPES.map((awardType) => {
-                  const block = payload.awards[awardType];
-                  const winners = block.winners ?? [];
-                  const names =
-                    winners.length > 0
-                      ? winners.map((w) => w.name).join(", ")
-                      : "—";
-                  const metric = metricText(
-                    block.metric_label,
-                    winners.map((w) => w.metric_value),
-                  );
-                  return (
-                    <tr
-                      key={awardType}
-                      className="border-t border-black/5 dark:border-white/5"
-                    >
-                      <td className="px-4 py-2 font-medium">{block.award_label}</td>
-                      <td className="px-4 py-2">{names}</td>
-                      <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">
-                        {metric}
+      {/* Scope-dependent results stream in independently; the keyed boundary
+          shows a skeleton the instant the scope/match toggle changes so the
+          page never feels frozen while the heavier query runs. */}
+      <Suspense
+        key={`results-${scope}-${matchId ?? "none"}`}
+        fallback={<ResultsSkeleton isAdmin={isAdmin} />}
+      >
+        <AwardsResults
+          scope={scope}
+          matchId={matchId}
+          thresholds={thresholds}
+          isAdmin={isAdmin}
+          noMatches={scope === "match" && matches.length === 0}
+        />
+      </Suspense>
+
+      <section className="mt-10">
+        <h2 className="text-lg font-semibold tracking-tight">Badge gallery</h2>
+        <div className="mt-2">
+          {/* Badge counts are scope-independent and by far the heaviest query,
+              so they stream in on their own and never block the table above. */}
+          <Suspense fallback={<BadgeSkeleton />}>
+            <BadgeSection playerId={playerId} thresholds={thresholds} />
+          </Suspense>
+        </div>
+      </section>
+    </main>
+  );
+}
+
+async function AwardsResults({
+  scope,
+  matchId,
+  thresholds,
+  isAdmin,
+  noMatches,
+}: {
+  scope: "match" | "overall";
+  matchId: number | null;
+  thresholds: Thresholds;
+  isAdmin: boolean;
+  noMatches: boolean;
+}) {
+  if (noMatches) {
+    return (
+      <p className="mt-6 rounded-lg bg-neutral-50 px-4 py-6 text-center text-sm text-neutral-500 dark:bg-neutral-900">
+        No matches available yet.
+      </p>
+    );
+  }
+
+  const payload =
+    scope === "overall" || matchId !== null
+      ? await getAwards(scope, matchId, thresholds)
+      : null;
+
+  const activePlayers = isAdmin && payload ? await getActivePlayers() : [];
+  const overrideItems: OverrideItem[] =
+    isAdmin && payload
+      ? AWARD_TYPES.map((awardType) => {
+          const block = payload.awards[awardType];
+          return {
+            awardType,
+            label: block.award_label,
+            currentWinnerIds: block.winners.map((w) => Number(w.player_id)),
+            isOverride: block.source === "override",
+          };
+        })
+      : [];
+
+  return (
+    <>
+      <DataTable className="mt-4 rounded-xl border border-black/10 dark:border-white/10">
+        <table className="w-full text-sm">
+          <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500 dark:bg-neutral-900">
+            <tr>
+              <th scope="col" className="px-4 py-2 font-medium">Award</th>
+              <th scope="col" className="px-4 py-2 font-medium">Winner(s)</th>
+              <th scope="col" className="px-4 py-2 font-medium">Metric</th>
+              {isAdmin ? (
+                <th scope="col" className="px-4 py-2 font-medium">Source</th>
+              ) : null}
+            </tr>
+          </thead>
+          <tbody>
+            {payload &&
+              AWARD_TYPES.map((awardType) => {
+                const block = payload.awards[awardType];
+                const winners = block.winners ?? [];
+                const names =
+                  winners.length > 0
+                    ? winners.map((w) => w.name).join(", ")
+                    : "—";
+                const metric = metricText(
+                  block.metric_label,
+                  winners.map((w) => w.metric_value),
+                );
+                return (
+                  <tr
+                    key={awardType}
+                    className="border-t border-black/5 dark:border-white/5"
+                  >
+                    <td className="px-4 py-2 font-medium">{block.award_label}</td>
+                    <td className="px-4 py-2">{names}</td>
+                    <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">
+                      {metric}
+                    </td>
+                    {isAdmin ? (
+                      <td className="px-4 py-2">
+                        {block.source === "override" ? (
+                          <Badge tone="warning" dot>
+                            override
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-neutral-400">computed</span>
+                        )}
                       </td>
-                      {isAdmin ? (
-                        <td className="px-4 py-2">
-                          {block.source === "override" ? (
-                            <Badge tone="warning" dot>
-                              override
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-neutral-400">computed</span>
-                          )}
-                        </td>
-                      ) : null}
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
-        </DataTable>
-      )}
+                    ) : null}
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </DataTable>
 
       {isAdmin && payload ? (
         <AdminOverridePanel
@@ -180,13 +230,57 @@ export default async function AwardsPage({
           players={activePlayers}
         />
       ) : null}
+    </>
+  );
+}
 
-      <section className="mt-10">
-        <h2 className="text-lg font-semibold tracking-tight">Badge gallery</h2>
-        <div className="mt-2">
-          <BadgeGallery counts={badgeCounts} />
+async function BadgeSection({
+  playerId,
+  thresholds,
+}: {
+  playerId: number | null;
+  thresholds: Thresholds;
+}) {
+  const badgeCounts = playerId
+    ? await getPlayerBadgeCounts(Number(playerId), thresholds)
+    : null;
+  return <BadgeGallery counts={badgeCounts} />;
+}
+
+function ResultsSkeleton({ isAdmin }: { isAdmin: boolean }) {
+  const cols = isAdmin ? 4 : 3;
+  return (
+    <div
+      className="mt-4 animate-pulse rounded-xl border border-black/10 dark:border-white/10"
+      aria-hidden="true"
+    >
+      <div className="h-9 rounded-t-xl bg-neutral-100 dark:bg-neutral-900" />
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="flex gap-4 border-t border-black/5 px-4 py-3 dark:border-white/5"
+        >
+          {Array.from({ length: cols }).map((_, c) => (
+            <div
+              key={c}
+              className="h-4 flex-1 rounded bg-neutral-200/70 dark:bg-neutral-800"
+            />
+          ))}
         </div>
-      </section>
-    </main>
+      ))}
+    </div>
+  );
+}
+
+function BadgeSkeleton() {
+  return (
+    <div className="flex flex-wrap gap-4" aria-hidden="true">
+      {Array.from({ length: 5 }).map((_, i) => (
+        <div
+          key={i}
+          className="h-20 w-20 animate-pulse rounded-xl bg-neutral-200/70 dark:bg-neutral-800"
+        />
+      ))}
+    </div>
   );
 }
