@@ -413,6 +413,11 @@ export async function getAwardMatches(): Promise<AwardMatch[]> {
 /**
  * Port of app.py _compute_player_badge_counts — counts award wins for a player
  * across the overall scope plus every match they played (not limited).
+ *
+ * The per-match tallies are computed with a fixed set of batched aggregate
+ * queries (goals, assists, peer ratings, MOTM, overrides) rather than a full
+ * awards computation per match, so the cost stays flat no matter how many
+ * matches the player has featured in.
  */
 export async function getPlayerBadgeCounts(
   playerId: number,
@@ -427,31 +432,190 @@ export async function getPlayerBadgeCounts(
     [AWARD_MOTM]: 0,
   };
 
-  const overall = await getAwards("overall", null, { minMatchVotes, minOverallVotes });
+  const [overall, matchCounts] = await Promise.all([
+    getAwards("overall", null, { minMatchVotes, minOverallVotes }),
+    computePlayerMatchBadgeCounts(pid, minMatchVotes),
+  ]);
+
   for (const awardType of AWARD_TYPES) {
     if (overall.awards[awardType].winners.some((w) => Number(w.player_id) === pid)) {
       counts[awardType] += 1;
     }
+    counts[awardType] += matchCounts[awardType];
   }
 
+  return counts;
+}
+
+type MaxRow = {
+  match_id: number | string;
+  max_val: number | string | null;
+  my_val: number | string | null;
+};
+
+/** True when the player holds (ties for) the per-match maximum. */
+function tieWinIds(rows: MaxRow[], requirePositive: boolean): Set<number> {
+  const set = new Set<number>();
+  for (const r of rows) {
+    if (r.my_val == null || r.max_val == null) continue;
+    const my = Number(r.my_val);
+    const mx = Number(r.max_val);
+    if (my === mx && (!requirePositive || mx > 0)) set.add(Number(r.match_id));
+  }
+  return set;
+}
+
+/**
+ * Per-match award wins for a player across all matches they featured in, using
+ * batched aggregate queries. Winner semantics (ties included) and admin
+ * overrides mirror {@link getAwards}; an override for a (match, award) fully
+ * replaces the computed winners for that scope.
+ */
+async function computePlayerMatchBadgeCounts(
+  playerId: number,
+  minMatchVotes: number,
+): Promise<Record<AwardType, number>> {
+  const pid = Math.trunc(playerId);
+  const minVotes = Math.trunc(minMatchVotes);
+  const counts: Record<AwardType, number> = {
+    [AWARD_TOP_SCORER]: 0,
+    [AWARD_TOP_ASSISTS]: 0,
+    [AWARD_TOP_DEFENDER]: 0,
+    [AWARD_TOP_PERFORMER]: 0,
+    [AWARD_MOTM]: 0,
+  };
+
   const matchRows = (await sqlClient.query(
-    `
-    SELECT m.id AS match_id
-    FROM match_players mp
-    JOIN matches m ON m.id = mp.match_id
-    WHERE mp.player_id = $1
-    ORDER BY m.played_on DESC, m.id DESC
-    `,
+    "SELECT match_id FROM match_players WHERE player_id = $1",
     [pid],
   )) as Array<{ match_id: number }>;
+  const matchIds = matchRows.map((r) => Number(r.match_id));
+  if (matchIds.length === 0) return counts;
 
-  for (const r of matchRows) {
+  const inPlayerMatches = "match_id IN (SELECT match_id FROM match_players WHERE player_id = $1)";
+
+  const [goalRows, assistRows, peerRows, motmRows, overrideRows] = await Promise.all([
+    sqlClient.query(
+      `
+      SELECT s.match_id,
+             MAX(s.goals) AS max_val,
+             MAX(s.goals) FILTER (WHERE s.player_id = $1) AS my_val
+      FROM stats s
+      JOIN match_players mp ON mp.match_id = s.match_id AND mp.player_id = s.player_id
+      WHERE s.${inPlayerMatches}
+      GROUP BY s.match_id
+      `,
+      [pid],
+    ) as unknown as Promise<MaxRow[]>,
+    sqlClient.query(
+      `
+      SELECT s.match_id,
+             MAX(s.assists) AS max_val,
+             MAX(s.assists) FILTER (WHERE s.player_id = $1) AS my_val
+      FROM stats s
+      JOIN match_players mp ON mp.match_id = s.match_id AND mp.player_id = s.player_id
+      WHERE s.${inPlayerMatches}
+      GROUP BY s.match_id
+      `,
+      [pid],
+    ) as unknown as Promise<MaxRow[]>,
+    sqlClient.query(
+      `
+      WITH agg AS (
+        SELECT v.match_id, v.voted_for_id AS player_id,
+               mp.position_played AS pos,
+               AVG(v.rating) AS avg_rating,
+               COUNT(*) AS votes
+        FROM votes v
+        JOIN match_players mp ON mp.match_id = v.match_id AND mp.player_id = v.voted_for_id
+        WHERE v.${inPlayerMatches}
+          AND ${VALID_VOTE_CASE_SQL}
+        GROUP BY v.match_id, v.voted_for_id, mp.position_played
+        HAVING COUNT(*) >= $2
+      )
+      SELECT match_id,
+             MAX(avg_rating) AS max_avg,
+             MAX(avg_rating) FILTER (WHERE player_id = $1) AS my_avg,
+             MAX(avg_rating) FILTER (WHERE UPPER(COALESCE(pos, '')) = 'DEF') AS max_def_avg,
+             MAX(avg_rating) FILTER (WHERE player_id = $1 AND UPPER(COALESCE(pos, '')) = 'DEF') AS my_def_avg
+      FROM agg
+      GROUP BY match_id
+      `,
+      [pid, minVotes],
+    ) as unknown as Promise<
+      Array<{
+        match_id: number | string;
+        max_avg: number | string | null;
+        my_avg: number | string | null;
+        max_def_avg: number | string | null;
+        my_def_avg: number | string | null;
+      }>
+    >,
+    sqlClient.query(
+      `
+      WITH agg AS (
+        SELECT mv.match_id, mv.voted_for_id AS player_id, COUNT(*) AS cnt
+        FROM match_motm_votes mv
+        WHERE mv.${inPlayerMatches}
+        GROUP BY mv.match_id, mv.voted_for_id
+      )
+      SELECT match_id,
+             MAX(cnt) AS max_val,
+             MAX(cnt) FILTER (WHERE player_id = $1) AS my_val
+      FROM agg
+      GROUP BY match_id
+      `,
+      [pid],
+    ) as unknown as Promise<MaxRow[]>,
+    sqlClient.query(
+      `
+      SELECT match_id, award_type, winner_player_ids
+      FROM award_overrides
+      WHERE scope_type = 'match'
+        AND ${inPlayerMatches}
+      `,
+      [pid],
+    ) as unknown as Promise<
+      Array<{ match_id: number | string; award_type: string; winner_player_ids: string | null }>
+    >,
+  ]);
+
+  const computedWins: Record<AwardType, Set<number>> = {
+    [AWARD_TOP_SCORER]: tieWinIds(goalRows, true),
+    [AWARD_TOP_ASSISTS]: tieWinIds(assistRows, true),
+    [AWARD_MOTM]: tieWinIds(motmRows, false),
+    [AWARD_TOP_PERFORMER]: new Set<number>(),
+    [AWARD_TOP_DEFENDER]: new Set<number>(),
+  };
+  for (const r of peerRows) {
     const mid = Number(r.match_id);
-    const awards = await getAwards("match", mid, { minMatchVotes, minOverallVotes });
-    for (const awardType of AWARD_TYPES) {
-      if (awards.awards[awardType].winners.some((w) => Number(w.player_id) === pid)) {
-        counts[awardType] += 1;
-      }
+    if (r.my_avg != null && r.max_avg != null && Number(r.my_avg) === Number(r.max_avg)) {
+      computedWins[AWARD_TOP_PERFORMER].add(mid);
+    }
+    if (r.my_def_avg != null && r.max_def_avg != null && Number(r.my_def_avg) === Number(r.max_def_avg)) {
+      computedWins[AWARD_TOP_DEFENDER].add(mid);
+    }
+  }
+
+  // Overrides replace the computed winners for their (match, award) scope.
+  const overridePidWins = new Map<string, boolean>();
+  for (const r of overrideRows) {
+    let ids: number[] = [];
+    try {
+      const parsed = JSON.parse(String(r.winner_player_ids));
+      if (Array.isArray(parsed)) ids = parsed.map((x) => Number(x));
+    } catch {
+      ids = [];
+    }
+    overridePidWins.set(`${r.award_type}|${Number(r.match_id)}`, ids.includes(pid));
+  }
+
+  for (const awardType of AWARD_TYPES) {
+    const winSet = computedWins[awardType];
+    for (const mid of matchIds) {
+      const key = `${awardType}|${mid}`;
+      const win = overridePidWins.has(key) ? overridePidWins.get(key)! : winSet.has(mid);
+      if (win) counts[awardType] += 1;
     }
   }
 
