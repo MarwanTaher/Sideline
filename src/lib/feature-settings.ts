@@ -11,6 +11,7 @@ import { sqlClient } from "./db";
 const AUTO_APPROVE_TRUSTED_KEY = "stats_auto_approve_trusted";
 const TRUSTED_PLAYER_IDS_KEY = "stats_trusted_player_ids";
 const WAITLIST_AUTO_PROMOTE_KEY = "waitlist_auto_promote";
+const AVAILABILITY_VOTE_GATE_KEY = "availability_vote_gate";
 
 async function getSetting(key: string): Promise<string | null> {
   const rows = (await sqlClient.query(
@@ -67,4 +68,16 @@ export async function isWaitlistAutoPromoteEnabled(): Promise<boolean> {
 
 export async function setWaitlistAutoPromote(enabled: boolean): Promise<void> {
   await setSetting(WAITLIST_AUTO_PROMOTE_KEY, enabled ? "1" : "0");
+}
+
+// ── Availability vote-gate ─────────────────────────────────────────────────
+// When on, a player who was in their last game but hasn't rated anyone yet is
+// blocked from marking IN for a new match until they vote. Default OFF.
+
+export async function isVoteGateEnabled(): Promise<boolean> {
+  return (await getSetting(AVAILABILITY_VOTE_GATE_KEY)) === "1";
+}
+
+export async function setVoteGate(enabled: boolean): Promise<void> {
+  await setSetting(AVAILABILITY_VOTE_GATE_KEY, enabled ? "1" : "0");
 }

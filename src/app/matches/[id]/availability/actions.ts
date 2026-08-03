@@ -18,6 +18,8 @@ import { deleteGuestsForHost, countGuests } from "@/lib/guests";
 import {
   isWaitlistAutoPromoteEnabled,
   setWaitlistAutoPromote,
+  isVoteGateEnabled,
+  setVoteGate,
 } from "@/lib/feature-settings";
 import { getPendingVoteObligation } from "@/lib/voting";
 import { notify } from "@/lib/push";
@@ -128,10 +130,11 @@ export async function setAvailabilityAction(
       return { ok: false, message: "Availability is closed for this match." };
     }
 
-    // Voting nudge: a player who was in their last game but hasn't rated anyone
-    // yet must vote before they can claim a spot in a new match. Any cast vote
-    // clears the block. Only gates marking IN — going OUT is always allowed.
-    if (status === "in") {
+    // Voting nudge (admin-toggled): a player who was in their last game but
+    // hasn't rated anyone yet must vote before they can claim a spot in a new
+    // match. Any cast vote clears the block. Only gates marking IN — going OUT
+    // is always allowed.
+    if (status === "in" && (await isVoteGateEnabled())) {
       const obligation = await getPendingVoteObligation(playerId, matchId);
       if (obligation) {
         return {
@@ -300,6 +303,31 @@ export async function setWaitlistAutoPromoteAction(
       message: enabled
         ? "Waitlist auto-promotion on."
         : "Waitlist auto-promotion off.",
+    };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
+/**
+ * Admin: turn the availability vote-gate on/off (global). When on, players who
+ * were in their last game but haven't voted are blocked from marking IN for a
+ * new match until they rate; casting any vote clears the block.
+ */
+export async function setVoteGateAction(
+  _prev: AvailabilityActionState,
+  formData: FormData,
+): Promise<AvailabilityActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const enabled = String(formData.get("enabled")) === "true";
+
+    await setVoteGate(enabled);
+    revalidateAvailability(matchId);
+    return {
+      ok: true,
+      message: enabled ? "Vote-gate on." : "Vote-gate off.",
     };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };

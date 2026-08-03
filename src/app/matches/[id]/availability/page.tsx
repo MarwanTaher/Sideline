@@ -12,13 +12,14 @@ import {
   type MatchdayStatus,
   type PlayerAvailability,
 } from "@/lib/availability";
-import { isWaitlistAutoPromoteEnabled } from "@/lib/feature-settings";
+import { isWaitlistAutoPromoteEnabled, isVoteGateEnabled } from "@/lib/feature-settings";
 import { AvailabilityControls } from "./availability-controls";
 import {
   AvailabilityOpenToggle,
   MaxPlayersForm,
   AdminPlayerControls,
   WaitlistToggle,
+  VoteGateToggle,
 } from "./availability-admin";
 import { AddGuestForm, GuestList, AdminAddGuestForm } from "./guest-controls";
 import { listGuests, MAX_GUESTS_PER_HOST, type Guest } from "@/lib/guests";
@@ -122,9 +123,13 @@ export default async function AvailabilityPage({
   const pendingGuests = guests.filter((g) => g.status === "pending");
   const myGuests = myPlayerId == null ? [] : guests.filter((g) => g.hostPlayerId === myPlayerId);
 
-  const [waitlistEnabled, waitlistPlayers] = isAdmin
-    ? await Promise.all([isWaitlistAutoPromoteEnabled(), getWaitlistPlayers(matchId)])
-    : [false, []];
+  const [waitlistEnabled, waitlistPlayers, voteGateEnabled] = isAdmin
+    ? await Promise.all([
+        isWaitlistAutoPromoteEnabled(),
+        getWaitlistPlayers(matchId),
+        isVoteGateEnabled(),
+      ])
+    : [false, [], false];
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
@@ -204,6 +209,10 @@ export default async function AvailabilityPage({
                 enabled={waitlistEnabled}
                 waitlist={waitlistPlayers}
               />
+            </div>
+            <div className="border-t border-black/5 pt-4 dark:border-white/5">
+              <h3 className="mb-2 text-sm font-medium">Vote-gate</h3>
+              <VoteGateToggle matchId={matchId} enabled={voteGateEnabled} />
             </div>
             <div className="border-t border-black/5 pt-4 dark:border-white/5">
               <h3 className="mb-2 text-sm font-medium">Set player availability</h3>

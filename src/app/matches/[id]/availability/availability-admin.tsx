@@ -7,6 +7,7 @@ import {
   setAvailabilityOpenAction,
   setMaxPlayersAction,
   setWaitlistAutoPromoteAction,
+  setVoteGateAction,
   type AvailabilityActionState,
 } from "./actions";
 import type { PlayerAvailability } from "@/lib/availability";
@@ -168,6 +169,57 @@ export function WaitlistToggle({
       ) : (
         <p className="mt-2 text-xs text-neutral-400">Waitlist is empty.</p>
       )}
+      <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+    </div>
+  );
+}
+
+/** Availability vote-gate: block IN until a player rates their last game. */
+export function VoteGateToggle({
+  matchId,
+  enabled,
+}: {
+  matchId: number;
+  enabled: boolean;
+}) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(setVoteGateAction, INITIAL);
+
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-neutral-500">
+          Vote-gate is{" "}
+          <span
+            className={
+              enabled
+                ? "font-semibold text-emerald-600 dark:text-emerald-400"
+                : "font-semibold text-neutral-500"
+            }
+          >
+            {enabled ? "on" : "off"}
+          </span>
+          . When on, a player who was in their last game but hasn&apos;t rated
+          anyone yet can&apos;t mark themselves IN for a new match until they
+          vote. Casting any vote clears the block; going OUT is always allowed.
+        </p>
+        <form action={formAction}>
+          <input type="hidden" name="matchId" value={matchId} />
+          <input type="hidden" name="enabled" value={enabled ? "false" : "true"} />
+          <Button
+            type="submit"
+            variant={enabled ? "secondary" : "success"}
+            pending={pending}
+            pendingLabel="Saving…"
+          >
+            {enabled ? "Turn off" : "Turn on"}
+          </Button>
+        </form>
+      </div>
       <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
     </div>
   );
