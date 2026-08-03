@@ -7,6 +7,7 @@ import {
   getPlayerStatsState,
   submitPlayerStats,
   approveStatsSubmission,
+  setPlayerMatchStats,
 } from "@/lib/stats";
 import {
   isAutoApproveTrustedEnabled,
@@ -101,3 +102,48 @@ export async function submitStatsAction(
     return { ok: false, message: err instanceof Error ? err.message : "Something went wrong." };
   }
 }
+
+const playerIdSchema = z.coerce.number().int().positive();
+
+/**
+ * Admin direct edit of a single roster player's goals/assists for a match.
+ * Bypasses the player submission flow and writes straight to the canonical
+ * stats (via setPlayerMatchStats), then refreshes scores/leaderboard.
+ */
+export async function adminSetStatAction(
+  _prev: StatsSubmitState,
+  formData: FormData,
+): Promise<StatsSubmitState> {
+  try {
+    const session = await auth();
+    const role = session?.user?.role;
+    if (!session?.user || (role !== "admin" && role !== "super")) {
+      return { ok: false, message: "Admins only." };
+    }
+
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const playerId = playerIdSchema.parse(formData.get("playerId"));
+    const goals = countSchema.parse(formData.get("goals"));
+    const assists = countSchema.parse(formData.get("assists"));
+
+    await setPlayerMatchStats(
+      matchId,
+      playerId,
+      goals,
+      assists,
+      session.user.name ?? `admin:${session.user.id ?? "?"}`,
+    );
+
+    revalidateScores();
+    revalidatePath(`/matches/${matchId}/stats`);
+    revalidatePath(`/matches/${matchId}`);
+    revalidatePath("/leaderboard");
+    return { ok: true, message: "Saved." };
+  } catch (err) {
+    if (err instanceof z.ZodError) {
+      return { ok: false, message: err.issues.map((i) => i.message).join(" ") };
+    }
+    return { ok: false, message: err instanceof Error ? err.message : "Something went wrong." };
+  }
+}
+

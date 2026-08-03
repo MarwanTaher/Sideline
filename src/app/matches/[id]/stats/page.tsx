@@ -3,8 +3,9 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchDetail, fmtDate, fmtMatchTime, isPlayerInMatch } from "@/lib/matches";
-import { getPlayerStatsState } from "@/lib/stats";
+import { getPlayerStatsState, getMatchRosterStats } from "@/lib/stats";
 import { StatsForm } from "./stats-form";
+import { AdminStatsEditor } from "./admin-stats-editor";
 import { MatchNav } from "../match-nav";
 
 export const metadata = {
@@ -40,6 +41,8 @@ export default async function MatchStatsPage({
     redirect("/matches");
   }
 
+  const rosterStats = isAdmin ? await getMatchRosterStats(matchId) : [];
+
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10">
       <Link
@@ -55,6 +58,12 @@ export default async function MatchStatsPage({
       <p className="mt-1 text-sm text-neutral-500">
         {fmtDate(match.playedOn)} at {fmtMatchTime(match.matchTime)} · matchday {match.matchdayStatus}
       </p>
+
+      {isAdmin ? (
+        <div className="mt-6">
+          <AdminStatsEditor matchId={matchId} players={rosterStats} />
+        </div>
+      ) : null}
 
       <div className="mt-6">
         {match.matchdayStatus === "draft" ? (

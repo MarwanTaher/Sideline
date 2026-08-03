@@ -264,13 +264,14 @@ export async function setMatchdayStatus(
   }
 
   if (status === "active") {
-    // Notify subscribers that the match is live. Never let a push failure
-    // block the status change.
+    // Notify subscribers that it's matchday — the game is on today. This is not
+    // an availability call (that went out when the match was created / opened);
+    // by now teams are drafted, so point people at the match itself.
     try {
       await notify("match_activated", {
-        title: "Match is live \u26bd",
-        body: `Match ${matchId} is now active \u2014 set your availability and get ready.`,
-        url: `/matches/${matchId}/availability`,
+        title: "It's matchday \u26bd",
+        body: `Match ${matchId} is live today \u2014 check your team and see you on the pitch.`,
+        url: `/matches/${matchId}`,
         tag: `match-${matchId}-active`,
       });
     } catch {

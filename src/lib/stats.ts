@@ -34,6 +34,14 @@ export interface ApprovedStat {
   assists: number;
 }
 
+export interface RosterStat {
+  playerId: number;
+  name: string;
+  teamNo: number;
+  goals: number;
+  assists: number;
+}
+
 export interface StatsReviewCounts {
   pending: number;
   approved: number;
@@ -240,11 +248,103 @@ export async function getStatsSubmissionStatus(
 // ── Writes ───────────────────────────────────────────────────────────────
 
 /**
- * Player self-submission of goals/assists for a match. Upserts a pending
- * submission and a pending goal claim. If a prior submission was already
- * approved, its approved `stats` row is removed so it no longer counts until
- * re-approved (mirrors the Streamlit re-submit behaviour).
+ * Every rostered player for a match with their current approved goals/assists
+ * (0 when no `stats` row exists yet). Ordered by team then name — the admin
+ * score-editing grid on the match stats page.
  */
+export async function getMatchRosterStats(matchId: number): Promise<RosterStat[]> {
+  const raw = await sqlClient.query(
+    `SELECT mp.player_id, p.name, mp.team_no,
+            COALESCE(s.goals, 0) AS goals,
+            COALESCE(s.assists, 0) AS assists
+       FROM match_players mp
+       JOIN players p ON p.id = mp.player_id
+       LEFT JOIN stats s ON s.match_id = mp.match_id AND s.player_id = mp.player_id
+      WHERE mp.match_id = $1
+      ORDER BY mp.team_no, p.name`,
+    [matchId],
+  );
+  const rows = raw as Array<{
+    player_id: number;
+    name: string;
+    team_no: number;
+    goals: number;
+    assists: number;
+  }>;
+  return rows.map((r) => ({
+    playerId: Number(r.player_id),
+    name: r.name,
+    teamNo: Number(r.team_no),
+    goals: Number(r.goals),
+    assists: Number(r.assists),
+  }));
+}
+
+/**
+ * Admin direct edit of a player's goals/assists for a match. Writes the
+ * canonical `stats` row, keeps the submission/goal-claim mirror in sync (marked
+ * approved by the admin so the player view matches), enables stats scoring for
+ * the match, and logs a `stats_audit` entry. Bypasses the player submission /
+ * review flow entirely.
+ */
+export async function setPlayerMatchStats(
+  matchId: number,
+  playerId: number,
+  goals: number,
+  assists: number,
+  actor: string,
+): Promise<void> {
+  const priorRaw = await sqlClient.query(
+    `SELECT goals, assists FROM stats WHERE match_id = $1 AND player_id = $2`,
+    [matchId, playerId],
+  );
+  const priorRows = priorRaw as { goals: number; assists: number }[];
+  const oldGoals = priorRows.length > 0 ? Number(priorRows[0].goals) : null;
+  const oldAssists = priorRows.length > 0 ? Number(priorRows[0].assists) : null;
+
+  await sqlClient.query(
+    `INSERT INTO stats(match_id, player_id, goals, assists)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT(match_id, player_id) DO UPDATE SET
+       goals = EXCLUDED.goals,
+       assists = EXCLUDED.assists`,
+    [matchId, playerId, goals, assists],
+  );
+
+  await sqlClient.query(
+    `INSERT INTO player_stats_submissions(match_id, player_id, goals, assists, status, reviewed_by, reviewed_at, created_at)
+     VALUES ($1, $2, $3, $4, 'approved', $5, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+     ON CONFLICT(match_id, player_id) DO UPDATE SET
+       goals = EXCLUDED.goals,
+       assists = EXCLUDED.assists,
+       status = 'approved',
+       reviewed_by = EXCLUDED.reviewed_by,
+       reviewed_at = CURRENT_TIMESTAMP`,
+    [matchId, playerId, goals, assists, actor],
+  );
+
+  await sqlClient.query(
+    `INSERT INTO player_goals_claims(match_id, player_id, goals_claimed, status, reviewed_by, reviewed_at, created_at)
+     VALUES ($1, $2, $3, 'approved', $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+     ON CONFLICT(match_id, player_id) DO UPDATE SET
+       goals_claimed = EXCLUDED.goals_claimed,
+       status = 'approved',
+       reviewed_by = EXCLUDED.reviewed_by,
+       reviewed_at = CURRENT_TIMESTAMP`,
+    [matchId, playerId, goals, actor],
+  );
+
+  await sqlClient.query(
+    `INSERT INTO stats_audit(match_id, player_id, action, actor,
+                             old_goals, new_goals, old_assists, new_assists, note)
+     VALUES ($1, $2, 'admin_edit', $3, $4, $5, $6, $7, $8)`,
+    [matchId, playerId, actor, oldGoals, goals, oldAssists, assists, "Admin direct edit"],
+  );
+
+  await sqlClient.query(`UPDATE matches SET stats_scoring_enabled = 1 WHERE id = $1`, [matchId]);
+}
+
+
 export async function submitPlayerStats(
   matchId: number,
   playerId: number,
