@@ -47,12 +47,9 @@ export default async function MatchdayPage({
   if (!consoleData) notFound();
 
   let scorekeepers: Scorekeeper[] = [];
-  let assignablePlayers: Scorekeeper[] = [];
+  const assignablePlayers: Scorekeeper[] = await listAssignablePlayers();
   if (isAdmin) {
-    [scorekeepers, assignablePlayers] = await Promise.all([
-      listScorekeepers(matchId),
-      listAssignablePlayers(),
-    ]);
+    scorekeepers = await listScorekeepers(matchId);
   }
 
   return (

@@ -19,6 +19,7 @@ import {
   isWaitlistAutoPromoteEnabled,
   setWaitlistAutoPromote,
 } from "@/lib/feature-settings";
+import { getPendingVoteObligation } from "@/lib/voting";
 import { notify } from "@/lib/push";
 
 export interface AvailabilityActionState {
@@ -125,6 +126,21 @@ export async function setAvailabilityAction(
     }
     if (!match.availabilityOpen) {
       return { ok: false, message: "Availability is closed for this match." };
+    }
+
+    // Voting nudge: a player who was in their last game but hasn't rated anyone
+    // yet must vote before they can claim a spot in a new match. Any cast vote
+    // clears the block. Only gates marking IN — going OUT is always allowed.
+    if (status === "in") {
+      const obligation = await getPendingVoteObligation(playerId, matchId);
+      if (obligation) {
+        return {
+          ok: false,
+          message:
+            `Rate your last game first. Open the Vote tab for match #${obligation.matchId}, ` +
+            `submit your ratings, then you can mark yourself IN here.`,
+        };
+      }
     }
 
     // Enforce the per-match cap when a player marks themselves IN. The cap

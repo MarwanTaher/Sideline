@@ -413,6 +413,74 @@ export async function deleteGoal(goalId: number): Promise<void> {
   await sqlClient.query(`DELETE FROM round_goals WHERE id = $1`, [goalId]);
 }
 
+// ── Fluid rosters ────────────────────────────────────────────────────────────
+//
+// Teams aren't fixed: subs turn up and players swap sides mid-day. To keep the
+// live log honest, a scorekeeper can drop any active player onto a team from the
+// console so goals/assists can be credited to them — and, once synced, they feed
+// the season stats like anyone else.
+
+export interface AddedPlayer {
+  playerId: number;
+  name: string;
+  position: string;
+  photoUrl: string | null;
+}
+
+/** Coerce a free-text preferred position onto the match_players CHECK values. */
+function normalizePosition(value: string | null): "GK" | "DEF" | "MID" | "FWD" {
+  const s = String(value ?? "").trim().toUpperCase();
+  if (s.startsWith("G")) return "GK";
+  if (s.startsWith("D")) return "DEF";
+  if (s.startsWith("F") || s.startsWith("A") || s.startsWith("S")) return "FWD";
+  return "MID";
+}
+
+/**
+ * Add an active player to a match roster on the given team, live from the
+ * console (a substitute who turned up, or a player switching sides). Idempotent
+ * on (match, player): an existing roster entry just has its team updated.
+ * Returns the roster entry so the console can drop them straight into the picker.
+ */
+export async function addMatchPlayer(
+  matchId: number,
+  playerId: number,
+  teamNo: number,
+): Promise<AddedPlayer> {
+  await requireMatchOpen(matchId);
+
+  const rows = (await sqlClient.query(
+    `SELECT id, name, preferred_position, photo_url, active
+       FROM players WHERE id = $1`,
+    [playerId],
+  )) as unknown as {
+    id: number;
+    name: string;
+    preferred_position: string | null;
+    photo_url: string | null;
+    active: number;
+  }[];
+  const p = rows[0];
+  if (!p) throw new MatchdayError("Player not found.");
+  if (Number(p.active) !== 1) throw new MatchdayError("That player is not active.");
+
+  const position = normalizePosition(p.preferred_position);
+  await sqlClient.query(
+    `INSERT INTO match_players(match_id, player_id, team_no, position_played)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (match_id, player_id)
+     DO UPDATE SET team_no = EXCLUDED.team_no`,
+    [matchId, playerId, teamNo, position],
+  );
+
+  return {
+    playerId: Number(p.id),
+    name: p.name,
+    position,
+    photoUrl: p.photo_url ?? null,
+  };
+}
+
 /**
  * Roll the live goal/assist log up into the season `stats` table so it feeds the
  * existing scoring, leaderboards and awards. Only roster players are written

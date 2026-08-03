@@ -15,6 +15,8 @@ import {
   addScorekeeper,
   removeScorekeeper,
   canRunMatchday,
+  addMatchPlayer,
+  type AddedPlayer,
   MatchdayError,
 } from "@/lib/matchday";
 
@@ -27,6 +29,9 @@ export interface CreateRoundResult extends ActionResult {
 }
 export interface AddGoalResult extends ActionResult {
   goalId?: number;
+}
+export interface AddSubstituteResult extends ActionResult {
+  player?: AddedPlayer;
 }
 
 const idSchema = z.coerce.number().int().positive();
@@ -191,6 +196,22 @@ export async function deleteGoalAction(matchId: number, goalId: number): Promise
     await deleteGoal(idSchema.parse(goalId));
     revalidate(mid);
     return { ok: true, message: "" };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function addSubstituteAction(
+  matchId: number,
+  playerId: number,
+  teamNo: number,
+): Promise<AddSubstituteResult> {
+  try {
+    const mid = idSchema.parse(matchId);
+    await requireCanScore(mid);
+    const player = await addMatchPlayer(mid, idSchema.parse(playerId), teamSchema.parse(teamNo));
+    revalidate(mid);
+    return { ok: true, message: "", player };
   } catch (err) {
     return fail(err);
   }

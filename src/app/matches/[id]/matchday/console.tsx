@@ -9,7 +9,7 @@ import {
   useTransition,
 } from "react";
 import { Button } from "@/components/ui/button";
-import type { MatchTeamPlayer } from "@/lib/matches";
+import type { MatchTeam, MatchTeamPlayer } from "@/lib/matches";
 import type {
   MatchdayConsole as ConsoleData,
   MatchRound,
@@ -29,6 +29,7 @@ import {
   syncStatsAction,
   addScorekeeperAction,
   removeScorekeeperAction,
+  addSubstituteAction,
 } from "./actions";
 
 // ── Team themes (graphics) ──────────────────────────────────────────────────
@@ -284,9 +285,11 @@ export function MatchdayConsole({
   scorekeepers: Scorekeeper[];
   assignablePlayers: Scorekeeper[];
 }) {
-  const { teams, teamNames } = initial;
-  const teamNumbers = teams.map((t) => t.teamNo);
+  const { teamNames } = initial;
+  const teamNumbers = initial.teams.map((t) => t.teamNo);
 
+  // Rosters are fluid: subs can be dropped onto a team live, so teams are state.
+  const [teams, setTeams] = useState<MatchTeam[]>(initial.teams);
   const [rounds, setRounds] = useState<MatchRound[]>(initial.rounds);
   const [error, setError] = useState("");
   const [watch, setWatch] = useState(false);
@@ -298,6 +301,13 @@ export function MatchdayConsole({
     for (const t of teams) map.set(t.teamNo, t.players);
     return map;
   }, [teams]);
+
+  // Active players not already on any team of this match — candidates to add.
+  const assignable = useMemo(() => {
+    const onRoster = new Set<number>();
+    for (const t of teams) for (const p of t.players) if (p.playerId > 0) onRoster.add(p.playerId);
+    return assignablePlayers.filter((p) => !onRoster.has(p.playerId));
+  }, [teams, assignablePlayers]);
 
   const photoIndex = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -547,6 +557,44 @@ export function MatchdayConsole({
     [matchId, run],
   );
 
+  // Drop a sub onto a team live and hand the new roster entry back so the picker
+  // can select them immediately. Optimistic: rolled back if the server rejects.
+  const handleAddSubstitute = useCallback(
+    (teamNo: number, player: Scorekeeper): MatchTeamPlayer => {
+      const added: MatchTeamPlayer = {
+        playerId: player.playerId,
+        name: player.name,
+        position: "MID",
+        photoUrl: player.photoUrl ?? null,
+      };
+      setTeams((prev) =>
+        prev.map((t) =>
+          t.teamNo === teamNo
+            ? {
+                ...t,
+                players: t.players.some((p) => p.playerId === added.playerId)
+                  ? t.players
+                  : [...t.players, added],
+              }
+            : t,
+        ),
+      );
+      run(
+        () => addSubstituteAction(matchId, player.playerId, teamNo),
+        () =>
+          setTeams((prev) =>
+            prev.map((t) =>
+              t.teamNo === teamNo
+                ? { ...t, players: t.players.filter((p) => p.playerId !== added.playerId) }
+                : t,
+            ),
+          ),
+      );
+      return added;
+    },
+    [matchId, run],
+  );
+
   const tally = useMemo(() => deriveTally(rounds), [rounds]);
   const orderedRounds = [...rounds].reverse();
 
@@ -555,6 +603,8 @@ export function MatchdayConsole({
     teamNames,
     rosterA: rosterByTeam.get(round.teamA) ?? [],
     rosterB: rosterByTeam.get(round.teamB) ?? [],
+    assignable,
+    onAddPlayer: handleAddSubstitute,
     nowFn,
     photoOf,
     onTimer: handleTimer,
@@ -759,6 +809,8 @@ interface RoundCardProps {
   teamNames: Record<number, string>;
   rosterA: MatchTeamPlayer[];
   rosterB: MatchTeamPlayer[];
+  assignable: Scorekeeper[];
+  onAddPlayer: (teamNo: number, player: Scorekeeper) => MatchTeamPlayer;
   nowFn: () => number;
   photoOf: (ref: PersonRef | null) => string | null;
   onTimer: (roundId: number, a: "start" | "pause" | "reset") => void;
@@ -781,6 +833,8 @@ function RoundCard({
   teamNames,
   rosterA,
   rosterB,
+  assignable,
+  onAddPlayer,
   nowFn,
   photoOf,
   onTimer,
@@ -896,6 +950,9 @@ function RoundCard({
             teamName={teamLabel(picker, teamNames)}
             theme={themeFor(picker)}
             roster={picker === round.teamA ? rosterA : rosterB}
+            teamNo={picker}
+            assignable={assignable}
+            onAddPlayer={onAddPlayer}
             submitLabel="⚽ Log goal"
             allowOwnGoal
             onOwnGoal={() => {
@@ -915,6 +972,9 @@ function RoundCard({
             teamName={`Edit goal · ${teamLabel(editingGoal.teamNo, teamNames)}`}
             theme={themeFor(editingGoal.teamNo)}
             roster={editingGoal.teamNo === round.teamA ? rosterA : rosterB}
+            teamNo={editingGoal.teamNo}
+            assignable={assignable}
+            onAddPlayer={onAddPlayer}
             submitLabel="Save changes"
             initialScorerKey={keyOfRef(editingGoal.scorer)}
             initialAssistKey={editingGoal.assist ? keyOfRef(editingGoal.assist) : undefined}
@@ -1010,6 +1070,9 @@ function GoalPicker({
   teamName,
   theme,
   roster,
+  teamNo,
+  assignable = [],
+  onAddPlayer,
   submitLabel,
   allowOwnGoal = false,
   initialScorerKey,
@@ -1021,6 +1084,9 @@ function GoalPicker({
   teamName: string;
   theme: Theme;
   roster: MatchTeamPlayer[];
+  teamNo: number;
+  assignable?: Scorekeeper[];
+  onAddPlayer?: (teamNo: number, player: Scorekeeper) => MatchTeamPlayer;
   submitLabel: string;
   allowOwnGoal?: boolean;
   initialScorerKey?: string;
@@ -1029,25 +1095,104 @@ function GoalPicker({
   onCancel: () => void;
   onConfirm: (scorer: MatchTeamPlayer, assist: MatchTeamPlayer | null) => void;
 }) {
-  const findByKey = useCallback(
-    (key?: string) => (key ? roster.find((p) => personValue(p) === key) ?? null : null),
-    [roster],
-  );
-  const [scorer, setScorer] = useState<MatchTeamPlayer | null>(() => findByKey(initialScorerKey));
-  const [assist, setAssist] = useState<MatchTeamPlayer | null>(() => findByKey(initialAssistKey));
+  // Track selections by key, not object identity, so they survive roster changes
+  // (e.g. a sub being added mid-pick) and can be pre-selected on add.
+  const [scorerKey, setScorerKey] = useState<string | null>(initialScorerKey ?? null);
+  const [assistKey, setAssistKey] = useState<string | null>(initialAssistKey ?? null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const scorer = scorerKey ? roster.find((p) => personValue(p) === scorerKey) ?? null : null;
+  const assist = assistKey ? roster.find((p) => personValue(p) === assistKey) ?? null : null;
+
+  const canAdd = typeof onAddPlayer === "function" && assignable.length > 0;
+  const filteredAssignable = query.trim()
+    ? assignable.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : assignable;
+
+  const addPlayer = (p: Scorekeeper) => {
+    const added = onAddPlayer!(teamNo, p);
+    setScorerKey(personValue(added));
+    setShowAdd(false);
+    setQuery("");
+  };
+
+  const addControl = canAdd ? (
+    <div className="mt-4">
+      {showAdd ? (
+        <div className="rounded-xl border border-black/10 p-2 dark:border-white/10">
+          <input
+            autoFocus
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search players…"
+            className="mb-2 w-full rounded-lg border border-black/10 bg-white/70 px-3 py-2 text-sm outline-none dark:border-white/15 dark:bg-white/5"
+          />
+          <div className="max-h-44 space-y-1 overflow-y-auto">
+            {filteredAssignable.length === 0 ? (
+              <p className="px-2 py-1 text-sm text-neutral-500">No matching players.</p>
+            ) : (
+              filteredAssignable.map((p) => (
+                <button
+                  key={p.playerId}
+                  type="button"
+                  onClick={() => addPlayer(p)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition hover:bg-black/5 dark:hover:bg-white/10"
+                >
+                  <span aria-hidden="true">＋</span>
+                  <span className="font-medium">{p.name}</span>
+                </button>
+              ))
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setShowAdd(false);
+              setQuery("");
+            }}
+            className="mt-1 px-2 py-1 text-xs text-neutral-500 underline"
+          >
+            Close
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setShowAdd(true)}
+          className="rounded-lg border border-dashed border-black/20 px-3 py-2 text-sm font-medium transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
+        >
+          ＋ Add a player to {teamName}
+        </button>
+      )}
+    </div>
+  ) : null;
 
   if (roster.length === 0) {
     return (
-      <div className="mt-3 rounded-xl border border-dashed border-black/15 p-4 text-sm text-neutral-500 dark:border-white/15">
-        {teamName} has no drafted players yet.
-        {allowOwnGoal && onOwnGoal ? (
-          <button onClick={onOwnGoal} className="ml-2 font-semibold underline">
-            Log own goal
+      <div className={`mt-3 rounded-2xl p-4 ${theme.soft}`}>
+        <p className="text-sm text-neutral-600 dark:text-neutral-300">
+          {teamName} has no players yet.
+        </p>
+        {addControl}
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          {allowOwnGoal && onOwnGoal ? (
+            <button
+              type="button"
+              onClick={onOwnGoal}
+              className="rounded-2xl border border-black/15 px-4 py-3 text-base font-medium transition hover:bg-black/5 dark:border-white/20 dark:hover:bg-white/10"
+            >
+              Own goal
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-2xl px-4 py-3 text-base font-medium text-neutral-600 transition hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/10"
+          >
+            Cancel
           </button>
-        ) : null}
-        <button onClick={onCancel} className="ml-2 underline">
-          Close
-        </button>
+        </div>
       </div>
     );
   }
@@ -1056,34 +1201,42 @@ function GoalPicker({
     <div className={`mt-3 rounded-2xl p-4 ${theme.soft}`}>
       <p className="text-sm font-bold">{teamName} — who scored?</p>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {roster.map((p) => (
-          <PlayerChip
-            key={personValue(p)}
-            player={p}
-            theme={theme}
-            selected={scorer === p}
-            onClick={() => {
-              setScorer(scorer === p ? null : p);
-              if (assist === p) setAssist(null);
-            }}
-          />
-        ))}
+        {roster.map((p) => {
+          const key = personValue(p);
+          return (
+            <PlayerChip
+              key={key}
+              player={p}
+              theme={theme}
+              selected={scorerKey === key}
+              onClick={() => {
+                setScorerKey(scorerKey === key ? null : key);
+                if (assistKey === key) setAssistKey(null);
+              }}
+            />
+          );
+        })}
       </div>
 
       <p className="mt-4 text-sm font-bold">Assist? (optional)</p>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {roster.map((p) => (
-          <PlayerChip
-            key={personValue(p)}
-            player={p}
-            theme={theme}
-            selected={assist === p}
-            disabled={scorer === p}
-            variant="assist"
-            onClick={() => setAssist(assist === p ? null : p)}
-          />
-        ))}
+        {roster.map((p) => {
+          const key = personValue(p);
+          return (
+            <PlayerChip
+              key={key}
+              player={p}
+              theme={theme}
+              selected={assistKey === key}
+              disabled={scorerKey === key}
+              variant="assist"
+              onClick={() => setAssistKey(assistKey === key ? null : key)}
+            />
+          );
+        })}
       </div>
+
+      {addControl}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button

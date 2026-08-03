@@ -125,6 +125,56 @@ export interface RatingInput {
 }
 
 /**
+ * A ballot where every rated player gets the exact same rating (the classic
+ * "5 to everyone" that just skips through the form) carries no signal and would
+ * only flatten the averages. Once at least this many players are rated with a
+ * single identical value, the whole ballot is still saved but kept OUT of the
+ * calculation (scope `out_of_scope`, include = 0) — no error is shown, the vote
+ * simply doesn't count. Fixing any one rating so the ballot varies makes it
+ * count again on the next submit.
+ */
+const UNIFORM_BALLOT_MIN_RATED = 10;
+
+function isUniformBallot(ratings: RatingInput[]): boolean {
+  if (ratings.length < UNIFORM_BALLOT_MIN_RATED) return false;
+  const first = ratings[0].rating;
+  return ratings.every((r) => r.rating === first);
+}
+
+export interface VoteObligation {
+  matchId: number;
+  playedOn: string;
+}
+
+/**
+ * The most recent match a player was rostered in whose voting is still open
+ * (matchday `active`) and for which they have cast no votes. Returns null when
+ * they have no outstanding voting obligation. Used to nudge players to rate the
+ * players from their last game before they can mark themselves available for a
+ * new one — casting any vote clears the block.
+ */
+export async function getPendingVoteObligation(
+  playerId: number,
+  excludeMatchId?: number,
+): Promise<VoteObligation | null> {
+  const rows = (await sqlClient.query(
+    `SELECT m.id, m.played_on
+       FROM matches m
+       JOIN match_players mp ON mp.match_id = m.id AND mp.player_id = $1
+      WHERE m.matchday_status = 'active'
+        AND m.id <> $2
+        AND NOT EXISTS (
+          SELECT 1 FROM votes v WHERE v.match_id = m.id AND v.voter_id = $1
+        )
+      ORDER BY m.played_on DESC, m.id DESC
+      LIMIT 1`,
+    [playerId, excludeMatchId ?? -1],
+  )) as Array<{ id: number; played_on: string | null }>;
+  if (rows.length === 0) return null;
+  return { matchId: Number(rows[0].id), playedOn: rows[0].played_on ?? "" };
+}
+
+/**
  * Persist a player's ballot. Direct port of `submit_player_votes_only` plus the
  * skip bookkeeping from the Streamlit voting form.
  *
@@ -151,18 +201,23 @@ export async function submitPlayerVotes(
     );
   }
 
+  // A ballot of identical ratings is saved but excluded from the calculation.
+  const uniform = isUniformBallot(ratings);
+  const includeFlag = uniform ? 0 : 1;
+  const scope = uniform ? "out_of_scope" : "in_scope";
+
   for (const { playerId, rating } of ratings) {
     await sqlClient.query(
       `INSERT INTO votes
          (match_id, voter_id, voted_for_id, rating, include_in_calculation, scope_status, updated_at)
-       VALUES ($1, $2, $3, $4, 1, 'in_scope', CURRENT_TIMESTAMP)
+       VALUES ($1, $2, $3, $4, $5, $6, CURRENT_TIMESTAMP)
        ON CONFLICT (match_id, voter_id, voted_for_id)
        DO UPDATE SET
          rating = EXCLUDED.rating,
-         include_in_calculation = 1,
-         scope_status = 'in_scope',
+         include_in_calculation = EXCLUDED.include_in_calculation,
+         scope_status = EXCLUDED.scope_status,
          updated_at = CURRENT_TIMESTAMP`,
-      [matchId, voterId, playerId, rating],
+      [matchId, voterId, playerId, rating, includeFlag, scope],
     );
   }
 
