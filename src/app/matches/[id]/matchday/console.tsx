@@ -293,6 +293,9 @@ export function MatchdayConsole({
   const [rounds, setRounds] = useState<MatchRound[]>(initial.rounds);
   const [error, setError] = useState("");
   const [watch, setWatch] = useState(false);
+  // Players subbed off this session: hidden from pickers but still on the team
+  // in the DB, so their goals/assists stay counted and they can be brought back.
+  const [benched, setBenched] = useState<Set<number>>(() => new Set());
   const [, startTransition] = useTransition();
   const cues = useCues();
 
@@ -302,12 +305,9 @@ export function MatchdayConsole({
     return map;
   }, [teams]);
 
-  // Active players not already on any team of this match — candidates to add.
-  const assignable = useMemo(() => {
-    const onRoster = new Set<number>();
-    for (const t of teams) for (const p of t.players) if (p.playerId > 0) onRoster.add(p.playerId);
-    return assignablePlayers.filter((p) => !onRoster.has(p.playerId));
-  }, [teams, assignablePlayers]);
+  // Candidates for a team's add/loan picker: all active players. Each picker
+  // hides players already on that team; players on another team show as loans.
+  const assignable = assignablePlayers;
 
   const photoIndex = useMemo(() => {
     const map = new Map<string, string | null>();
@@ -567,6 +567,11 @@ export function MatchdayConsole({
         position: "MID",
         photoUrl: player.photoUrl ?? null,
       };
+      // A player already on another team is a loan: let them score for this
+      // team without moving them in the DB (their own roster stays intact).
+      const isLoan = teams.some(
+        (t) => t.teamNo !== teamNo && t.players.some((p) => p.playerId === player.playerId),
+      );
       setTeams((prev) =>
         prev.map((t) =>
           t.teamNo === teamNo
@@ -579,21 +584,43 @@ export function MatchdayConsole({
             : t,
         ),
       );
-      run(
-        () => addSubstituteAction(matchId, player.playerId, teamNo),
-        () =>
-          setTeams((prev) =>
-            prev.map((t) =>
-              t.teamNo === teamNo
-                ? { ...t, players: t.players.filter((p) => p.playerId !== added.playerId) }
-                : t,
+      // Bringing a player on clears any benched (subbed-off) mark on them.
+      setBenched((prev) => {
+        if (!prev.has(player.playerId)) return prev;
+        const next = new Set(prev);
+        next.delete(player.playerId);
+        return next;
+      });
+      if (!isLoan) {
+        run(
+          () => addSubstituteAction(matchId, player.playerId, teamNo),
+          () =>
+            setTeams((prev) =>
+              prev.map((t) =>
+                t.teamNo === teamNo
+                  ? { ...t, players: t.players.filter((p) => p.playerId !== added.playerId) }
+                  : t,
+              ),
             ),
-          ),
-      );
+        );
+      }
       return added;
     },
-    [matchId, run],
+    [matchId, run, teams],
   );
+
+  const handleSubOut = useCallback((playerId: number) => {
+    setBenched((prev) => new Set(prev).add(playerId));
+  }, []);
+
+  const handleBringBack = useCallback((playerId: number) => {
+    setBenched((prev) => {
+      if (!prev.has(playerId)) return prev;
+      const next = new Set(prev);
+      next.delete(playerId);
+      return next;
+    });
+  }, []);
 
   const tally = useMemo(() => deriveTally(rounds), [rounds]);
   const orderedRounds = [...rounds].reverse();
@@ -605,6 +632,9 @@ export function MatchdayConsole({
     rosterB: rosterByTeam.get(round.teamB) ?? [],
     assignable,
     onAddPlayer: handleAddSubstitute,
+    benched,
+    onSubOut: handleSubOut,
+    onBringBack: handleBringBack,
     nowFn,
     photoOf,
     onTimer: handleTimer,
@@ -811,6 +841,9 @@ interface RoundCardProps {
   rosterB: MatchTeamPlayer[];
   assignable: Scorekeeper[];
   onAddPlayer: (teamNo: number, player: Scorekeeper) => MatchTeamPlayer;
+  benched: Set<number>;
+  onSubOut: (playerId: number) => void;
+  onBringBack: (playerId: number) => void;
   nowFn: () => number;
   photoOf: (ref: PersonRef | null) => string | null;
   onTimer: (roundId: number, a: "start" | "pause" | "reset") => void;
@@ -835,6 +868,9 @@ function RoundCard({
   rosterB,
   assignable,
   onAddPlayer,
+  benched,
+  onSubOut,
+  onBringBack,
   nowFn,
   photoOf,
   onTimer,
@@ -953,6 +989,9 @@ function RoundCard({
             teamNo={picker}
             assignable={assignable}
             onAddPlayer={onAddPlayer}
+            benched={benched}
+            onSubOut={onSubOut}
+            onBringBack={onBringBack}
             submitLabel="⚽ Log goal"
             allowOwnGoal
             onOwnGoal={() => {
@@ -975,6 +1014,9 @@ function RoundCard({
             teamNo={editingGoal.teamNo}
             assignable={assignable}
             onAddPlayer={onAddPlayer}
+            benched={benched}
+            onSubOut={onSubOut}
+            onBringBack={onBringBack}
             submitLabel="Save changes"
             initialScorerKey={keyOfRef(editingGoal.scorer)}
             initialAssistKey={editingGoal.assist ? keyOfRef(editingGoal.assist) : undefined}
@@ -1066,6 +1108,8 @@ function GoalButton({
   );
 }
 
+const EMPTY_BENCH: ReadonlySet<number> = new Set<number>();
+
 function GoalPicker({
   teamName,
   theme,
@@ -1073,6 +1117,9 @@ function GoalPicker({
   teamNo,
   assignable = [],
   onAddPlayer,
+  benched,
+  onSubOut,
+  onBringBack,
   submitLabel,
   allowOwnGoal = false,
   initialScorerKey,
@@ -1087,6 +1134,9 @@ function GoalPicker({
   teamNo: number;
   assignable?: Scorekeeper[];
   onAddPlayer?: (teamNo: number, player: Scorekeeper) => MatchTeamPlayer;
+  benched?: ReadonlySet<number>;
+  onSubOut?: (playerId: number) => void;
+  onBringBack?: (playerId: number) => void;
   submitLabel: string;
   allowOwnGoal?: boolean;
   initialScorerKey?: string;
@@ -1101,26 +1151,96 @@ function GoalPicker({
   const [assistKey, setAssistKey] = useState<string | null>(initialAssistKey ?? null);
   const [showAdd, setShowAdd] = useState(false);
   const [query, setQuery] = useState("");
+  const [replacing, setReplacing] = useState<number | null>(null);
 
   const scorer = scorerKey ? roster.find((p) => personValue(p) === scorerKey) ?? null : null;
   const assist = assistKey ? roster.find((p) => personValue(p) === assistKey) ?? null : null;
 
-  const canAdd = typeof onAddPlayer === "function" && assignable.length > 0;
+  // Subbed-off players are hidden from selection but stay on the team.
+  const benchedIds = benched ?? EMPTY_BENCH;
+  const activeRoster = roster.filter((p) => !benchedIds.has(p.playerId));
+  const benchedRoster = roster.filter((p) => benchedIds.has(p.playerId));
+  const replacingName =
+    replacing != null ? roster.find((p) => p.playerId === replacing)?.name ?? null : null;
+
+  // Hide players already on this team; anyone else (including other teams) can
+  // be added or loaned in.
+  const rosterIds = useMemo(() => new Set(roster.map((p) => p.playerId)), [roster]);
+  const candidates = assignable.filter((p) => !rosterIds.has(p.playerId));
+  const canAdd = typeof onAddPlayer === "function" && candidates.length > 0;
+  const canSub = typeof onSubOut === "function" && candidates.length > 0;
   const filteredAssignable = query.trim()
-    ? assignable.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
-    : assignable;
+    ? candidates.filter((p) => p.name.toLowerCase().includes(query.trim().toLowerCase()))
+    : candidates;
+
+  const closeAdd = () => {
+    setShowAdd(false);
+    setQuery("");
+    setReplacing(null);
+  };
 
   const addPlayer = (p: Scorekeeper) => {
     const added = onAddPlayer!(teamNo, p);
-    setScorerKey(personValue(added));
+    if (replacing != null) {
+      onSubOut?.(replacing);
+      setReplacing(null);
+    } else {
+      setScorerKey(personValue(added));
+    }
     setShowAdd(false);
     setQuery("");
   };
+
+  const startSub = (playerId: number) => {
+    setReplacing(playerId);
+    setShowAdd(true);
+    setQuery("");
+  };
+
+  const subsControl =
+    (canSub && activeRoster.length > 0) || benchedRoster.length > 0 ? (
+      <div className="mt-4 border-t border-black/5 pt-3 dark:border-white/5">
+        <p className="text-xs font-semibold text-neutral-500">Substitutions</p>
+        {canSub && activeRoster.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {activeRoster.map((p) => (
+              <button
+                key={personValue(p)}
+                type="button"
+                onClick={() => startSub(p.playerId)}
+                className="inline-flex items-center gap-1 rounded-lg border border-black/10 px-2 py-1 text-xs transition hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
+              >
+                <span aria-hidden="true">⇄</span> Sub {p.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        {benchedRoster.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {benchedRoster.map((p) => (
+              <button
+                key={personValue(p)}
+                type="button"
+                onClick={() => onBringBack?.(p.playerId)}
+                className="inline-flex items-center gap-1 rounded-lg border border-dashed border-black/20 px-2 py-1 text-xs text-neutral-500 transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
+              >
+                <span aria-hidden="true">↩</span> Bring back {p.name}
+              </button>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    ) : null;
 
   const addControl = canAdd ? (
     <div className="mt-4">
       {showAdd ? (
         <div className="rounded-xl border border-black/10 p-2 dark:border-white/10">
+          {replacingName ? (
+            <p className="mb-2 text-xs font-medium text-neutral-500">
+              Bringing on for {replacingName}
+            </p>
+          ) : null}
           <input
             autoFocus
             value={query}
@@ -1147,10 +1267,7 @@ function GoalPicker({
           </div>
           <button
             type="button"
-            onClick={() => {
-              setShowAdd(false);
-              setQuery("");
-            }}
+            onClick={closeAdd}
             className="mt-1 px-2 py-1 text-xs text-neutral-500 underline"
           >
             Close
@@ -1162,7 +1279,7 @@ function GoalPicker({
           onClick={() => setShowAdd(true)}
           className="rounded-lg border border-dashed border-black/20 px-3 py-2 text-sm font-medium transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
         >
-          ＋ Add a player to {teamName}
+          ＋ Add or loan a player to {teamName}
         </button>
       )}
     </div>
@@ -1201,7 +1318,7 @@ function GoalPicker({
     <div className={`mt-3 rounded-2xl p-4 ${theme.soft}`}>
       <p className="text-sm font-bold">{teamName} — who scored?</p>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {roster.map((p) => {
+        {activeRoster.map((p) => {
           const key = personValue(p);
           return (
             <PlayerChip
@@ -1220,7 +1337,7 @@ function GoalPicker({
 
       <p className="mt-4 text-sm font-bold">Assist? (optional)</p>
       <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {roster.map((p) => {
+        {activeRoster.map((p) => {
           const key = personValue(p);
           return (
             <PlayerChip
@@ -1237,6 +1354,7 @@ function GoalPicker({
       </div>
 
       {addControl}
+      {subsControl}
 
       <div className="mt-4 flex flex-wrap items-center gap-2">
         <button
