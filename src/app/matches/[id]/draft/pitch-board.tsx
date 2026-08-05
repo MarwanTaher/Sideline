@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { POSITIONS, type Position } from "@/lib/positions";
 import type { DraftPlayer } from "@/lib/draft";
+import { TEAM_COUNT_OPTIONS, teamGridColumns } from "@/lib/team-constants";
 import {
   autoBalanceAction,
   saveDraftAction,
@@ -276,8 +277,11 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
                           onChange={(e) => setTeamCount(Number(e.target.value))}
                           className="rounded-lg border border-white/15 bg-[#0d0d0d] px-2 py-1 text-sm text-neutral-100"
                         >
-                          <option value={2}>2</option>
-                          <option value={3}>3</option>
+                          {TEAM_COUNT_OPTIONS.map((n) => (
+                            <option key={n} value={n}>
+                              {n}
+                            </option>
+                          ))}
                         </select>
                       </label>
                       <button
@@ -325,7 +329,7 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
               <TeamList teamNos={teamNos} byTeam={byTeam} bench={bench} teamNames={teamNames} />
             ) : (
             <div
-              className={`grid gap-5 ${teamNos.length >= 3 ? "xl:grid-cols-3" : "lg:grid-cols-2"}`}
+              className={`grid gap-5 ${teamGridColumns(teamNos.length)}`}
             >
               {teamNos.map((n) => {
                 const byPos = byTeam.get(n)!;

@@ -11,6 +11,7 @@ import {
   type Position,
 } from "@/lib/draft";
 import { revalidateScores } from "@/lib/scores-cache";
+import { MIN_TEAMS, MAX_TEAMS } from "@/lib/team-constants";
 
 export interface DraftActionState {
   ok: boolean;
@@ -27,13 +28,13 @@ async function requireAdmin(): Promise<void> {
 }
 
 const matchIdSchema = z.coerce.number().int().positive();
-const numTeamsSchema = z.coerce.number().int().min(2).max(3);
+const numTeamsSchema = z.coerce.number().int().min(MIN_TEAMS).max(MAX_TEAMS);
 const positionSchema = z.enum(POSITIONS as unknown as [Position, ...Position[]]);
 
 const assignmentSchema = z.object({
   // Positive ids are real players; negative ids are guests.
   playerId: z.coerce.number().int().refine((n) => n !== 0, "Invalid id."),
-  teamNo: z.coerce.number().int().min(1).max(3),
+  teamNo: z.coerce.number().int().min(1).max(MAX_TEAMS),
   position: positionSchema,
 });
 

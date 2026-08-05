@@ -46,6 +46,7 @@ const THEMES: Theme[] = [
   { dot: "bg-sky-500", soft: "bg-sky-500/10", text: "text-sky-600 dark:text-sky-400", solid: "bg-sky-600 hover:bg-sky-700 active:bg-sky-800", ring: "ring-sky-500/40" },
   { dot: "bg-emerald-500", soft: "bg-emerald-500/10", text: "text-emerald-600 dark:text-emerald-400", solid: "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800", ring: "ring-emerald-500/40" },
   { dot: "bg-amber-500", soft: "bg-amber-500/10", text: "text-amber-600 dark:text-amber-400", solid: "bg-amber-600 hover:bg-amber-700 active:bg-amber-800", ring: "ring-amber-500/40" },
+  { dot: "bg-violet-500", soft: "bg-violet-500/10", text: "text-violet-600 dark:text-violet-400", solid: "bg-violet-600 hover:bg-violet-700 active:bg-violet-800", ring: "ring-violet-500/40" },
 ];
 function themeFor(teamNo: number): Theme {
   return THEMES[(Math.abs(teamNo) - 1) % THEMES.length] ?? THEMES[0];

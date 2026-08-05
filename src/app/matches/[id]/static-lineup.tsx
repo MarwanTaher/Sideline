@@ -1,5 +1,6 @@
 import Image from "next/image";
 import type { MatchTeam, MatchTeamPlayer } from "@/lib/matches";
+import { teamGridColumns } from "@/lib/team-constants";
 
 /* Read-only pitch view of a saved draft, shown on the match overview. Mirrors
  * the Lineup Builder's look but has no drag/drop or controls. */
@@ -22,7 +23,7 @@ function groupByRow(players: MatchTeamPlayer[]): Record<Row, MatchTeamPlayer[]> 
 export function StaticLineup({ teams }: { teams: MatchTeam[] }) {
   return (
     <div
-      className={`grid gap-4 ${teams.length >= 3 ? "md:grid-cols-2 lg:grid-cols-3" : "sm:grid-cols-2"}`}
+      className={`grid gap-4 ${teamGridColumns(teams.length)}`}
     >
       {teams.map((team) => (
         <StaticPitch key={team.teamNo} team={team} />

@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { createMatchAction, type MatchActionState } from "../actions";
+import { TEAM_COUNT_OPTIONS } from "@/lib/team-constants";
 
 const INITIAL: MatchActionState = { ok: false, message: "" };
 
@@ -49,8 +50,11 @@ export function CreateMatchForm() {
             defaultValue="2"
             className="mt-1 w-full rounded-lg border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-neutral-900"
           >
-            <option value="2">2</option>
-            <option value="3">3</option>
+            {TEAM_COUNT_OPTIONS.map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
           </select>
         </label>
       </div>

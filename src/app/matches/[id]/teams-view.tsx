@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { MatchTeam } from "@/lib/matches";
 import { StaticLineup } from "./static-lineup";
+import { teamGridColumns } from "@/lib/team-constants";
 
 /* Overview teams block with a segmented toggle between a compact roster list
  * and the static field view. */
@@ -67,7 +68,7 @@ function TabButton({
 
 function TeamList({ teams }: { teams: MatchTeam[] }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className={`grid gap-4 ${teamGridColumns(teams.length)}`}>
       {teams.map((team) => (
         <div
           key={team.teamNo}

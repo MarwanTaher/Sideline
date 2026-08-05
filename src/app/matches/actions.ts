@@ -4,6 +4,7 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { MIN_TEAMS, MAX_TEAMS } from "@/lib/team-constants";
 import {
   createMatch,
   updateMatchSettings,
@@ -32,9 +33,11 @@ const dateSchema = z
   .trim()
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD.");
 const timeSchema = z.string().trim().min(1, "Match time is required.");
-const numTeamsSchema = z.coerce.number().int().refine((n) => n === 2 || n === 3, {
-  message: "Teams must be 2 or 3.",
-});
+const numTeamsSchema = z.coerce
+  .number()
+  .int()
+  .min(MIN_TEAMS, `Teams must be between ${MIN_TEAMS} and ${MAX_TEAMS}.`)
+  .max(MAX_TEAMS, `Teams must be between ${MIN_TEAMS} and ${MAX_TEAMS}.`);
 const matchIdSchema = z.coerce.number().int().positive();
 const matchdaySchema = z.enum(["draft", "active", "closed"]);
 const statusSchema = z.enum(["open", "closed"]);
