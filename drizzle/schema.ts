@@ -24,7 +24,7 @@ export const matches = pgTable("matches", {
 	teamNames: text("team_names"),
 }, (table) => [
 	index("idx_matches_status_played_on").using("btree", table.status.asc().nullsLast().op("text_ops"), table.playedOn.asc().nullsLast().op("text_ops")),
-	check("matches_num_teams_check", sql`num_teams = ANY (ARRAY[2, 3])`),
+	check("matches_num_teams_check", sql`num_teams >= 2 AND num_teams <= 5`),
 	check("matches_stats_scoring_enabled_check", sql`stats_scoring_enabled = ANY (ARRAY[0, 1])`),
 	check("matches_status_check", sql`status = ANY (ARRAY['open'::text, 'closed'::text])`),
 	check("matches_matchday_status_check", sql`matchday_status = ANY (ARRAY['draft'::text, 'active'::text, 'closed'::text])`),
