@@ -17,7 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { POSITIONS, type Position } from "@/lib/positions";
 import type { DraftPlayer } from "@/lib/draft";
-import { TEAM_COUNT_OPTIONS, teamGridColumns } from "@/lib/team-constants";
+import { MAX_TEAMS, TEAM_COUNT_OPTIONS, teamGridColumns } from "@/lib/team-constants";
 import {
   autoBalanceAction,
   saveDraftAction,
@@ -142,7 +142,7 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
   const maxTeam = useMemo(() => {
     let m = teamCount;
     for (const a of Object.values(assign)) if (a.teamNo && a.teamNo > m) m = a.teamNo;
-    return Math.min(Math.max(m, 1), 3);
+    return Math.min(Math.max(m, 1), MAX_TEAMS);
   }, [assign, teamCount]);
 
   const teamNos = useMemo(
