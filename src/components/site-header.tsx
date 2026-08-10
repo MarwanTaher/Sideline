@@ -82,7 +82,8 @@ export default async function SiteHeader() {
               {user.playerId != null ? (
                 <Link
                   href="/profile"
-                  className="font-medium text-neutral-700 transition hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-neutral-100"
+                  title="View your profile"
+                  className="font-semibold text-emerald-600 underline decoration-emerald-600/30 decoration-2 underline-offset-4 transition hover:text-emerald-700 hover:decoration-emerald-600 dark:text-emerald-400 dark:decoration-emerald-400/40 dark:hover:text-emerald-300"
                 >
                   {user.name}
                 </Link>
