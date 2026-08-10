@@ -647,3 +647,77 @@ export async function autoFlagOutliers(
   }
   return flagged;
 }
+
+export interface RecalcScopeResult {
+  reset: number;
+  flagged: number;
+}
+
+/**
+ * Full scope recalculation: return detector-flagged outliers to in_scope, then
+ * re-run detection. Only votes whose most recent audit was the detector marking
+ * them out_of_scope are reset, so admin-manual out_of_scope /
+ * removed_from_calculation exclusions are preserved. matchId=0 scans all matches.
+ */
+export async function recalculateScope(
+  matchId: number,
+  sensitivity: OutlierSensitivity,
+  actor: string,
+): Promise<RecalcScopeResult> {
+  const resetRows = (await sqlClient.query(
+    matchId === 0
+      ? `WITH latest AS (
+           SELECT DISTINCT ON (match_id, voter_id, voted_for_id)
+                  match_id, voter_id, voted_for_id, action
+             FROM vote_audit
+            ORDER BY match_id, voter_id, voted_for_id, id DESC
+         )
+         UPDATE votes v
+            SET include_in_calculation = 1, scope_status = 'in_scope',
+                updated_at = CURRENT_TIMESTAMP
+           FROM latest l
+          WHERE v.match_id = l.match_id AND v.voter_id = l.voter_id
+            AND v.voted_for_id = l.voted_for_id
+            AND l.action = 'mark_out_of_scope'
+            AND v.scope_status = 'out_of_scope'
+          RETURNING v.match_id, v.voter_id, v.voted_for_id, v.rating`
+      : `WITH latest AS (
+           SELECT DISTINCT ON (voter_id, voted_for_id)
+                  voter_id, voted_for_id, action
+             FROM vote_audit
+            WHERE match_id = $1
+            ORDER BY voter_id, voted_for_id, id DESC
+         )
+         UPDATE votes v
+            SET include_in_calculation = 1, scope_status = 'in_scope',
+                updated_at = CURRENT_TIMESTAMP
+           FROM latest l
+          WHERE v.match_id = $1 AND v.voter_id = l.voter_id
+            AND v.voted_for_id = l.voted_for_id
+            AND l.action = 'mark_out_of_scope'
+            AND v.scope_status = 'out_of_scope'
+          RETURNING v.match_id, v.voter_id, v.voted_for_id, v.rating`,
+    matchId === 0 ? [] : [matchId],
+  )) as unknown as {
+    match_id: number;
+    voter_id: number;
+    voted_for_id: number;
+    rating: number;
+  }[];
+
+  for (const r of resetRows) {
+    await logVoteAudit(
+      Number(r.match_id),
+      Number(r.voter_id),
+      Number(r.voted_for_id),
+      "recalc_reset",
+      actor,
+      { rating: r.rating, includeInCalculation: 0, scopeStatus: "out_of_scope" },
+      { rating: r.rating, includeInCalculation: 1, scopeStatus: "in_scope" },
+      "Returned to scope by recalculation",
+    );
+  }
+
+  const flagged = await autoFlagOutliers(matchId, sensitivity, actor);
+  return { reset: resetRows.length, flagged };
+}

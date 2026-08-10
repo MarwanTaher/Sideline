@@ -9,6 +9,7 @@ import {
   editVoteAction,
   excludeVoteAction,
   previewAutoFlagAction,
+  recalculateScopeAction,
   resetVoteAction,
   type AutoFlagState,
   type VoteActionState,
@@ -371,12 +372,20 @@ function AutoFlagPanel({
     applyAutoFlagAction,
     AUTO_FLAG_INITIAL,
   );
+  const [recalcState, recalcAction, recalcPending] = useActionState(
+    recalculateScopeAction,
+    AUTO_FLAG_INITIAL,
+  );
   const [matchId, setMatchId] = useState<number>(selectedMatchId);
   const [sensitivity, setSensitivity] = useState<OutlierSensitivity>("normal");
 
   useEffect(() => {
     if (applyState.ok) router.refresh();
   }, [applyState, router]);
+
+  useEffect(() => {
+    if (recalcState.ok) router.refresh();
+  }, [recalcState, router]);
 
   const candidates = previewState.candidates ?? [];
   const toFlag = candidates.filter((c) => !c.alreadyOutOfScope);
@@ -428,8 +437,20 @@ function AutoFlagPanel({
             {previewPending ? "Scanning…" : "Preview outliers"}
           </button>
         </form>
-        <Banner state={previewState} />
-      </div>
+        <Banner state={previewState} />        <div className="mt-4 border-t border-black/10 pt-3 dark:border-white/10">
+          <p className="text-sm text-neutral-500">
+            Recalculate returns votes the detector previously flagged back to scope, then re-detects
+            at the selected sensitivity. Votes you excluded manually are left untouched.
+          </p>
+          <form action={recalcAction} className="mt-3">
+            <input type="hidden" name="matchId" value={matchId} />
+            <input type="hidden" name="sensitivity" value={sensitivity} />
+            <button type="submit" disabled={recalcPending} className={btnGhost}>
+              {recalcPending ? "Recalculating\u2026" : "Recalculate scope"}
+            </button>
+          </form>
+          <Banner state={recalcState} />
+        </div>      </div>
 
       {previewState.candidates != null ? (
         <div className="space-y-3">

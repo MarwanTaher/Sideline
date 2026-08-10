@@ -40,6 +40,13 @@ export interface RosterStat {
   teamNo: number;
   goals: number;
   assists: number;
+  /** Rolled up from the matchday goal log, or null when no matchday was recorded. */
+  matchdayGoals: number | null;
+  matchdayAssists: number | null;
+  /** From the player's stats submission, or null when they never submitted. */
+  submittedGoals: number | null;
+  submittedAssists: number | null;
+  submissionStatus: string | null;
 }
 
 export interface StatsReviewCounts {
@@ -253,13 +260,42 @@ export async function getStatsSubmissionStatus(
  * score-editing grid on the match stats page.
  */
 export async function getMatchRosterStats(matchId: number): Promise<RosterStat[]> {
+  const matchdayCountRaw = await sqlClient.query(
+    `SELECT COUNT(*) AS n FROM round_goals WHERE match_id = $1`,
+    [matchId],
+  );
+  const matchdayUsed = Number((matchdayCountRaw as { n: number }[])[0]?.n ?? 0) > 0;
+
   const raw = await sqlClient.query(
-    `SELECT mp.player_id, p.name, mp.team_no,
+    `WITH md AS (
+        SELECT player_id, SUM(goals)::int AS goals, SUM(assists)::int AS assists
+          FROM (
+            SELECT scorer_player_id AS player_id, COUNT(*) AS goals, 0 AS assists
+              FROM round_goals
+             WHERE match_id = $1 AND scorer_player_id IS NOT NULL
+             GROUP BY scorer_player_id
+            UNION ALL
+            SELECT assist_player_id AS player_id, 0 AS goals, COUNT(*) AS assists
+              FROM round_goals
+             WHERE match_id = $1 AND assist_player_id IS NOT NULL
+             GROUP BY assist_player_id
+          ) rolled
+         GROUP BY player_id
+     )
+     SELECT mp.player_id, p.name, mp.team_no,
             COALESCE(s.goals, 0) AS goals,
-            COALESCE(s.assists, 0) AS assists
+            COALESCE(s.assists, 0) AS assists,
+            md.goals AS md_goals,
+            md.assists AS md_assists,
+            pss.goals AS sub_goals,
+            pss.assists AS sub_assists,
+            pss.status AS sub_status
        FROM match_players mp
        JOIN players p ON p.id = mp.player_id
        LEFT JOIN stats s ON s.match_id = mp.match_id AND s.player_id = mp.player_id
+       LEFT JOIN md ON md.player_id = mp.player_id
+       LEFT JOIN player_stats_submissions pss
+              ON pss.match_id = mp.match_id AND pss.player_id = mp.player_id
       WHERE mp.match_id = $1
       ORDER BY mp.team_no, p.name`,
     [matchId],
@@ -270,6 +306,11 @@ export async function getMatchRosterStats(matchId: number): Promise<RosterStat[]
     team_no: number;
     goals: number;
     assists: number;
+    md_goals: number | null;
+    md_assists: number | null;
+    sub_goals: number | null;
+    sub_assists: number | null;
+    sub_status: string | null;
   }>;
   return rows.map((r) => ({
     playerId: Number(r.player_id),
@@ -277,6 +318,11 @@ export async function getMatchRosterStats(matchId: number): Promise<RosterStat[]
     teamNo: Number(r.team_no),
     goals: Number(r.goals),
     assists: Number(r.assists),
+    matchdayGoals: matchdayUsed ? Number(r.md_goals ?? 0) : null,
+    matchdayAssists: matchdayUsed ? Number(r.md_assists ?? 0) : null,
+    submittedGoals: r.sub_goals == null ? null : Number(r.sub_goals),
+    submittedAssists: r.sub_assists == null ? null : Number(r.sub_assists),
+    submissionStatus: r.sub_status ?? null,
   }));
 }
 

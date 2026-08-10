@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useActionState } from "react";
+import { useEffect, useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { adminSetStatAction, type StatsSubmitState } from "./actions";
 import type { RosterStat } from "@/lib/stats";
@@ -9,9 +9,41 @@ import { FeedbackMessage } from "@/components/ui/banner";
 
 const INITIAL: StatsSubmitState = { ok: false, message: "" };
 
+function SourcePick({
+  label,
+  goals,
+  assists,
+  onUse,
+}: {
+  label: string;
+  goals: number | null;
+  assists: number | null;
+  onUse: (goals: number, assists: number) => void;
+}) {
+  const available = goals != null && assists != null;
+  return (
+    <div className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs dark:border-white/10">
+      <p className="font-medium text-neutral-500">{label}</p>
+      <p className="mt-0.5 tabular-nums">
+        {available ? `${goals} G · ${assists} A` : "—"}
+      </p>
+      <button
+        type="button"
+        disabled={!available}
+        onClick={() => available && onUse(goals!, assists!)}
+        className="mt-1 rounded-md border border-black/15 px-2 py-0.5 text-[11px] font-medium enabled:hover:bg-black/5 disabled:opacity-40 dark:border-white/15 dark:enabled:hover:bg-white/5"
+      >
+        Use
+      </button>
+    </div>
+  );
+}
+
 function StatRow({ matchId, player }: { matchId: number; player: RosterStat }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(adminSetStatAction, INITIAL);
+  const [goals, setGoals] = useState<number | string>(player.goals);
+  const [assists, setAssists] = useState<number | string>(player.assists);
 
   useEffect(() => {
     if (state.ok) router.refresh();
@@ -28,6 +60,24 @@ function StatRow({ matchId, player }: { matchId: number; player: RosterStat }) {
         <p className="truncate text-sm font-medium">{player.name}</p>
         <p className="text-xs text-neutral-500">Team {player.teamNo}</p>
       </div>
+      <SourcePick
+        label="Matchday"
+        goals={player.matchdayGoals}
+        assists={player.matchdayAssists}
+        onUse={(g, a) => {
+          setGoals(g);
+          setAssists(a);
+        }}
+      />
+      <SourcePick
+        label="Submitted"
+        goals={player.submittedGoals}
+        assists={player.submittedAssists}
+        onUse={(g, a) => {
+          setGoals(g);
+          setAssists(a);
+        }}
+      />
       <label className="block text-xs">
         <span className="font-medium text-neutral-500">Goals</span>
         <input
@@ -36,7 +86,8 @@ function StatRow({ matchId, player }: { matchId: number; player: RosterStat }) {
           min={0}
           max={50}
           step={1}
-          defaultValue={player.goals}
+          value={goals}
+          onChange={(e) => setGoals(e.target.value)}
           className="mt-1 w-20 rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm dark:border-white/15 dark:bg-neutral-900"
         />
       </label>
@@ -48,7 +99,8 @@ function StatRow({ matchId, player }: { matchId: number; player: RosterStat }) {
           min={0}
           max={50}
           step={1}
-          defaultValue={player.assists}
+          value={assists}
+          onChange={(e) => setAssists(e.target.value)}
           className="mt-1 w-20 rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm dark:border-white/15 dark:bg-neutral-900"
         />
       </label>

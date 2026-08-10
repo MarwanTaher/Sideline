@@ -10,6 +10,7 @@ import {
   detectOutliers,
   editVote,
   excludeVote,
+  recalculateScope,
   resetVote,
   SCOPE_OPTIONS,
   type OutlierCandidate,
@@ -225,6 +226,34 @@ export async function applyAutoFlagAction(
     return {
       ok: true,
       message: `Out-of-scope detection applied. Flagged ${flagged} vote(s).`,
+      candidates: null,
+      sensitivity,
+      matchId,
+    };
+  } catch (err) {
+    return { ...AUTO_FLAG_INITIAL, ...fail(err) };
+  }
+}
+
+/**
+ * Full recalculation: return detector-flagged outliers to scope, then re-detect.
+ * Available on demand (not gated on there being new outliers to flag).
+ */
+export async function recalculateScopeAction(
+  _prev: AutoFlagState,
+  formData: FormData,
+): Promise<AutoFlagState> {
+  try {
+    const actor = await requireAdmin();
+    const matchId = idSchema.parse(formData.get("matchId"));
+    const sensitivity = sensitivitySchema.parse(
+      formData.get("sensitivity"),
+    ) as OutlierSensitivity;
+    const { reset, flagged } = await recalculateScope(matchId, sensitivity, actor);
+    revalidate();
+    return {
+      ok: true,
+      message: `Scope recalculated \u2014 returned ${reset} vote(s) to scope, flagged ${flagged} outlier(s).`,
       candidates: null,
       sensitivity,
       matchId,
