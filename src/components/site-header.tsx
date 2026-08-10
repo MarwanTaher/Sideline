@@ -24,84 +24,64 @@ export default async function SiteHeader() {
 
   const navSignals = user ? await getNavSignals() : null;
 
+  const initial = (user?.name?.trim()?.charAt(0) ?? "?").toUpperCase();
+
   return (
     <header className="sticky top-0 z-10 border-b border-black/10 bg-white/80 backdrop-blur relative dark:border-white/10 dark:bg-neutral-950/80">
-      <div className="mx-auto flex w-full max-w-4xl items-center justify-between px-4 py-3">
-        <Link
-          href="/"
-          className="flex items-center gap-2"
-        >
-          <Image
-            src="/logo-mark.svg"
-            alt=""
-            width={26}
-            height={26}
-            className="rounded-md"
-          />
-          <span className="text-sm font-bold uppercase tracking-[0.2em]">
-            Sideline
-          </span>
-        </Link>
-
-        <MobileNav>
-          {user ? <MainNav adminView={adminView} isSuper={isSuper} lockedTabs={lockedTabs} signals={navSignals ?? undefined} /> : null}
-
-          {canToggle ? (
-            <div
-              role="group"
-              aria-label="View as"
-              className="flex items-center gap-0.5 rounded-lg border border-black/10 p-0.5 text-xs dark:border-white/15"
-            >
-              {(["player", "admin"] as const).map((m) => (
-                <form key={m} action={setViewModeAction}>
-                  <input type="hidden" name="mode" value={m} />
-                  <button
-                    type="submit"
-                    aria-pressed={mode === m}
-                    className={`rounded-md px-2 py-0.5 font-medium capitalize transition ${
-                      mode === m
-                        ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
-                        : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
-                    }`}
-                  >
-                    {m}
-                  </button>
-                </form>
-              ))}
-            </div>
-          ) : null}
-
+      <div className="mx-auto w-full max-w-4xl px-4 py-3">
+        {/* Mobile app bar: menu · brand · profile */}
+        <div className="relative flex items-center justify-between md:hidden">
           {user ? (
-            <form
-              action={async () => {
-                "use server";
-                await signOut({ redirectTo: "/login" });
-              }}
-              className="flex items-center gap-3"
-            >
+            <MobileNav>
+              <MainNav adminView={adminView} isSuper={isSuper} lockedTabs={lockedTabs} signals={navSignals ?? undefined} />
+              {canToggle ? <ViewToggle mode={mode} /> : null}
               {user.playerId != null ? (
                 <Link
                   href="/profile"
-                  title="View your profile"
-                  className="font-semibold text-emerald-600 underline decoration-emerald-600/30 decoration-2 underline-offset-4 transition hover:text-emerald-700 hover:decoration-emerald-600 dark:text-emerald-400 dark:decoration-emerald-400/40 dark:hover:text-emerald-300"
+                  className="font-semibold text-emerald-600 underline decoration-emerald-600/30 decoration-2 underline-offset-4 transition hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
                 >
-                  {user.name}
+                  View your profile
                 </Link>
-              ) : (
-                <span className="text-neutral-500">{user.name}</span>
-              )}
-              {user.role && user.role !== "player" && adminView ? (
-                <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                  {user.role}
-                </span>
               ) : null}
-              <button
-                type="submit"
-                className="rounded-lg border border-black/10 px-2.5 py-1 text-xs font-medium transition hover:bg-neutral-50 dark:border-white/15 dark:hover:bg-neutral-800"
+              <form
+                action={async () => {
+                  "use server";
+                  await signOut({ redirectTo: "/login" });
+                }}
               >
-                Sign out
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  className="rounded-lg border border-black/10 px-2.5 py-1 text-xs font-medium transition hover:bg-neutral-50 dark:border-white/15 dark:hover:bg-neutral-800"
+                >
+                  Sign out
+                </button>
+              </form>
+            </MobileNav>
+          ) : (
+            <span className="h-9 w-9" aria-hidden />
+          )}
+
+          <Link
+            href="/"
+            className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2"
+          >
+            <Image src="/logo-mark.svg" alt="" width={24} height={24} className="rounded-md" />
+            <span className="text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
+          </Link>
+
+          {user ? (
+            user.playerId != null ? (
+              <Link
+                href="/profile"
+                aria-label={`View your profile, ${user.name}`}
+                title="Your profile"
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-semibold text-white shadow-sm ring-2 ring-emerald-600/20 transition hover:bg-emerald-700"
+              >
+                {initial}
+              </Link>
+            ) : (
+              <span className="text-xs text-neutral-500">{user.name}</span>
+            )
           ) : (
             <Link
               href="/login"
@@ -110,8 +90,89 @@ export default async function SiteHeader() {
               Sign in
             </Link>
           )}
-        </MobileNav>
+        </div>
+
+        {/* Desktop bar: brand left · inline nav right */}
+        <div className="hidden items-center justify-between md:flex">
+          <Link href="/" className="flex items-center gap-2">
+            <Image src="/logo-mark.svg" alt="" width={26} height={26} className="rounded-md" />
+            <span className="text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
+          </Link>
+
+          <div className="flex items-center gap-4">
+            {user ? (
+              <MainNav adminView={adminView} isSuper={isSuper} lockedTabs={lockedTabs} signals={navSignals ?? undefined} />
+            ) : null}
+            {canToggle ? <ViewToggle mode={mode} /> : null}
+            {user ? (
+              <form
+                action={async () => {
+                  "use server";
+                  await signOut({ redirectTo: "/login" });
+                }}
+                className="flex items-center gap-3"
+              >
+                {user.playerId != null ? (
+                  <Link
+                    href="/profile"
+                    title="View your profile"
+                    className="font-semibold text-emerald-600 underline decoration-emerald-600/30 decoration-2 underline-offset-4 transition hover:text-emerald-700 hover:decoration-emerald-600 dark:text-emerald-400 dark:decoration-emerald-400/40 dark:hover:text-emerald-300"
+                  >
+                    {user.name}
+                  </Link>
+                ) : (
+                  <span className="text-neutral-500">{user.name}</span>
+                )}
+                {user.role && user.role !== "player" && adminView ? (
+                  <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                    {user.role}
+                  </span>
+                ) : null}
+                <button
+                  type="submit"
+                  className="rounded-lg border border-black/10 px-2.5 py-1 text-xs font-medium transition hover:bg-neutral-50 dark:border-white/15 dark:hover:bg-neutral-800"
+                >
+                  Sign out
+                </button>
+              </form>
+            ) : (
+              <Link
+                href="/login"
+                className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+              >
+                Sign in
+              </Link>
+            )}
+          </div>
+        </div>
       </div>
     </header>
+  );
+}
+
+function ViewToggle({ mode }: { mode: string }) {
+  return (
+    <div
+      role="group"
+      aria-label="View as"
+      className="flex items-center gap-0.5 rounded-lg border border-black/10 p-0.5 text-xs dark:border-white/15"
+    >
+      {(["player", "admin"] as const).map((m) => (
+        <form key={m} action={setViewModeAction}>
+          <input type="hidden" name="mode" value={m} />
+          <button
+            type="submit"
+            aria-pressed={mode === m}
+            className={`rounded-md px-2 py-0.5 font-medium capitalize transition ${
+              mode === m
+                ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
+                : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+            }`}
+          >
+            {m}
+          </button>
+        </form>
+      ))}
+    </div>
   );
 }
