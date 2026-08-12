@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { isTabLockedForCurrentUser } from "@/lib/admin-access";
-import { getPlayersAdminData } from "@/lib/players-admin";
+import { getPlayersAdminData, getDeletedPlayers } from "@/lib/players-admin";
 import PlayersAdmin from "./players-admin";
 import { SectionIcon } from "@/components/section-icon";
 
@@ -24,6 +24,7 @@ export default async function PlayersPage() {
 
   const { players, activeCount, inactiveCount, resetRequests } =
     await getPlayersAdminData();
+  const deletedPlayers = await getDeletedPlayers();
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
@@ -41,6 +42,7 @@ export default async function PlayersPage() {
         activeCount={activeCount}
         inactiveCount={inactiveCount}
         resetRequests={resetRequests}
+        deletedPlayers={deletedPlayers}
       />
     </main>
   );

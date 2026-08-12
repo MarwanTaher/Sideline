@@ -12,6 +12,7 @@ import {
   bulkSetPosition,
   createPlayer,
   deletePlayer,
+  restorePlayer,
   dismissResetRequest,
   importPlayers,
   parsePlayersCsv,
@@ -118,7 +119,24 @@ export async function deletePlayerAction(
     revalidateScores();
     revalidatePath("/players");
     revalidatePath("/leaderboard");
-    return { ok: true, message: "Player removed." };
+    return { ok: true, message: "Player removed. You can restore them from Deleted players." };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function restorePlayerAction(
+  _prev: PlayerActionState,
+  formData: FormData,
+): Promise<PlayerActionState> {
+  try {
+    await requireAdmin();
+    const playerId = playerIdSchema.parse(formData.get("playerId"));
+    await restorePlayer(playerId);
+    revalidateScores();
+    revalidatePath("/players");
+    revalidatePath("/leaderboard");
+    return { ok: true, message: "Player restored." };
   } catch (err) {
     return fail(err);
   }

@@ -14,10 +14,11 @@ import {
   revokeMagicLinksAction,
   importCsvAction,
   savePlayerAction,
+  restorePlayerAction,
   type PlayerActionState,
 } from "./actions";
 import { POSITIONS } from "@/lib/positions";
-import type { PlayerRow, ResetRequestRow } from "@/lib/players-admin";
+import type { PlayerRow, ResetRequestRow, DeletedPlayer } from "@/lib/players-admin";
 import { ShareButton } from "@/components/share-button";
 
 const INITIAL: PlayerActionState = { ok: false, message: "" };
@@ -120,6 +121,19 @@ function ActivateForm({ player }: { player: PlayerRow }) {
       <input type="hidden" name="playerId" value={player.id} />
       <button type="submit" disabled={pending} className={btnPrimary}>
         {pending ? "…" : "Activate"}
+      </button>
+    </form>
+  );
+}
+
+function RestoreForm({ player }: { player: DeletedPlayer }) {
+  const [state, action, pending] = useActionState(restorePlayerAction, INITIAL);
+  useRefreshOnOk(state);
+  return (
+    <form action={action} className="inline">
+      <input type="hidden" name="playerId" value={player.id} />
+      <button type="submit" disabled={pending} className={btnPrimary}>
+        {pending ? "…" : "Restore"}
       </button>
     </form>
   );
@@ -416,11 +430,13 @@ export default function PlayersAdmin({
   activeCount,
   inactiveCount,
   resetRequests,
+  deletedPlayers,
 }: {
   players: PlayerRow[];
   activeCount: number;
   inactiveCount: number;
   resetRequests: ResetRequestRow[];
+  deletedPlayers: DeletedPlayer[];
 }) {
   const [search, setSearch] = useState("");
   const inactive = players.filter((p) => !p.active);
@@ -501,6 +517,35 @@ export default function PlayersAdmin({
           <ImportExportBulk players={players} />
         </div>
       </section>
+
+      {deletedPlayers.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold tracking-tight">
+            Deleted players ({deletedPlayers.length})
+          </h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            Removed players are archived here with all their history. Restore brings
+            them back as active.
+          </p>
+          <div className="mt-3 space-y-2">
+            {deletedPlayers.map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center justify-between rounded-lg border border-black/10 px-4 py-2 text-sm dark:border-white/10"
+              >
+                <span>
+                  <span className="font-medium">{p.name}</span>{" "}
+                  <span className="text-neutral-500">({p.preferredPosition})</span>
+                  <span className="ml-2 text-xs text-neutral-400">
+                    deleted {p.deletedAt.slice(0, 10)}
+                  </span>
+                </span>
+                <RestoreForm player={p} />
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

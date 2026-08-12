@@ -39,6 +39,7 @@ export const players = pgTable("players", {
 	phone: text(),
 	photoUrl: text("photo_url"),
 	email: text(),
+	deletedAt: timestamp("deleted_at", { mode: 'string' }),
 }, (table) => [
 	unique("players_name_key").on(table.name),
 	check("players_preferred_position_check", sql`preferred_position = ANY (ARRAY['GK'::text, 'DEF'::text, 'MID'::text, 'FWD'::text])`),

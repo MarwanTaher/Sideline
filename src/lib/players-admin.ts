@@ -43,6 +43,7 @@ export async function getPlayersAdminData(): Promise<PlayersAdminData> {
            CASE WHEN c.player_id IS NULL THEN 0 ELSE 1 END AS has_password
     FROM players p
     LEFT JOIN player_credentials c ON c.player_id = p.id
+    WHERE p.deleted_at IS NULL
     ORDER BY p.active DESC, LOWER(p.name) ASC
     `,
   )) as unknown as Array<{
@@ -181,9 +182,48 @@ export async function activatePlayer(playerId: number): Promise<void> {
   await sqlClient.query("UPDATE players SET active = 1 WHERE id = $1", [playerId]);
 }
 
-/** Permanently remove a player (cascades to dependent rows via FKs). */
+/** Soft-delete a player: hide them everywhere but keep all their history. */
 export async function deletePlayer(playerId: number): Promise<void> {
-  await sqlClient.query("DELETE FROM players WHERE id = $1", [playerId]);
+  await sqlClient.query(
+    "UPDATE players SET active = 0, deleted_at = CURRENT_TIMESTAMP WHERE id = $1",
+    [playerId],
+  );
+}
+
+/** Deleted (archived) players, most recently removed first. */
+export interface DeletedPlayer {
+  id: number;
+  name: string;
+  preferredPosition: string;
+  deletedAt: string;
+}
+
+export async function getDeletedPlayers(): Promise<DeletedPlayer[]> {
+  const rows = (await sqlClient.query(
+    `SELECT id, name, preferred_position, deleted_at
+       FROM players
+      WHERE deleted_at IS NOT NULL
+      ORDER BY deleted_at DESC`,
+  )) as unknown as Array<{
+    id: number;
+    name: string;
+    preferred_position: string;
+    deleted_at: string;
+  }>;
+  return rows.map((r) => ({
+    id: Number(r.id),
+    name: String(r.name),
+    preferredPosition: String(r.preferred_position),
+    deletedAt: String(r.deleted_at),
+  }));
+}
+
+/** Restore a soft-deleted player, bringing them back as active. */
+export async function restorePlayer(playerId: number): Promise<void> {
+  await sqlClient.query(
+    "UPDATE players SET deleted_at = NULL, active = 1 WHERE id = $1",
+    [playerId],
+  );
 }
 
 /**
@@ -229,10 +269,13 @@ export async function bulkSetPosition(ids: number[], position: string): Promise<
   ]);
 }
 
-/** Remove multiple players at once (cascades via FKs). */
+/** Soft-delete multiple players at once (keeps history, allows restore). */
 export async function bulkDelete(ids: number[]): Promise<void> {
   if (ids.length === 0) return;
-  await sqlClient.query(`DELETE FROM players WHERE id = ANY($1::int[])`, [ids]);
+  await sqlClient.query(
+    `UPDATE players SET active = 0, deleted_at = CURRENT_TIMESTAMP WHERE id = ANY($1::int[])`,
+    [ids],
+  );
 }
 
 export interface ImportPlayerRow {
