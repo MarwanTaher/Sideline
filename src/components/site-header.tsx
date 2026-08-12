@@ -128,6 +128,26 @@ export default async function SiteHeader() {
                 {user.playerId != null ? (
                   <Link
                     href="/profile"
+                    aria-label={`View your profile, ${user.name}`}
+                    title="Your profile"
+                    className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-emerald-600 text-xs font-semibold text-white shadow-sm ring-2 ring-emerald-600/20 transition hover:bg-emerald-700"
+                  >
+                    {photoUrl ? (
+                      <Image
+                        src={photoUrl}
+                        alt=""
+                        width={32}
+                        height={32}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      initial
+                    )}
+                  </Link>
+                ) : null}
+                {user.playerId != null ? (
+                  <Link
+                    href="/profile"
                     title="View your profile"
                     className="font-semibold text-emerald-600 underline decoration-emerald-600/30 decoration-2 underline-offset-4 transition hover:text-emerald-700 hover:decoration-emerald-600 dark:text-emerald-400 dark:decoration-emerald-400/40 dark:hover:text-emerald-300"
                   >
