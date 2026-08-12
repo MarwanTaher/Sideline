@@ -6,6 +6,7 @@ import MobileNav from "@/components/mobile-nav";
 import { getViewMode } from "@/lib/view-mode";
 import { getLockedTabsForPlayer } from "@/lib/admin-access";
 import { getNavSignals } from "@/lib/nav-signals";
+import { getPlayerContact } from "@/lib/player-profile";
 import { setViewModeAction } from "@/app/actions/view-mode";
 
 export default async function SiteHeader() {
@@ -24,6 +25,8 @@ export default async function SiteHeader() {
 
   const navSignals = user ? await getNavSignals() : null;
 
+  const contact = user?.playerId != null ? await getPlayerContact(user.playerId) : null;
+  const photoUrl = contact?.photoUrl ?? null;
   const initial = (user?.name?.trim()?.charAt(0) ?? "?").toUpperCase();
 
   return (
@@ -75,9 +78,19 @@ export default async function SiteHeader() {
                 href="/profile"
                 aria-label={`View your profile, ${user.name}`}
                 title="Your profile"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 text-sm font-semibold text-white shadow-sm ring-2 ring-emerald-600/20 transition hover:bg-emerald-700"
+                className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-emerald-600 text-sm font-semibold text-white shadow-sm ring-2 ring-emerald-600/20 transition hover:bg-emerald-700"
               >
-                {initial}
+                {photoUrl ? (
+                  <Image
+                    src={photoUrl}
+                    alt=""
+                    width={36}
+                    height={36}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  initial
+                )}
               </Link>
             ) : (
               <span className="text-xs text-neutral-500">{user.name}</span>
