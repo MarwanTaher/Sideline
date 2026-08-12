@@ -10,6 +10,7 @@ import {
   countInPlayers,
   addToWaitlist,
   removeFromWaitlist,
+  moveWaitlistPlayer,
   getWaitlist,
   promoteWaitlistCandidate,
 } from "@/lib/availability";
@@ -18,6 +19,7 @@ import { deleteGuestsForHost, countGuests } from "@/lib/guests";
 import {
   isWaitlistAutoPromoteEnabled,
   setWaitlistAutoPromote,
+  setWaitlistVisibleToPlayers,
   isVoteGateEnabled,
   setVoteGate,
 } from "@/lib/feature-settings";
@@ -56,6 +58,34 @@ async function requireAdmin(): Promise<void> {
 function revalidateAvailability(matchId: number): void {
   revalidatePath(`/matches/${matchId}/availability`);
   revalidatePath(`/matches/${matchId}/draft`);
+}
+
+/** Admin: manually add a player to the waitlist. */
+export async function adminAddToWaitlistAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const matchId = matchIdSchema.parse(formData.get("matchId"));
+  const playerId = playerIdSchema.parse(formData.get("playerId"));
+  await addToWaitlist(matchId, playerId);
+  revalidateAvailability(matchId);
+}
+
+/** Admin: remove a player from the waitlist. */
+export async function adminRemoveFromWaitlistAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const matchId = matchIdSchema.parse(formData.get("matchId"));
+  const playerId = playerIdSchema.parse(formData.get("playerId"));
+  await removeFromWaitlist(matchId, playerId);
+  revalidateAvailability(matchId);
+}
+
+/** Admin: move a waitlisted player up or down one place. */
+export async function adminMoveWaitlistAction(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const matchId = matchIdSchema.parse(formData.get("matchId"));
+  const playerId = playerIdSchema.parse(formData.get("playerId"));
+  const direction = String(formData.get("direction")) === "up" ? -1 : 1;
+  await moveWaitlistPlayer(matchId, playerId, direction);
+  revalidateAvailability(matchId);
 }
 
 /**
@@ -303,6 +333,28 @@ export async function setWaitlistAutoPromoteAction(
       message: enabled
         ? "Waitlist auto-promotion on."
         : "Waitlist auto-promotion off.",
+    };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
+/** Admin: show or hide the waitlist for non-admin players (global). */
+export async function setWaitlistVisibleAction(
+  _prev: AvailabilityActionState,
+  formData: FormData,
+): Promise<AvailabilityActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const enabled = String(formData.get("enabled")) === "true";
+    await setWaitlistVisibleToPlayers(enabled);
+    revalidateAvailability(matchId);
+    return {
+      ok: true,
+      message: enabled
+        ? "Waitlist is now visible to players."
+        : "Waitlist hidden from players.",
     };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };

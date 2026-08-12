@@ -7,6 +7,10 @@ import {
   setAvailabilityOpenAction,
   setMaxPlayersAction,
   setWaitlistAutoPromoteAction,
+  setWaitlistVisibleAction,
+  adminAddToWaitlistAction,
+  adminRemoveFromWaitlistAction,
+  adminMoveWaitlistAction,
   setVoteGateAction,
   type AvailabilityActionState,
 } from "./actions";
@@ -104,25 +108,37 @@ export function MaxPlayersForm({
   );
 }
 
-/** #9: global waitlist auto-promotion toggle + current waitlist. */
+/** #9: waitlist controls — auto-promotion, visibility, ordering, add/remove. */
 export function WaitlistToggle({
   matchId,
   enabled,
+  visibleToPlayers,
   waitlist,
+  candidates,
 }: {
   matchId: number;
   enabled: boolean;
+  visibleToPlayers: boolean;
   waitlist: { playerId: number; name: string }[];
+  candidates: { playerId: number; name: string }[];
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(
     setWaitlistAutoPromoteAction,
     INITIAL,
   );
+  const [visState, visAction, visPending] = useActionState(
+    setWaitlistVisibleAction,
+    INITIAL,
+  );
 
   useEffect(() => {
     if (state.ok) router.refresh();
   }, [state, router]);
+
+  useEffect(() => {
+    if (visState.ok) router.refresh();
+  }, [visState, router]);
 
   return (
     <div>
@@ -155,21 +171,127 @@ export function WaitlistToggle({
           </Button>
         </form>
       </div>
-      {waitlist.length > 0 ? (
-        <div className="mt-3">
-          <h4 className="text-xs font-medium text-neutral-500">
-            Waitlist ({waitlist.length})
-          </h4>
-          <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm">
-            {waitlist.map((w) => (
-              <li key={w.playerId}>{w.name}</li>
+
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-black/5 pt-3 dark:border-white/5">
+        <p className="text-xs text-neutral-500">
+          Waitlist is{" "}
+          <span
+            className={
+              visibleToPlayers
+                ? "font-semibold text-emerald-600 dark:text-emerald-400"
+                : "font-semibold text-neutral-500"
+            }
+          >
+            {visibleToPlayers ? "visible" : "hidden"}
+          </span>{" "}
+          to players. When visible, everyone sees the ordered waitlist on this page.
+        </p>
+        <form action={visAction}>
+          <input type="hidden" name="matchId" value={matchId} />
+          <input type="hidden" name="enabled" value={visibleToPlayers ? "false" : "true"} />
+          <Button
+            type="submit"
+            variant={visibleToPlayers ? "secondary" : "success"}
+            pending={visPending}
+            pendingLabel="Saving…"
+          >
+            {visibleToPlayers ? "Hide" : "Show"}
+          </Button>
+        </form>
+      </div>
+
+      <div className="mt-3 border-t border-black/5 pt-3 dark:border-white/5">
+        <h4 className="text-xs font-medium text-neutral-500">
+          Waitlist ({waitlist.length})
+        </h4>
+        {waitlist.length > 0 ? (
+          <ol className="mt-1 space-y-1">
+            {waitlist.map((w, i) => (
+              <li
+                key={w.playerId}
+                className="flex items-center gap-2 rounded-lg border border-black/10 px-2 py-1 text-sm dark:border-white/10"
+              >
+                <span className="w-5 text-right text-xs tabular-nums text-neutral-400">
+                  {i + 1}
+                </span>
+                <span className="min-w-0 flex-1 truncate">{w.name}</span>
+                <form action={adminMoveWaitlistAction}>
+                  <input type="hidden" name="matchId" value={matchId} />
+                  <input type="hidden" name="playerId" value={w.playerId} />
+                  <input type="hidden" name="direction" value="up" />
+                  <button
+                    type="submit"
+                    disabled={i === 0}
+                    aria-label={`Move ${w.name} up`}
+                    className="rounded-md border border-black/10 px-1.5 py-0.5 text-xs transition enabled:hover:bg-neutral-50 disabled:opacity-30 dark:border-white/15 dark:enabled:hover:bg-neutral-800"
+                  >
+                    ↑
+                  </button>
+                </form>
+                <form action={adminMoveWaitlistAction}>
+                  <input type="hidden" name="matchId" value={matchId} />
+                  <input type="hidden" name="playerId" value={w.playerId} />
+                  <input type="hidden" name="direction" value="down" />
+                  <button
+                    type="submit"
+                    disabled={i === waitlist.length - 1}
+                    aria-label={`Move ${w.name} down`}
+                    className="rounded-md border border-black/10 px-1.5 py-0.5 text-xs transition enabled:hover:bg-neutral-50 disabled:opacity-30 dark:border-white/15 dark:enabled:hover:bg-neutral-800"
+                  >
+                    ↓
+                  </button>
+                </form>
+                <form action={adminRemoveFromWaitlistAction}>
+                  <input type="hidden" name="matchId" value={matchId} />
+                  <input type="hidden" name="playerId" value={w.playerId} />
+                  <button
+                    type="submit"
+                    aria-label={`Remove ${w.name} from waitlist`}
+                    className="rounded-md border border-black/10 px-1.5 py-0.5 text-xs text-red-600 transition hover:bg-red-50 dark:border-white/15 dark:hover:bg-red-950/40"
+                  >
+                    Remove
+                  </button>
+                </form>
+              </li>
             ))}
           </ol>
-        </div>
-      ) : (
-        <p className="mt-2 text-xs text-neutral-400">Waitlist is empty.</p>
-      )}
+        ) : (
+          <p className="mt-2 text-xs text-neutral-400">Waitlist is empty.</p>
+        )}
+
+        {candidates.length > 0 ? (
+          <form
+            action={adminAddToWaitlistAction}
+            className="mt-3 flex flex-wrap items-center gap-2"
+          >
+            <input type="hidden" name="matchId" value={matchId} />
+            <select
+              name="playerId"
+              defaultValue=""
+              required
+              className="rounded-lg border border-black/15 bg-white px-2 py-1.5 text-sm dark:border-white/15 dark:bg-neutral-900"
+            >
+              <option value="" disabled>
+                Add a player…
+              </option>
+              {candidates.map((c) => (
+                <option key={c.playerId} value={c.playerId}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <button
+              type="submit"
+              className="rounded-lg border border-black/10 px-2.5 py-1.5 text-xs font-medium transition hover:bg-neutral-50 dark:border-white/15 dark:hover:bg-neutral-800"
+            >
+              Add to waitlist
+            </button>
+          </form>
+        ) : null}
+      </div>
+
       <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+      <FeedbackMessage ok={visState.ok} message={visState.message} className="mt-2" />
     </div>
   );
 }

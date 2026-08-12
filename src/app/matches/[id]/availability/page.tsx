@@ -12,7 +12,7 @@ import {
   type MatchdayStatus,
   type PlayerAvailability,
 } from "@/lib/availability";
-import { isWaitlistAutoPromoteEnabled, isVoteGateEnabled } from "@/lib/feature-settings";
+import { isWaitlistAutoPromoteEnabled, isWaitlistVisibleToPlayers, isVoteGateEnabled } from "@/lib/feature-settings";
 import { AvailabilityControls } from "./availability-controls";
 import {
   AvailabilityOpenToggle,
@@ -123,13 +123,26 @@ export default async function AvailabilityPage({
   const pendingGuests = guests.filter((g) => g.status === "pending");
   const myGuests = myPlayerId == null ? [] : guests.filter((g) => g.hostPlayerId === myPlayerId);
 
-  const [waitlistEnabled, waitlistPlayers, voteGateEnabled] = isAdmin
+  const [waitlistEnabled, waitlistPlayers, waitlistVisible, voteGateEnabled] = isAdmin
     ? await Promise.all([
         isWaitlistAutoPromoteEnabled(),
         getWaitlistPlayers(matchId),
+        isWaitlistVisibleToPlayers(),
         isVoteGateEnabled(),
       ])
-    : [false, [], false];
+    : [false, [], false, false];
+
+  // Non-admin players only see the waitlist when the admin has made it visible.
+  const publicWaitlist =
+    !isAdmin && (await isWaitlistVisibleToPlayers())
+      ? await getWaitlistPlayers(matchId)
+      : [];
+
+  // Players an admin can still add to the waitlist: not already IN and not queued.
+  const waitlistedIds = new Set(waitlistPlayers.map((w) => w.playerId));
+  const waitlistCandidates = players
+    .filter((p) => p.status !== "in" && !waitlistedIds.has(p.playerId))
+    .map((p) => ({ playerId: p.playerId, name: p.name }));
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
@@ -189,6 +202,38 @@ export default async function AvailabilityPage({
         </details>
       ) : null}
 
+      {publicWaitlist.length > 0 ? (
+        <section className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
+          <h2 className="text-sm font-semibold">Waitlist ({publicWaitlist.length})</h2>
+          <p className="mt-1 text-xs text-neutral-500">
+            If the match is full, spots open up in this order.
+          </p>
+          <ol className="mt-3 space-y-1">
+            {publicWaitlist.map((w, i) => {
+              const isMe = w.playerId === myPlayerId;
+              return (
+                <li
+                  key={w.playerId}
+                  className={`flex items-center gap-2 rounded-lg px-2 py-1 text-sm ${
+                    isMe
+                      ? "bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      : ""
+                  }`}
+                >
+                  <span className="w-5 text-right text-xs tabular-nums text-neutral-400">
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">
+                    {w.name}
+                    {isMe ? " (you)" : ""}
+                  </span>
+                </li>
+              );
+            })}
+          </ol>
+        </section>
+      ) : null}
+
       {isAdmin ? (
         <details className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
           <summary className="cursor-pointer text-sm font-semibold">
@@ -207,7 +252,9 @@ export default async function AvailabilityPage({
               <WaitlistToggle
                 matchId={matchId}
                 enabled={waitlistEnabled}
+                visibleToPlayers={waitlistVisible}
                 waitlist={waitlistPlayers}
+                candidates={waitlistCandidates}
               />
             </div>
             <div className="border-t border-black/5 pt-4 dark:border-white/5">

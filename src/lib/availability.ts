@@ -210,6 +210,21 @@ export async function removeFromWaitlist(matchId: number, playerId: number): Pro
   if (next.length !== list.length) await saveWaitlist(matchId, next);
 }
 
+/** Move a waitlisted player one place up (-1) or down (+1). No-op at the edges. */
+export async function moveWaitlistPlayer(
+  matchId: number,
+  playerId: number,
+  direction: -1 | 1,
+): Promise<void> {
+  const list = await getWaitlist(matchId);
+  const i = list.indexOf(playerId);
+  if (i < 0) return;
+  const j = i + direction;
+  if (j < 0 || j >= list.length) return;
+  [list[i], list[j]] = [list[j], list[i]];
+  await saveWaitlist(matchId, list);
+}
+
 /** The waitlisted players (id, name) in join order — for the admin view. */
 export async function getWaitlistPlayers(
   matchId: number,

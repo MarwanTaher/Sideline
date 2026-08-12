@@ -11,6 +11,7 @@ import { sqlClient } from "./db";
 const AUTO_APPROVE_TRUSTED_KEY = "stats_auto_approve_trusted";
 const TRUSTED_PLAYER_IDS_KEY = "stats_trusted_player_ids";
 const WAITLIST_AUTO_PROMOTE_KEY = "waitlist_auto_promote";
+const WAITLIST_VISIBLE_KEY = "waitlist_visible_to_players";
 const AVAILABILITY_VOTE_GATE_KEY = "availability_vote_gate";
 
 async function getSetting(key: string): Promise<string | null> {
@@ -68,6 +69,17 @@ export async function isWaitlistAutoPromoteEnabled(): Promise<boolean> {
 
 export async function setWaitlistAutoPromote(enabled: boolean): Promise<void> {
   await setSetting(WAITLIST_AUTO_PROMOTE_KEY, enabled ? "1" : "0");
+}
+
+// ── Waitlist visibility to players ─────────────────────────────────────────
+// When on, non-admin players see the ordered waitlist on the availability page.
+
+export async function isWaitlistVisibleToPlayers(): Promise<boolean> {
+  return (await getSetting(WAITLIST_VISIBLE_KEY)) === "1";
+}
+
+export async function setWaitlistVisibleToPlayers(enabled: boolean): Promise<void> {
+  await setSetting(WAITLIST_VISIBLE_KEY, enabled ? "1" : "0");
 }
 
 // ── Availability vote-gate ─────────────────────────────────────────────────
