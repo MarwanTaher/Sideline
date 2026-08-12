@@ -386,8 +386,6 @@ export async function setPlayerMatchStats(
      VALUES ($1, $2, 'admin_edit', $3, $4, $5, $6, $7, $8)`,
     [matchId, playerId, actor, oldGoals, goals, oldAssists, assists, "Admin direct edit"],
   );
-
-  await sqlClient.query(`UPDATE matches SET stats_scoring_enabled = 1 WHERE id = $1`, [matchId]);
 }
 
 
@@ -555,8 +553,9 @@ export async function rejectStatsSubmission(
 }
 
 /**
- * Rebuild the `stats` table from every approved submission and enable stats
- * scoring on the affected matches. Returns the number of stat rows written.
+ * Rebuild the `stats` table from every approved submission. Stats scoring stays
+ * governed by each match's own setting (this never flips it on). Returns the
+ * number of stat rows written.
  */
 export async function backfillApprovedStats(): Promise<number> {
   const raw = await sqlClient.query(
@@ -566,13 +565,11 @@ export async function backfillApprovedStats(): Promise<number> {
   );
   const rows = raw as SubmissionRow[];
 
-  const matchIds = new Set<number>();
   for (const row of rows) {
     const matchId = Number(row.match_id);
     const playerId = Number(row.player_id);
     const goals = Number(row.goals ?? 0);
     const assists = Number(row.assists ?? 0);
-    matchIds.add(matchId);
     await sqlClient.query(
       `INSERT INTO stats(match_id, player_id, goals, assists)
        VALUES ($1, $2, $3, $4)
@@ -581,12 +578,6 @@ export async function backfillApprovedStats(): Promise<number> {
          assists = EXCLUDED.assists`,
       [matchId, playerId, goals, assists],
     );
-  }
-
-  for (const matchId of matchIds) {
-    await sqlClient.query(`UPDATE matches SET stats_scoring_enabled = 1 WHERE id = $1`, [
-      matchId,
-    ]);
   }
 
   return rows.length;

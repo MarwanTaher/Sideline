@@ -60,7 +60,7 @@ export function CreateMatchForm() {
       </div>
 
       <label className="flex items-center gap-2 text-sm">
-        <input type="checkbox" name="statsScoringEnabled" defaultChecked className="h-4 w-4" />
+        <input type="checkbox" name="statsScoringEnabled" className="h-4 w-4" />
         <span>
           Include stats in scoring
           <span className="block text-xs text-neutral-500">

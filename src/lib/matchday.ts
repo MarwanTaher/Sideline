@@ -519,11 +519,6 @@ export async function syncMatchdayToStats(matchId: number): Promise<number> {
     );
   }
 
-  await sqlClient.query(
-    `UPDATE matches SET stats_scoring_enabled = 1 WHERE id = $1`,
-    [matchId],
-  );
-
   return rows.length;
 }
 
