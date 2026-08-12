@@ -145,17 +145,9 @@ export default async function SiteHeader() {
                     )}
                   </Link>
                 ) : null}
-                {user.playerId != null ? (
-                  <Link
-                    href="/profile"
-                    title="View your profile"
-                    className="font-semibold text-emerald-600 underline decoration-emerald-600/30 decoration-2 underline-offset-4 transition hover:text-emerald-700 hover:decoration-emerald-600 dark:text-emerald-400 dark:decoration-emerald-400/40 dark:hover:text-emerald-300"
-                  >
-                    {user.name}
-                  </Link>
-                ) : (
+                {user.playerId == null ? (
                   <span className="text-neutral-500">{user.name}</span>
-                )}
+                ) : null}
                 {user.role && user.role !== "player" && adminView ? (
                   <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
                     {user.role}
