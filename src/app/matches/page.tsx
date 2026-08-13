@@ -46,7 +46,7 @@ export default async function MatchesPage() {
         {isAdmin ? (
           <Link
             href="/matches/new"
-            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+            className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition active:scale-[0.98] hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
           >
             + New match
           </Link>
@@ -78,7 +78,7 @@ export default async function MatchesPage() {
             <li key={m.id}>
               <Link
                 href={`/matches/${m.id}`}
-                className="flex items-center justify-between rounded-xl border border-black/10 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-white/10 dark:bg-neutral-900"
+                className="flex items-center justify-between rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-white/10 dark:bg-neutral-900"
               >
                 <div>
                   <div className="flex items-center gap-2">

@@ -5,7 +5,7 @@ export type CardProps = React.HTMLAttributes<HTMLDivElement>;
 export function Card({ className = "", children, ...rest }: CardProps) {
   return (
     <div
-      className={`rounded-xl border border-black/10 p-4 dark:border-white/10 ${className}`.trim()}
+      className={`rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm transition dark:border-white/10 dark:bg-neutral-900 ${className}`.trim()}
       {...rest}
     >
       {children}
