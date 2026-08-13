@@ -32,7 +32,7 @@ import {
  * get persisted through the same saveDraftAction as the classic board.
  * ------------------------------------------------------------------------- */
 
-const BRAND = "#a6ce39";
+const BRAND = "#059669";
 const INITIAL: DraftActionState = { ok: false, message: "" };
 
 // Pitch rows, attack-upward (FWD at the top, GK guarding the bottom goal).

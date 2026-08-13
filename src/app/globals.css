@@ -3,7 +3,7 @@
 :root {
   --background: #ffffff;
   --foreground: #0d0d0d;
-  --brand: #a6ce39;
+  --brand: #059669;
   color-scheme: light;
 }
 
@@ -19,7 +19,7 @@
   :root {
     --background: #0d0d0d;
     --foreground: #ededed;
-    --brand: #a6ce39;
+    --brand: #059669;
     color-scheme: dark;
   }
 }

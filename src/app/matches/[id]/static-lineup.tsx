@@ -5,7 +5,7 @@ import { teamGridColumns } from "@/lib/team-constants";
 /* Read-only pitch view of a saved draft, shown on the match overview. Mirrors
  * the Lineup Builder's look but has no drag/drop or controls. */
 
-const BRAND = "#a6ce39";
+const BRAND = "#059669";
 const ROW_ORDER = ["FWD", "MID", "DEF", "GK"] as const;
 type Row = (typeof ROW_ORDER)[number];
 
