@@ -5,8 +5,8 @@ import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
 import { getPlayerRank } from "@/lib/leaderboard";
-import { getPlayerSeason } from "@/lib/player-trends";
 import { getPendingVoteObligation } from "@/lib/voting";
+import { getLastMatchdayOutcome } from "@/lib/matchday";
 import { getStatsReviewCounts } from "@/lib/stats";
 import { getPlayersAdminData } from "@/lib/players-admin";
 import { Card } from "@/components/ui/card";
@@ -48,15 +48,8 @@ export default async function Home() {
     rankInfo = await getPlayerRank(playerId);
   }
 
-  const season = playerId != null ? await getPlayerSeason(playerId) : null;
   const voteObligation = playerId != null ? await getPendingVoteObligation(playerId) : null;
-  const wdl = season
-    ? {
-        W: season.form.filter((r) => r === "W").length,
-        D: season.form.filter((r) => r === "D").length,
-        L: season.form.filter((r) => r === "L").length,
-      }
-    : null;
+  const lastMatchday = playerId != null ? await getLastMatchdayOutcome(playerId) : null;
 
   let adminInfo: { pendingReviews: number; resetRequests: number } | null = null;
   if (isAdmin) {
@@ -260,15 +253,20 @@ export default async function Home() {
         ) : null}
       </div>
 
-      {wdl && wdl.W + wdl.D + wdl.L > 0 ? (
+      {lastMatchday && lastMatchday.rounds > 0 ? (
         <Card className="mt-4">
-          <h2 className="text-sm font-semibold text-neutral-500">Recent form</h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-neutral-500">
+              Last matchday · Match {lastMatchday.matchId}
+            </h2>
+            <span className="text-xs text-neutral-400">{lastMatchday.rounds} mini-matches</span>
+          </div>
           <div className="mt-3">
             <SegmentedBar
               segments={[
-                { label: "Won", value: wdl.W, barClass: "bg-emerald-500", dotClass: "bg-emerald-500" },
-                { label: "Drawn", value: wdl.D, barClass: "bg-neutral-400", dotClass: "bg-neutral-400" },
-                { label: "Lost", value: wdl.L, barClass: "bg-red-500", dotClass: "bg-red-500" },
+                { label: "Won", value: lastMatchday.won, barClass: "bg-emerald-500", dotClass: "bg-emerald-500" },
+                { label: "Drawn", value: lastMatchday.drawn, barClass: "bg-neutral-400", dotClass: "bg-neutral-400" },
+                { label: "Lost", value: lastMatchday.lost, barClass: "bg-red-500", dotClass: "bg-red-500" },
               ]}
             />
           </div>
