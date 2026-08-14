@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type { LeaderboardRow } from "@/lib/leaderboard";
 import { Badge } from "@/components/ui/badge";
 import { Avatar } from "@/components/ui/avatar";
@@ -155,10 +156,13 @@ export default function LeaderboardTable({
                 >
                   <td className="px-3 py-2 text-neutral-400">{i + 1}</td>
                   <td className="px-3 py-2">
-                    <span className="flex items-center gap-2">
+                    <Link
+                      href={`/players/${r.id}`}
+                      className="flex items-center gap-2 transition hover:text-emerald-600 dark:hover:text-emerald-400"
+                    >
                       <Avatar name={r.name} photoUrl={r.photoUrl} size="xs" />
                       <span className="font-medium">{r.name}</span>
-                    </span>
+                    </Link>
                   </td>
                   <td className="px-3 py-2 text-neutral-500">{r.position}</td>
                   <td className="px-3 py-2 text-right tabular-nums">

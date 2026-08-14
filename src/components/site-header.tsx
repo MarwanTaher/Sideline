@@ -51,7 +51,7 @@ export default async function SiteHeader() {
                 href="/profile"
                 aria-label={`View your profile, ${user.name}`}
                 title="Your profile"
-                className="rounded-full ring-2 ring-black/5 transition hover:ring-emerald-600/30 dark:ring-white/10"
+                className="inline-flex rounded-full ring-2 ring-black/5 transition hover:ring-emerald-600/30 dark:ring-white/10"
               >
                 <Avatar name={user.name} photoUrl={photoUrl} size="md" />
               </Link>
@@ -93,7 +93,7 @@ export default async function SiteHeader() {
                     href="/profile"
                     aria-label={`View your profile, ${user.name}`}
                     title="Your profile"
-                    className="rounded-full ring-2 ring-black/5 transition hover:ring-emerald-600/30 dark:ring-white/10"
+                    className="inline-flex rounded-full ring-2 ring-black/5 transition hover:ring-emerald-600/30 dark:ring-white/10"
                   >
                     <Avatar name={user.name} photoUrl={photoUrl} size="sm" />
                   </Link>

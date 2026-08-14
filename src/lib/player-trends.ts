@@ -15,6 +15,7 @@ export type PlayerSeason = {
   appearances: number;
   goals: number;
   assists: number;
+  lastMatch: { goals: number; assists: number } | null;
   ratingSeries: SeriesPoint[];
   goalsSeries: SeriesPoint[];
   form: MatchResult[];
@@ -147,6 +148,13 @@ export async function getPlayerSeason(playerId: number): Promise<PlayerSeason> {
     appearances: matchRows.length,
     goals,
     assists,
+    lastMatch:
+      matchRows.length > 0
+        ? {
+            goals: Number(matchRows[matchRows.length - 1].goals),
+            assists: Number(matchRows[matchRows.length - 1].assists),
+          }
+        : null,
     ratingSeries,
     goalsSeries,
     form,

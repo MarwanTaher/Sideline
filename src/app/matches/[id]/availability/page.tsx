@@ -63,8 +63,13 @@ function StatusList({
         <ul className={`mt-2 space-y-1 text-sm ${dim ? "opacity-[0.55]" : ""}`}>
           {players.map((p) => (
             <li key={p.playerId} className="flex items-center gap-2">
-              <Avatar name={p.name} photoUrl={p.photoUrl} size="xs" />
-              <span className="min-w-0 flex-1 truncate">{p.name}</span>
+              <Link
+                href={`/players/${p.playerId}`}
+                className="flex min-w-0 flex-1 items-center gap-2 transition hover:text-emerald-600 dark:hover:text-emerald-400"
+              >
+                <Avatar name={p.name} photoUrl={p.photoUrl} size="xs" />
+                <span className="min-w-0 flex-1 truncate">{p.name}</span>
+              </Link>
               {p.preferredPosition ? (
                 <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
                   {p.preferredPosition}

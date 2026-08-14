@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { MatchTeam } from "@/lib/matches";
 import { StaticLineup } from "./static-lineup";
 import { teamGridColumns } from "@/lib/team-constants";
@@ -87,7 +88,16 @@ function TeamList({ teams }: { teams: MatchTeam[] }) {
                       Guest
                     </span>
                   ) : null}
-                  <span>{p.name}</span>
+                  {p.isGuest ? (
+                    <span>{p.name}</span>
+                  ) : (
+                    <Link
+                      href={`/players/${p.playerId}`}
+                      className="transition hover:text-emerald-600 dark:hover:text-emerald-400"
+                    >
+                      {p.name}
+                    </Link>
+                  )}
                   {p.isGuest && p.hostName ? (
                     <span className="text-xs text-neutral-500"> · of {p.hostName}</span>
                   ) : null}
