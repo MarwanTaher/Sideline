@@ -93,6 +93,13 @@ export const PlusIcon = ({ className }: IconProps) => (
   </Svg>
 );
 
+export const PencilIcon = ({ className }: IconProps) => (
+  <Svg className={className}>
+    <path d="M4 20h4L18.5 9.5a2 2 0 0 0-2.8-2.8L5 17.2z" />
+    <path d="M13.5 6.5l4 4" />
+  </Svg>
+);
+
 /** Solid rank medal with the position number. */
 export const MedalIcon = ({
   className,

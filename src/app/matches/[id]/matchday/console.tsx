@@ -9,7 +9,7 @@ import {
   useTransition,
 } from "react";
 import { Button } from "@/components/ui/button";
-import { BallIcon, SwapIcon, UndoIcon, PlusIcon, MedalIcon } from "@/components/ui/icons";
+import { BallIcon, SwapIcon, UndoIcon, PlusIcon, MedalIcon, PencilIcon, XIcon } from "@/components/ui/icons";
 import type { MatchTeam, MatchTeamPlayer } from "@/lib/matches";
 import type {
   MatchdayConsole as ConsoleData,
@@ -942,15 +942,15 @@ function RoundCard({
               <div className="flex w-full max-w-md items-center gap-2">
                 {round.running ? (
                   <TimerBtn className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700" onClick={() => onTimer(round.id, "pause")}>
-                    ⏸ Pause
+                    Pause
                   </TimerBtn>
                 ) : (
                   <TimerBtn className="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700" onClick={() => onTimer(round.id, "start")}>
-                    ▶ {round.elapsedMs > 0 ? "Resume" : "Start"}
+                    {round.elapsedMs > 0 ? "Resume" : "Start"}
                   </TimerBtn>
                 )}
                 <TimerBtn className="bg-white/15 hover:bg-white/25 active:bg-white/30" onClick={() => onTimer(round.id, "reset")}>
-                  ↺ Reset
+                  Reset
                 </TimerBtn>
               </div>
             ) : null}
@@ -1478,7 +1478,7 @@ function GoalLog({
                 aria-label="Edit goal"
                 className="rounded-lg px-2 py-2 text-neutral-400 transition hover:text-neutral-900 dark:hover:text-neutral-100"
               >
-                ✎
+                <PencilIcon className="h-4 w-4" />
               </button>
             ) : null}
             <button
@@ -1486,7 +1486,7 @@ function GoalLog({
               aria-label="Remove goal"
               className="rounded-lg px-2 py-2 text-neutral-400 transition hover:text-red-600"
             >
-              ✕
+              <XIcon className="h-4 w-4" />
             </button>
           </li>
         );
