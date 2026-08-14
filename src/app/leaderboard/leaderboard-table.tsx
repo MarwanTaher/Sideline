@@ -151,7 +151,7 @@ export default function LeaderboardTable({
               filtered.map((r, i) => (
                 <tr
                   key={r.id}
-                  className="border-b border-black/5 last:border-0 dark:border-white/5"
+                  className="border-b border-black/5 transition last:border-0 hover:bg-neutral-50 dark:border-white/5 dark:hover:bg-white/5"
                 >
                   <td className="px-3 py-2 text-neutral-400">{i + 1}</td>
                   <td className="px-3 py-2">
