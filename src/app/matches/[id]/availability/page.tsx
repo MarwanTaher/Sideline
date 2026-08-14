@@ -43,21 +43,23 @@ function StatusList({
   title,
   players,
   guests = [],
+  dim = false,
 }: {
   title: ReactNode;
   players: PlayerAvailability[];
   guests?: Guest[];
+  dim?: boolean;
 }) {
   const total = players.length + guests.length;
   return (
-    <div className="rounded-xl border border-black/10 p-3 dark:border-white/10">
+    <div className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-sm dark:border-white/10 dark:bg-neutral-900">
       <h3 className="text-sm font-semibold">
         {title} <span className="font-normal text-neutral-400">({total})</span>
       </h3>
       {total === 0 ? (
         <p className="mt-2 text-xs text-neutral-400">None</p>
       ) : (
-        <ul className="mt-2 space-y-1 text-sm">
+        <ul className={`mt-2 space-y-1 text-sm ${dim ? "opacity-[0.55]" : ""}`}>
           {players.map((p) => (
             <li key={p.playerId} className="flex items-center justify-between">
               <span className="truncate">{p.name}</span>
@@ -187,6 +189,20 @@ export default async function AvailabilityPage({
             <p className="text-xs text-neutral-500">Pending</p>
           </div>
         </div>
+        {match.maxPlayers ? (
+          <div className="mt-3">
+            <div className="mb-1 flex items-center justify-between text-xs text-neutral-500">
+              <span>{inPlayers.length >= match.maxPlayers ? "Match full" : "Spots filled"}</span>
+              <span className="tabular-nums">{inPlayers.length}/{match.maxPlayers}</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+              <div
+                className={`h-full rounded-full ${inPlayers.length >= match.maxPlayers ? "bg-amber-500" : "bg-emerald-500"}`}
+                style={{ width: `${Math.min(100, (inPlayers.length / match.maxPlayers) * 100)}%` }}
+              />
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {myPlayerId != null ? (
@@ -225,7 +241,7 @@ export default async function AvailabilityPage({
       ) : null}
 
       {publicWaitlist.length > 0 ? (
-        <section className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
+        <section className="mt-6 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
           <h2 className="text-sm font-semibold">Waitlist ({publicWaitlist.length})</h2>
           <p className="mt-1 text-xs text-neutral-500">
             If the match is full, spots open up in this order.
@@ -236,19 +252,30 @@ export default async function AvailabilityPage({
               return (
                 <li
                   key={w.playerId}
-                  className={`flex items-center gap-2 rounded-lg px-2 py-1 text-sm ${
+                  className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm ${
                     isMe
                       ? "bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                       : ""
                   }`}
                 >
-                  <span className="w-5 text-right text-xs tabular-nums text-neutral-400">
+                  <span
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ${
+                      i === 0
+                        ? "bg-amber-500 text-white"
+                        : "bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300"
+                    }`}
+                  >
                     {i + 1}
                   </span>
                   <span className="min-w-0 flex-1 truncate">
                     {w.name}
                     {isMe ? " (you)" : ""}
                   </span>
+                  {i === 0 ? (
+                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                      Next up
+                    </span>
+                  ) : null}
                 </li>
               );
             })}
@@ -355,7 +382,7 @@ export default async function AvailabilityPage({
 
       <section className="mt-6 grid gap-4 sm:grid-cols-3">
         <StatusList title={<span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> In</span>} players={inPlayers} guests={approvedGuests} />
-        <StatusList title={<span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" /> Out</span>} players={outPlayers} />
+        <StatusList title={<span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" /> Out</span>} players={outPlayers} dim />
         <StatusList title={<span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-neutral-400" /> Pending</span>} players={pendingPlayers} />
       </section>
     </main>

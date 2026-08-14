@@ -4,8 +4,7 @@ import { useEffect, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { setAvailabilityAction, type AvailabilityActionState } from "./actions";
 import type { AvailabilityStatus } from "@/lib/availability";
-import { Button } from "@/components/ui/button";
-import { Banner, FeedbackMessage } from "@/components/ui/banner";
+import { FeedbackMessage } from "@/components/ui/banner";
 import { CheckIcon, XIcon } from "@/components/ui/icons";
 
 const INITIAL: AvailabilityActionState = { ok: false, message: "" };
@@ -30,44 +29,58 @@ export function AvailabilityControls({
 
   const banner =
     currentStatus === "in"
-      ? { tone: "success" as const, text: "You are marked IN for this match." }
+      ? { dot: "bg-emerald-500", label: "You're IN", sub: "See you on the pitch.", cls: "bg-emerald-50 dark:bg-emerald-950/30" }
       : currentStatus === "out"
-        ? { tone: "warning" as const, text: "You are marked OUT for this match." }
-        : { tone: "info" as const, text: "You have not responded yet." };
+        ? { dot: "bg-red-500", label: "You're OUT", sub: "You've marked yourself unavailable.", cls: "bg-red-50 dark:bg-red-950/30" }
+        : { dot: "bg-amber-500", label: "No response yet", sub: "Let everyone know if you can play.", cls: "bg-amber-50 dark:bg-amber-950/30" };
 
   return (
-    <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
-      <Banner tone={banner.tone}>{banner.text}</Banner>
+    <div className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
+      <div className={`flex items-start gap-2.5 rounded-xl px-3 py-2.5 ${banner.cls}`}>
+        <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${banner.dot}`} />
+        <div>
+          <p className="text-sm font-semibold">{banner.label}</p>
+          <p className="text-xs text-neutral-500">{banner.sub}</p>
+        </div>
+      </div>
 
       {open ? (
-        <div className="mt-3 flex gap-2">
-          <form action={formAction} className="flex-1">
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <form action={formAction}>
             <input type="hidden" name="matchId" value={matchId} />
             <input type="hidden" name="status" value="in" />
-            <Button
+            <button
               type="submit"
-              variant="success"
-              className="w-full"
-              disabled={currentStatus === "in"}
-              pending={pending}
-              pendingLabel="Marking…"
+              disabled={pending}
+              className={`flex w-full flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60 ${
+                currentStatus === "in"
+                  ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
+                  : "border-emerald-600/40 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+              }`}
             >
-              <CheckIcon className="h-4 w-4" /> Mark IN
-            </Button>
+              <span className={`flex h-9 w-9 items-center justify-center rounded-full ${currentStatus === "in" ? "bg-white/20" : "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400"}`}>
+                <CheckIcon className="h-5 w-5" />
+              </span>
+              I&apos;m IN
+            </button>
           </form>
-          <form action={formAction} className="flex-1">
+          <form action={formAction}>
             <input type="hidden" name="matchId" value={matchId} />
             <input type="hidden" name="status" value="out" />
-            <Button
+            <button
               type="submit"
-              variant="secondary"
-              className="w-full"
-              disabled={currentStatus === "out"}
-              pending={pending}
-              pendingLabel="Marking…"
+              disabled={pending}
+              className={`flex w-full flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60 ${
+                currentStatus === "out"
+                  ? "border-red-600 bg-red-600 text-white shadow-sm"
+                  : "border-red-600/40 text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
+              }`}
             >
-              <XIcon className="h-4 w-4" /> Mark OUT
-            </Button>
+              <span className={`flex h-9 w-9 items-center justify-center rounded-full ${currentStatus === "out" ? "bg-white/20" : "bg-red-600/10 text-red-600 dark:text-red-400"}`}>
+                <XIcon className="h-5 w-5" />
+              </span>
+              I&apos;m OUT
+            </button>
           </form>
         </div>
       ) : (
