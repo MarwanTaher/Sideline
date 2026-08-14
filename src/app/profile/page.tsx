@@ -16,6 +16,7 @@ import AchievementsGrid from "./achievements-grid";
 import ChemistryPanel from "./chemistry-panel";
 import { getPlayerContact } from "@/lib/player-profile";
 import { getPlayerSeason } from "@/lib/player-trends";
+import { getPlayerRank } from "@/lib/leaderboard";
 import { getPlayerAchievementsLive } from "@/lib/achievements";
 import { getChemistry } from "@/lib/chemistry";
 
@@ -79,6 +80,12 @@ export default async function ProfilePage() {
   ]);
 
   const displayName = contact?.name ?? session.user.name ?? "Player";
+  const rankInfo = await getPlayerRank(pid);
+  const standingLabel = rankInfo?.ranked
+    ? `Ranked #${rankInfo.rank} · Top ${Math.ceil((rankInfo.rank / rankInfo.total) * 100)}%`
+    : "Unranked";
+  const roleLabel =
+    session.user.role && session.user.role !== "player" ? session.user.role : null;
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
@@ -93,6 +100,8 @@ export default async function ProfilePage() {
             email={contact?.email ?? null}
             phone={contact?.phone ?? null}
             photoUrl={contact?.photoUrl ?? null}
+            standingLabel={standingLabel}
+            roleLabel={roleLabel}
           />
         </section>
 
