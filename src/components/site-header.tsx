@@ -42,7 +42,7 @@ export default async function SiteHeader() {
         <div className="flex items-center justify-between md:hidden">
           <Link href="/" className="flex items-center gap-2">
             <Image src="/logo-mark.svg" alt="" width={24} height={24} className="rounded-md" />
-            <span className="text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
+            <span className="font-heading text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
           </Link>
 
           {user ? (
@@ -82,7 +82,7 @@ export default async function SiteHeader() {
         <div className="hidden items-center justify-between md:flex">
           <Link href="/" className="flex items-center gap-2">
             <Image src="/logo-mark.svg" alt="" width={26} height={26} className="rounded-md" />
-            <span className="text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
+            <span className="font-heading text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
           </Link>
 
           <div className="flex items-center gap-4">

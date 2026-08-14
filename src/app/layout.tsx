@@ -1,15 +1,21 @@
 import type { Metadata } from "next";
-import { Montserrat, Geist_Mono } from "next/font/google";
+import { Outfit, Inter, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import SiteHeader from "@/components/site-header";
 import { SplashScreen } from "@/components/splash-screen";
 import OnboardingFlow from "@/components/onboarding-flow";
 import { auth } from "@/auth";
 
-const montserrat = Montserrat({
+const inter = Inter({
   variable: "--font-geist-sans",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
+});
+
+const outfit = Outfit({
+  variable: "--font-heading",
+  subsets: ["latin"],
+  weight: ["700", "800"],
 });
 
 const geistMono = Geist_Mono({
@@ -55,7 +61,7 @@ export default async function RootLayout({
   return (
     <html
       lang="en"
-      className={`${montserrat.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${outfit.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col pb-20 md:pb-0">
         <SplashScreen />
