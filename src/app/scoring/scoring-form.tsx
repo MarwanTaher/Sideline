@@ -83,7 +83,7 @@ export function ScoringForm({ config }: { config: ScoringConfigView }) {
         <p className="mt-1 text-sm text-neutral-500">
           Configure how peer votes and approved stats combine into a player&apos;s final ranking.
         </p>
-        <div className="mt-3 rounded-xl border border-black/10 p-4 dark:border-white/10">
+        <div className="mt-3 rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
           <label className="block text-sm">
             <span className="font-medium">Stats weight: {statPct}%</span>
             <input
@@ -175,7 +175,7 @@ export function ScoringForm({ config }: { config: ScoringConfigView }) {
           Optional refinements to make peer scores more fair, consistent and accurate. All default
           to off — turning them on changes how scores are computed.
         </p>
-        <div className="mt-3 space-y-4 rounded-xl border border-black/10 p-4 dark:border-white/10">
+        <div className="mt-3 space-y-4 rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
           <ToggleField
             label="Normalize voter harshness"
             name="voterNormalization"

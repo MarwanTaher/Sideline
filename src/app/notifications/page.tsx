@@ -41,7 +41,7 @@ export default async function NotificationsAdminPage() {
         {deviceCount} device{deviceCount === 1 ? "" : "s"} subscribed to push.
       </p>
 
-      <section className="mt-8 rounded-xl border border-black/10 p-4 dark:border-white/10">
+      <section className="mt-8 rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-sm font-medium">Push notifications</h2>
@@ -70,7 +70,7 @@ export default async function NotificationsAdminPage() {
 
       <NotificationTypesSection globalEnabled={enabled} />
 
-      <section className="mt-8 rounded-xl border border-black/10 p-4 dark:border-white/10">
+      <section className="mt-8 rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h2 className="text-sm font-medium">Per-user control</h2>

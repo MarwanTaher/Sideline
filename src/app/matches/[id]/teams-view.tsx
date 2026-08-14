@@ -72,7 +72,7 @@ function TeamList({ teams }: { teams: MatchTeam[] }) {
       {teams.map((team) => (
         <div
           key={team.teamNo}
-          className="rounded-xl border border-black/10 p-4 dark:border-white/10"
+          className="rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10"
         >
           <h3 className="text-sm font-semibold">
             {team.name?.trim() || `Team ${team.teamNo}`}{" "}
