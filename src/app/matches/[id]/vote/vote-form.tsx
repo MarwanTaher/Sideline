@@ -5,15 +5,14 @@ import { useRouter } from "next/navigation";
 import { submitVotesAction, type VoteActionState } from "./actions";
 import {
   DEFAULT_RATING,
-  MAX_RATING,
-  MIN_RATING,
   RATING_LABELS,
   ratingLabel,
   ratingTier,
 } from "@/lib/voting-constants";
 import type { BallotPlayer } from "@/lib/voting";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
+import { RatingSlider } from "@/components/ui/rating-slider";
 import { Banner, FeedbackMessage } from "@/components/ui/banner";
 
 const INITIAL: VoteActionState = { ok: false, message: "" };
@@ -169,56 +168,44 @@ export function VoteForm({ matchId, ballot, hasVotedBefore }: VoteFormProps) {
           return (
             <li
               key={b.playerId}
-              className={`rounded-xl border p-3 transition ${
+              className={`rounded-2xl border p-3 shadow-sm transition ${
                 row.skipped
                   ? "border-black/5 bg-neutral-50 dark:border-white/5 dark:bg-neutral-900"
-                  : "border-black/10 dark:border-white/10"
+                  : "border-black/[0.06] bg-white dark:border-white/10 dark:bg-neutral-900"
               }`}
             >
               <div className="flex items-center justify-between gap-3">
-                <span className="font-medium">
-                  {b.name}{" "}
-                  <span className="text-xs font-normal text-neutral-400">Team {b.teamNo}</span>
-                </span>
-                <div className="flex items-center gap-2">
-                  {row.skipped ? <Badge tone="neutral" dot>Skipped</Badge> : null}
-                  <label className="flex items-center gap-1.5 text-xs text-neutral-500">
-                    <input
-                      type="checkbox"
-                      checked={row.skipped}
-                      onChange={(e) => setSkipped(b.playerId, e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                    Skip
-                  </label>
-                </div>
-              </div>
-              <div className="mt-2 flex items-center gap-3">
-                <input
-                  type="range"
-                  min={MIN_RATING}
-                  max={MAX_RATING}
-                  step={1}
-                  value={row.rating}
-                  disabled={row.skipped}
-                  aria-label={`Rate ${b.name} from ${MIN_RATING} to ${MAX_RATING}`}
-                  aria-valuetext={
-                    row.skipped ? "skipped" : `${row.rating} out of ${MAX_RATING}`
-                  }
-                  onChange={(e) => setRating(b.playerId, Number(e.target.value))}
-                  className="flex-1 accent-neutral-900 disabled:opacity-40 dark:accent-white"
-                />
-                <span className="w-8 text-right text-lg font-semibold tabular-nums">
-                  {row.skipped ? "\u2014" : row.rating}
-                </span>
-              </div>
-              {row.skipped ? null : (
-                <div className="mt-1 flex justify-end">
-                  <span
-                    className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium text-white ${TIER_DOT[ratingTier(row.rating)]}`}
-                  >
-                    {ratingLabel(row.rating)}
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <Avatar name={b.name} size="sm" />
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium">{b.name}</span>
+                    <span className="text-xs text-neutral-400">Team {b.teamNo}</span>
                   </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSkipped(b.playerId, !row.skipped)}
+                  className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                    row.skipped
+                      ? "border-emerald-600/40 text-emerald-700 dark:text-emerald-400"
+                      : "border-black/15 text-neutral-500 dark:border-white/15"
+                  }`}
+                >
+                  {row.skipped ? "Rate" : "Skip"}
+                </button>
+              </div>
+              {row.skipped ? (
+                <p className="mt-2 text-xs text-neutral-400">Skipped — not counted.</p>
+              ) : (
+                <div className="mt-3">
+                  <RatingSlider value={row.rating} onChange={(v) => setRating(b.playerId, v)} />
+                  <div className="mt-1 flex justify-center">
+                    <span
+                      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium text-white ${TIER_DOT[ratingTier(row.rating)]}`}
+                    >
+                      {ratingLabel(row.rating)}
+                    </span>
+                  </div>
                 </div>
               )}
             </li>
