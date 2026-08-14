@@ -15,6 +15,7 @@ import BadgeGallery from "@/components/badge-gallery";
 import { SubNav } from "@/components/ui/sub-nav";
 import { SectionIcon } from "@/components/section-icon";
 import { Badge } from "@/components/ui/badge";
+import { TrophyIcon } from "@/components/ui/icons";
 import { DataTable } from "@/components/ui/data-table";
 
 export const metadata = {
@@ -169,7 +170,7 @@ async function AwardsResults({
 
   return (
     <>
-      <DataTable className="mt-4 rounded-xl border border-black/10 dark:border-white/10">
+      <DataTable className="mt-4 rounded-2xl border border-black/[0.06] shadow-sm dark:border-white/10">
         <table className="w-full text-sm">
           <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500 dark:bg-neutral-900">
             <tr>
@@ -199,7 +200,14 @@ async function AwardsResults({
                     key={awardType}
                     className="border-t border-black/5 dark:border-white/5"
                   >
-                    <td className="px-4 py-2 font-medium">{block.award_label}</td>
+                    <td className="px-4 py-2">
+                      <span className="flex items-center gap-2 font-medium">
+                        <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+                          <TrophyIcon className="h-3.5 w-3.5" />
+                        </span>
+                        {block.award_label}
+                      </span>
+                    </td>
                     <td className="px-4 py-2">{names}</td>
                     <td className="px-4 py-2 text-neutral-600 dark:text-neutral-300">
                       {metric}

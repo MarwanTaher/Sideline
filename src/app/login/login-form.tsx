@@ -74,7 +74,7 @@ export default function LoginForm({
           height={36}
           className="rounded-lg"
         />
-        <span className="text-lg font-bold uppercase tracking-[0.2em]">
+        <span className="font-heading text-lg font-bold uppercase tracking-[0.2em]">
           Sideline
         </span>
       </div>
@@ -94,7 +94,7 @@ export default function LoginForm({
             <select
               value={playerId}
               onChange={(e) => setPlayerId(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-black/30 dark:border-white/15"
+              className="mt-1 w-full rounded-xl border border-black/15 bg-transparent px-3 py-2 text-sm outline-none transition focus:border-emerald-500 dark:border-white/15"
             >
               {players.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -112,7 +112,7 @@ export default function LoginForm({
             autoComplete="current-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="mt-1 w-full rounded-lg border border-black/10 bg-transparent px-3 py-2 text-sm outline-none focus:border-black/30 dark:border-white/15"
+            className="mt-1 w-full rounded-xl border border-black/15 bg-transparent px-3 py-2 text-sm outline-none transition focus:border-emerald-500 dark:border-white/15"
           />
         </label>
 
@@ -125,7 +125,7 @@ export default function LoginForm({
         <button
           type="submit"
           disabled={!canSubmit || loading}
-          className="w-full rounded-lg bg-neutral-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-neutral-800 disabled:opacity-50 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+          className="w-full rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white shadow-sm transition active:scale-[0.98] hover:bg-emerald-500 disabled:opacity-50"
         >
           {loading ? "Signing in…" : "Sign in"}
         </button>
