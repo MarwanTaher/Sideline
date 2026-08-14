@@ -74,7 +74,9 @@ export default async function Home() {
           sizes="(max-width: 896px) 100vw, 896px"
           className="object-cover"
         />
-        <div className="absolute inset-0 bg-gradient-to-br from-emerald-700/90 via-emerald-800/85 to-emerald-950/90" />
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/85 via-emerald-600/80 to-teal-900/90" />
+        <div className="absolute inset-0 bg-[radial-gradient(90%_120%_at_100%_0%,rgba(163,230,53,0.35),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(80%_120%_at_0%_100%,rgba(45,212,191,0.30),transparent_55%)]" />
         <div className="relative">
           <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-medium capitalize backdrop-blur">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />

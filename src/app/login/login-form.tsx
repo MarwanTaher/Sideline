@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Image from "next/image";
 import Link from "next/link";
 import { signIn } from "next-auth/react";
@@ -30,7 +29,6 @@ export default function LoginForm({
   players: PlayerOption[];
   callbackUrl?: string;
 }) {
-  const router = useRouter();
   const target = resolveTarget(callbackUrl);
   const [playerId, setPlayerId] = useState<string>(
     players[0]?.id.toString() ?? "",
@@ -58,8 +56,10 @@ export default function LoginForm({
       return;
     }
 
-    router.push(target);
-    router.refresh();
+    // Full-page navigation so the freshly set session cookie is sent with the
+    // next request; a client-side router.push can race the cookie and bounce
+    // back to /login?callbackUrl=...
+    window.location.assign(target);
   }
 
   const canSubmit = password.length > 0 && playerId.length > 0;
