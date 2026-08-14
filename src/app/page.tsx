@@ -5,10 +5,14 @@ import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
 import { getPlayerRank } from "@/lib/leaderboard";
+import { getPlayerSeason } from "@/lib/player-trends";
 import { getStatsReviewCounts } from "@/lib/stats";
 import { getPlayersAdminData } from "@/lib/players-admin";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { StatBar } from "@/components/ui/stat-bar";
+import { SegmentedBar } from "@/components/ui/segmented-bar";
+import { BallIcon, BarsIcon, TrophyIcon } from "@/components/ui/icons";
 import { SectionIcon } from "@/components/section-icon";
 import NotificationPrompt from "@/components/notification-prompt";
 import InstallPrompt from "@/components/install-prompt";
@@ -44,6 +48,19 @@ export default async function Home() {
     rankInfo = await getPlayerRank(playerId);
   }
 
+  const season = playerId != null ? await getPlayerSeason(playerId) : null;
+  const avgRating =
+    season && season.ratingSeries.length > 0
+      ? season.ratingSeries.reduce((s, p) => s + p.value, 0) / season.ratingSeries.length
+      : (rankInfo?.final ?? 0);
+  const wdl = season
+    ? {
+        W: season.form.filter((r) => r === "W").length,
+        D: season.form.filter((r) => r === "D").length,
+        L: season.form.filter((r) => r === "L").length,
+      }
+    : null;
+
   let adminInfo: { pendingReviews: number; resetRequests: number } | null = null;
   if (isAdmin) {
     const [rc, pdata] = await Promise.all([
@@ -69,10 +86,11 @@ export default async function Home() {
         />
         <div className="absolute inset-0 bg-gradient-to-br from-emerald-700/90 via-emerald-800/85 to-emerald-950/90" />
         <div className="relative">
-          <p className="text-xs font-medium uppercase tracking-[0.15em] text-white/70">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-medium capitalize backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
             {isAdmin ? role : "Player"}
-          </p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight">Welcome back, {name}</h1>
+          </span>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight">Welcome back, {name}</h1>
           {rankInfo?.ranked ? (
             <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
               <span className="tabular-nums">#{rankInfo.rank}</span>
@@ -208,15 +226,52 @@ export default async function Home() {
               <p className="mt-0.5 text-sm tabular-nums text-neutral-500">
                 Score {rankInfo.final.toFixed(1)}
               </p>
+              {rankInfo.ranked && rankInfo.total > 0 ? (
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+                  <div
+                    className="h-full rounded-full bg-emerald-500"
+                    style={{ width: `${Math.max(4, ((rankInfo.total - rankInfo.rank + 1) / rankInfo.total) * 100)}%` }}
+                  />
+                </div>
+              ) : null}
             </Card>
           </Link>
         ) : null}
       </div>
 
+      {season && season.appearances > 0 ? (
+        <Card className="mt-4">
+          <h2 className="text-sm font-semibold text-neutral-500">Season performance</h2>
+          <div className="mt-3 space-y-2.5">
+            <StatBar label="Matches" value={season.appearances} max={Math.max(matches.length, season.appearances, 1)} colorClass="bg-emerald-500" />
+            <StatBar label="Goals" value={season.goals} max={Math.max(season.appearances, season.goals, 1)} colorClass="bg-emerald-500" />
+            <StatBar label="Assists" value={season.assists} max={Math.max(season.appearances, season.assists, 1)} colorClass="bg-sky-500" />
+            <StatBar label="Avg" value={avgRating} max={10} display={avgRating.toFixed(1)} colorClass="bg-amber-500" />
+          </div>
+        </Card>
+      ) : null}
+
+      {wdl && wdl.W + wdl.D + wdl.L > 0 ? (
+        <Card className="mt-4">
+          <h2 className="text-sm font-semibold text-neutral-500">Recent form</h2>
+          <div className="mt-3">
+            <SegmentedBar
+              segments={[
+                { label: "Won", value: wdl.W, barClass: "bg-emerald-500", dotClass: "bg-emerald-500" },
+                { label: "Drawn", value: wdl.D, barClass: "bg-neutral-400", dotClass: "bg-neutral-400" },
+                { label: "Lost", value: wdl.L, barClass: "bg-red-500", dotClass: "bg-red-500" },
+              ]}
+            />
+          </div>
+        </Card>
+      ) : null}
+
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
         <Link href="/matches" className="block">
           <Card className="h-full transition hover:shadow-md">
-            <SectionIcon name="matches" className="h-10 w-10" />
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+              <BallIcon className="h-6 w-6" />
+            </span>
             <h2 className="mt-3 font-semibold">Matches</h2>
             <p className="mt-1 text-sm text-neutral-500">
               Browse matches, teams, and approved stats.
@@ -225,7 +280,9 @@ export default async function Home() {
         </Link>
         <Link href="/leaderboard" className="block">
           <Card className="h-full transition hover:shadow-md">
-            <SectionIcon name="leaderboard" className="h-10 w-10" />
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
+              <BarsIcon className="h-6 w-6" />
+            </span>
             <h2 className="mt-3 font-semibold">Leaderboard</h2>
             <p className="mt-1 text-sm text-neutral-500">
               Rankings with the peer/stat blend.
@@ -234,7 +291,9 @@ export default async function Home() {
         </Link>
         <Link href="/awards" className="block">
           <Card className="h-full transition hover:shadow-md">
-            <SectionIcon name="awards" className="h-10 w-10" />
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+              <TrophyIcon className="h-6 w-6" />
+            </span>
             <h2 className="mt-3 font-semibold">Awards</h2>
             <p className="mt-1 text-sm text-neutral-500">
               Top scorer, defender, MOTM, and your badges.

@@ -39,6 +39,12 @@ export const BallIcon = ({ className }: IconProps) => (
   </Svg>
 );
 
+export const BarsIcon = ({ className }: IconProps) => (
+  <Svg className={className}>
+    <path d="M5.5 20v-6M12 20V5M18.5 20v-9" />
+  </Svg>
+);
+
 export const LockIcon = ({ className }: IconProps) => (
   <Svg className={className}>
     <rect x="5" y="11" width="14" height="9" rx="2" />
