@@ -76,9 +76,9 @@ export default async function MatchDetailPage({
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
       <Link
         href="/matches"
-        className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
+        className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-sm font-semibold text-neutral-700 shadow-sm transition hover:border-emerald-500/40 hover:text-emerald-700 active:scale-[0.97] dark:border-white/15 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:text-emerald-300"
       >
-        ← All matches
+        <span aria-hidden="true">←</span> All matches
       </Link>
 
       <div className="mt-3 rounded-2xl border border-black/[0.06] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">

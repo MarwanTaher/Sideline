@@ -93,6 +93,12 @@ export default function BottomNav({
     setMoreOpen(false);
   }, [pathname]);
 
+  // Inside a single match, the match's own bottom bar (MatchTabsMobile) takes
+  // over, so suppress the global bar to avoid stacking two bottom navs.
+  if (/^\/matches\/\d+(?:\/|$)/.test(pathname)) {
+    return null;
+  }
+
   const locked = new Set(lockedTabs);
   const adminItems = [
     ...ADMIN_TABS.filter((t) => !locked.has(t.key)).map((t) => ({

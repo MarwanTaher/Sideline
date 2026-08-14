@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import MainNav from "@/components/main-nav";
 import BottomNav from "@/components/bottom-nav";
@@ -8,6 +7,7 @@ import { getLockedTabsForPlayer } from "@/lib/admin-access";
 import { getNavSignals } from "@/lib/nav-signals";
 import { getPlayerContact } from "@/lib/player-profile";
 import { Avatar } from "@/components/ui/avatar";
+import { LogoMark } from "@/components/logo-mark";
 import { setViewModeAction } from "@/app/actions/view-mode";
 
 export default async function SiteHeader() {
@@ -41,7 +41,7 @@ export default async function SiteHeader() {
         {/* Mobile top bar: brand left · profile right (nav is the bottom bar) */}
         <div className="flex items-center justify-between md:hidden">
           <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo-mark.svg" alt="" width={24} height={24} className="rounded-md" />
+            <LogoMark className="h-6 w-6 rounded-md" />
             <span className="font-heading text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
           </Link>
 
@@ -71,7 +71,7 @@ export default async function SiteHeader() {
         {/* Desktop bar: brand left · inline nav right */}
         <div className="hidden items-center justify-between md:flex">
           <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo-mark.svg" alt="" width={26} height={26} className="rounded-md" />
+            <LogoMark className="h-[26px] w-[26px] rounded-md" />
             <span className="font-heading text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
           </Link>
 
