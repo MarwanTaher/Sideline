@@ -123,7 +123,7 @@ export interface AdminStatsEditorProps {
 
 export function AdminStatsEditor({ matchId, players }: AdminStatsEditorProps) {
   return (
-    <section className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+    <section className="rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
       <h2 className="text-lg font-semibold tracking-tight">Admin: edit scores</h2>
       <p className="mt-1 text-sm text-neutral-500">
         Set each player&apos;s goals and assists for this match. Saving writes

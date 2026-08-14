@@ -31,7 +31,11 @@ export function Avatar({
   className?: string;
 }) {
   const label = (name ?? "").trim();
-  const initial = (label.charAt(0) || "?").toUpperCase();
+  const parts = label.split(/\s+/).filter(Boolean);
+  const initials =
+    parts.length >= 2
+      ? (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+      : (parts[0]?.slice(0, 1) || "?").toUpperCase();
   const idx = (label.charCodeAt(0) || 0) % PALETTE.length;
   return (
     <span
@@ -48,7 +52,7 @@ export function Avatar({
           className="h-full w-full object-cover"
         />
       ) : (
-        initial
+        initials
       )}
     </span>
   );

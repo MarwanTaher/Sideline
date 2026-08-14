@@ -187,12 +187,12 @@ function PlayerCard({ player }: { player: PlayerRow }) {
             <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-neutral-500">
               {player.email ? (
                 <a href={`mailto:${player.email}`} className="hover:underline">
-                  ✉ {player.email}
+                  {player.email}
                 </a>
               ) : null}
               {player.phone ? (
                 <a href={`tel:${player.phone}`} className="hover:underline">
-                  ☎ {player.phone}
+                  {player.phone}
                 </a>
               ) : null}
             </div>

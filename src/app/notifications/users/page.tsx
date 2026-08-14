@@ -74,7 +74,7 @@ export default async function PerUserNotificationsPage() {
         {players.map((p) => (
           <section
             key={p.playerId}
-            className="rounded-xl border border-black/10 p-4 dark:border-white/10"
+            className="rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10"
           >
             <div className="flex items-center justify-between gap-3">
               <h2 className="text-sm font-semibold">{p.name}</h2>
