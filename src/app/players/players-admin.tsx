@@ -20,6 +20,7 @@ import {
 import { POSITIONS } from "@/lib/positions";
 import type { PlayerRow, ResetRequestRow, DeletedPlayer } from "@/lib/players-admin";
 import { ShareButton } from "@/components/share-button";
+import { Avatar } from "@/components/ui/avatar";
 import { LockIcon, KeyIcon } from "@/components/ui/icons";
 
 const INITIAL: PlayerActionState = { ok: false, message: "" };
@@ -150,33 +151,33 @@ function PlayerCard({ player }: { player: PlayerRow }) {
   useRefreshOnOk(delState);
   useRefreshOnOk(revokeState);
   return (
-    <div className="rounded-xl border border-black/10 dark:border-white/10">
+    <div className="rounded-2xl border border-black/[0.06] shadow-sm dark:border-white/10">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
       >
-        <span>
-          <span
-            aria-hidden="true"
-            className={player.active ? "text-emerald-600" : "text-red-500"}
-          >
-            ●
+        <span className="flex min-w-0 items-center gap-2.5">
+          <Avatar name={player.name} size="sm" className={player.active ? "" : "opacity-50"} />
+          <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+            <span className="font-medium">{player.name}</span>
+            <span className="text-xs uppercase text-neutral-500">{player.preferredPosition}</span>
+            {!player.active ? (
+              <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                Inactive
+              </span>
+            ) : null}
+            {player.hasPassword && (
+              <span className="inline-flex items-center gap-1 text-xs text-neutral-400">
+                <LockIcon className="h-3.5 w-3.5" /> password set
+              </span>
+            )}
+            {player.activeLinkCount > 0 && (
+              <span className="text-xs text-neutral-400">
+                {player.activeLinkCount} active link{player.activeLinkCount === 1 ? "" : "s"}
+              </span>
+            )}
           </span>
-          <span className="sr-only">{player.active ? "Active" : "Inactive"}</span>{" "}
-          <span className="font-medium">{player.name}</span>
-          <span className="ml-2 text-neutral-500">{player.preferredPosition}</span>
-          {player.hasPassword && (
-            <span className="ml-2 inline-flex items-center gap-1 text-xs text-neutral-400">
-              <LockIcon className="h-3.5 w-3.5" /> password set
-            </span>
-          )}
-          {player.activeLinkCount > 0 && (
-            <span className="ml-2 text-xs text-neutral-400">
-              <span aria-hidden="true">🔗</span> {player.activeLinkCount} active link
-              {player.activeLinkCount === 1 ? "" : "s"}
-            </span>
-          )}
         </span>
         <span className="text-neutral-400">{open ? "▲" : "▼"}</span>
       </button>
@@ -477,9 +478,12 @@ export default function PlayersAdmin({
                 key={p.id}
                 className="flex items-center justify-between rounded-lg border border-black/10 px-4 py-2 text-sm dark:border-white/10"
               >
-                <span>
-                  <span className="font-medium">{p.name}</span>{" "}
-                  <span className="text-neutral-500">({p.preferredPosition})</span>
+                <span className="flex items-center gap-2.5">
+                  <Avatar name={p.name} size="sm" />
+                  <span>
+                    <span className="font-medium">{p.name}</span>{" "}
+                    <span className="text-neutral-500">({p.preferredPosition})</span>
+                  </span>
                 </span>
                 <ActivateForm player={p} />
               </div>
@@ -534,11 +538,14 @@ export default function PlayersAdmin({
                 key={p.id}
                 className="flex items-center justify-between rounded-lg border border-black/10 px-4 py-2 text-sm dark:border-white/10"
               >
-                <span>
-                  <span className="font-medium">{p.name}</span>{" "}
-                  <span className="text-neutral-500">({p.preferredPosition})</span>
-                  <span className="ml-2 text-xs text-neutral-400">
-                    deleted {p.deletedAt.slice(0, 10)}
+                <span className="flex items-center gap-2.5">
+                  <Avatar name={p.name} size="sm" />
+                  <span>
+                    <span className="font-medium">{p.name}</span>{" "}
+                    <span className="text-neutral-500">({p.preferredPosition})</span>
+                    <span className="ml-2 text-xs text-neutral-400">
+                      deleted {p.deletedAt.slice(0, 10)}
+                    </span>
                   </span>
                 </span>
                 <RestoreForm player={p} />
