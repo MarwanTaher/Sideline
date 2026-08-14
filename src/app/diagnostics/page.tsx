@@ -4,6 +4,7 @@ import { isAdminView } from "@/lib/view-mode";
 import { isTabLockedForCurrentUser } from "@/lib/admin-access";
 import { getDiagnostics } from "@/lib/diagnostics";
 import { SectionIcon } from "@/components/section-icon";
+import { CheckIcon, XIcon } from "@/components/ui/icons";
 
 export const metadata = {
   title: "DB diagnostics · Sideline",
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
-    <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+    <div className="rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
       <div className="text-xs text-neutral-500">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums">{value}</div>
     </div>
@@ -95,7 +96,7 @@ export default async function DiagnosticsPage() {
                 <tr key={r.matchId} className="border-t border-black/5 dark:border-white/5">
                   <td className="py-2 pr-4">{r.matchId}</td>
                   <td className="py-2 pr-4">{r.playedOn}</td>
-                  <td className="py-2 pr-4">{r.statsOn ? "✅" : "❌"}</td>
+                  <td className="py-2 pr-4">{r.statsOn ? <CheckIcon className="h-4 w-4 text-emerald-600" /> : <XIcon className="h-4 w-4 text-neutral-400" />}</td>
                   <td className="py-2 pr-4">{r.players}</td>
                   <td className="py-2 pr-4">{r.statsRows}</td>
                   <td className="py-2 pr-4">{r.approvedSubs}</td>

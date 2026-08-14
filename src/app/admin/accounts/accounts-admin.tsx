@@ -14,6 +14,7 @@ import {
 } from "./actions";
 import type { AdminAccountRow, LinkablePlayer } from "@/lib/admins";
 import { ADMIN_TABS, type AdminTabKey } from "@/lib/admin-tabs";
+import { LockIcon } from "@/components/ui/icons";
 
 const INITIAL: AccountActionState = { ok: false, message: "" };
 
@@ -54,7 +55,7 @@ function TabLockToggle({
             : "border-black/15 text-neutral-600 hover:bg-neutral-50 dark:border-white/15 dark:text-neutral-300 dark:hover:bg-neutral-800"
         }`}
       >
-        {locked ? "🔒 " : ""}
+        {locked ? <LockIcon className="mr-1 inline h-3.5 w-3.5" /> : null}
         {label}
       </button>
     </form>

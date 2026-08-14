@@ -50,7 +50,7 @@ export default function AppleIcon() {
             borderRadius: 3,
           }}
         />
-        {/* Vertical accent (brand green) */}
+        {/* Vertical accent (brand emerald) */}
         <div
           style={{
             position: "absolute",
@@ -58,7 +58,7 @@ export default function AppleIcon() {
             top: 50,
             width: 6,
             height: 81,
-            background: "#A6CE39",
+            background: "#059669",
             borderRadius: 3,
           }}
         />

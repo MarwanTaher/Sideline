@@ -61,7 +61,7 @@ export function MatchSettings({ match }: { match: MatchAdmin }) {
   }, [mdState, stState, editState, router]);
 
   return (
-    <section className="mt-10 rounded-xl border border-black/10 p-5 dark:border-white/10">
+    <section className="mt-10 rounded-2xl border border-black/[0.06] p-5 shadow-sm dark:border-white/10">
       <h2 className="text-lg font-semibold tracking-tight">Match settings</h2>
       <p className="mt-1 text-xs text-neutral-500">Admin only.</p>
 

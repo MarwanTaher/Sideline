@@ -2,9 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
-import { getMatchList, fmtDate, fmtMatchTime, type MatchdayStatus } from "@/lib/matches";
+import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
 import { SectionIcon } from "@/components/section-icon";
 import { EmptyState } from "@/components/ui/empty-state";
+import { MatchesList } from "./matches-list";
 
 export const metadata = {
   title: "Matches · Sideline",
@@ -13,11 +14,7 @@ export const metadata = {
 // Match data is read live on every request.
 export const dynamic = "force-dynamic";
 
-const MATCHDAY_BADGE: Record<MatchdayStatus, string> = {
-  draft: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-  active: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
-  closed: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
-};
+
 
 export default async function MatchesPage() {
   const session = await auth();
@@ -46,7 +43,7 @@ export default async function MatchesPage() {
         {isAdmin ? (
           <Link
             href="/matches/new"
-            className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+            className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white shadow-sm transition active:scale-[0.98] hover:bg-neutral-700 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
           >
             + New match
           </Link>
@@ -73,43 +70,16 @@ export default async function MatchesPage() {
             : "Check back once an admin schedules the next match."}
         </EmptyState>
       ) : (
-        <ul className="mt-6 space-y-3">
-          {matches.map((m) => (
-            <li key={m.id}>
-              <Link
-                href={`/matches/${m.id}`}
-                className="flex items-center justify-between rounded-xl border border-black/10 bg-white p-4 shadow-sm transition hover:shadow-md dark:border-white/10 dark:bg-neutral-900"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold">Match {m.id}</span>
-                    <span
-                      className={`rounded px-1.5 py-0.5 text-xs font-medium capitalize ${MATCHDAY_BADGE[m.matchdayStatus]}`}
-                    >
-                      {m.matchdayStatus}
-                    </span>
-                    {m.status === "closed" ? (
-                      <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                        closed
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="mt-1 text-sm text-neutral-500">
-                    {fmtDate(m.playedOn)} at {fmtMatchTime(m.matchTime)}
-                  </div>
-                </div>
-                <div className="text-right text-sm text-neutral-500">
-                  <div>
-                    {m.playerCount} player{m.playerCount === 1 ? "" : "s"}
-                  </div>
-                  {m.statsScoringEnabled ? (
-                    <div className="text-xs text-neutral-400">stats scoring on</div>
-                  ) : null}
-                </div>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <MatchesList
+          items={matches.map((m) => ({
+            id: m.id,
+            matchdayStatus: m.matchdayStatus,
+            closed: m.status === "closed",
+            playerCount: m.playerCount,
+            statsScoringEnabled: m.statsScoringEnabled,
+            dateLabel: `${fmtDate(m.playedOn)} at ${fmtMatchTime(m.matchTime)}`,
+          }))}
+        />
       )}
     </main>
   );

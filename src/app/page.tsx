@@ -1,13 +1,18 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
 import { getPlayerRank } from "@/lib/leaderboard";
+import { getPendingVoteObligation } from "@/lib/voting";
+import { getLastMatchdayOutcome } from "@/lib/matchday";
 import { getStatsReviewCounts } from "@/lib/stats";
 import { getPlayersAdminData } from "@/lib/players-admin";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { SegmentedBar } from "@/components/ui/segmented-bar";
+import { BallIcon, BarsIcon, TrophyIcon } from "@/components/ui/icons";
 import { SectionIcon } from "@/components/section-icon";
 import NotificationPrompt from "@/components/notification-prompt";
 import InstallPrompt from "@/components/install-prompt";
@@ -43,6 +48,9 @@ export default async function Home() {
     rankInfo = await getPlayerRank(playerId);
   }
 
+  const voteObligation = playerId != null ? await getPendingVoteObligation(playerId) : null;
+  const lastMatchday = playerId != null ? await getLastMatchdayOutcome(playerId) : null;
+
   let adminInfo: { pendingReviews: number; resetRequests: number } | null = null;
   if (isAdmin) {
     const [rc, pdata] = await Promise.all([
@@ -57,13 +65,56 @@ export default async function Home() {
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-10">
-      <h1 className="text-2xl font-semibold tracking-tight">Welcome, {name}</h1>
-      <p className="mt-1 text-sm capitalize text-neutral-500">
-          {isAdmin ? role : "Player"}
-      </p>
+      <section className="relative overflow-hidden rounded-3xl p-6 text-white shadow-sm">
+        <Image
+          src="/home-hero.jpg"
+          alt=""
+          fill
+          priority
+          sizes="(max-width: 896px) 100vw, 896px"
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-500/85 via-emerald-600/80 to-teal-900/90" />
+        <div className="absolute inset-0 bg-[radial-gradient(90%_120%_at_100%_0%,rgba(163,230,53,0.35),transparent_55%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(80%_120%_at_0%_100%,rgba(45,212,191,0.30),transparent_55%)]" />
+        <div className="relative">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-medium capitalize backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
+            {isAdmin ? role : "Player"}
+          </span>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight">Welcome back, {name}</h1>
+          {rankInfo?.ranked ? (
+            <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
+              <span className="tabular-nums">#{rankInfo.rank}</span>
+              <span className="text-white/70">of {rankInfo.total}</span>
+              <span className="text-white/40">·</span>
+              <span className="tabular-nums">Score {rankInfo.final.toFixed(1)}</span>
+            </p>
+          ) : null}
+        </div>
+      </section>
 
       <NotificationPrompt />
       <InstallPrompt />
+
+      {voteObligation ? (
+        <Link href={`/matches/${voteObligation.matchId}/vote`} className="mt-4 block">
+          <Card accent="#059669" className="flex items-center justify-between gap-3 bg-emerald-50/60 dark:bg-emerald-950/20">
+            <div className="flex items-center gap-3">
+              <SectionIcon name="votes" className="h-8 w-8" />
+              <div>
+                <p className="text-sm font-semibold">Rate match {voteObligation.matchId}</p>
+                <p className="text-sm text-neutral-500">
+                  Voting is open — rate how your teammates played.
+                </p>
+              </div>
+            </div>
+            <span aria-hidden className="text-lg text-emerald-600 dark:text-emerald-400">
+              &rarr;
+            </span>
+          </Card>
+        </Link>
+      ) : null}
 
       {playerId != null &&
       nextMatch &&
@@ -72,7 +123,7 @@ export default async function Home() {
           href={`/matches/${nextMatch.id}/availability`}
           className="mt-6 block"
         >
-          <Card className="flex items-center justify-between gap-3 border-emerald-500/40 bg-emerald-50/60 transition hover:border-emerald-500/70 dark:bg-emerald-950/20">
+          <Card accent="#059669" className="flex items-center justify-between gap-3 bg-emerald-50/60 dark:bg-emerald-950/20">
             <div className="flex items-center gap-3">
               <SectionIcon name="availability" className="h-8 w-8" />
               <div>
@@ -92,7 +143,7 @@ export default async function Home() {
         nextMatch &&
         nextMatch.matchdayStatus === "closed" ? (
         <Link href="/leaderboard" className="mt-6 block">
-          <Card className="flex items-center justify-between gap-3 border-indigo-500/40 bg-indigo-50/60 transition hover:border-indigo-500/70 dark:bg-indigo-950/20">
+          <Card accent="#6366f1" className="flex items-center justify-between gap-3 bg-indigo-50/60 dark:bg-indigo-950/20">
             <div className="flex items-center gap-3">
               <SectionIcon name="leaderboard" className="h-8 w-8" />
               <div>
@@ -185,16 +236,51 @@ export default async function Home() {
               </p>
               <p className="mt-0.5 text-sm tabular-nums text-neutral-500">
                 Score {rankInfo.final.toFixed(1)}
+                {rankInfo.ranked && rankInfo.total > 0 ? (
+                  <span className="ml-2 font-medium text-emerald-600 dark:text-emerald-400">
+                    Top {Math.ceil((rankInfo.rank / rankInfo.total) * 100)}%
+                  </span>
+                ) : null}
               </p>
+              {rankInfo.ranked && rankInfo.total > 0 ? (
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+                  <div
+                    className="h-full rounded-full bg-emerald-500"
+                    style={{ width: `${Math.max(4, ((rankInfo.total - rankInfo.rank + 1) / rankInfo.total) * 100)}%` }}
+                  />
+                </div>
+              ) : null}
             </Card>
           </Link>
         ) : null}
       </div>
 
+      {lastMatchday && lastMatchday.rounds > 0 ? (
+        <Card className="mt-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-neutral-500">
+              Last matchday · Match {lastMatchday.matchId}
+            </h2>
+            <span className="text-xs text-neutral-400">{lastMatchday.rounds} mini-matches</span>
+          </div>
+          <div className="mt-3">
+            <SegmentedBar
+              segments={[
+                { label: "Won", value: lastMatchday.won, barClass: "bg-emerald-500", dotClass: "bg-emerald-500" },
+                { label: "Drawn", value: lastMatchday.drawn, barClass: "bg-neutral-400", dotClass: "bg-neutral-400" },
+                { label: "Lost", value: lastMatchday.lost, barClass: "bg-red-500", dotClass: "bg-red-500" },
+              ]}
+            />
+          </div>
+        </Card>
+      ) : null}
+
       <div className="mt-4 grid gap-4 sm:grid-cols-3">
         <Link href="/matches" className="block">
           <Card className="h-full transition hover:shadow-md">
-            <SectionIcon name="matches" className="h-10 w-10" />
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+              <BallIcon className="h-6 w-6" />
+            </span>
             <h2 className="mt-3 font-semibold">Matches</h2>
             <p className="mt-1 text-sm text-neutral-500">
               Browse matches, teams, and approved stats.
@@ -203,7 +289,9 @@ export default async function Home() {
         </Link>
         <Link href="/leaderboard" className="block">
           <Card className="h-full transition hover:shadow-md">
-            <SectionIcon name="leaderboard" className="h-10 w-10" />
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
+              <BarsIcon className="h-6 w-6" />
+            </span>
             <h2 className="mt-3 font-semibold">Leaderboard</h2>
             <p className="mt-1 text-sm text-neutral-500">
               Rankings with the peer/stat blend.
@@ -212,7 +300,9 @@ export default async function Home() {
         </Link>
         <Link href="/awards" className="block">
           <Card className="h-full transition hover:shadow-md">
-            <SectionIcon name="awards" className="h-10 w-10" />
+            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+              <TrophyIcon className="h-6 w-6" />
+            </span>
             <h2 className="mt-3 font-semibold">Awards</h2>
             <p className="mt-1 text-sm text-neutral-500">
               Top scorer, defender, MOTM, and your badges.

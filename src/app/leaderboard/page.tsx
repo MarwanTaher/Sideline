@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getCachedLeaderboard } from "@/lib/leaderboard";
 import { getLeaderboardMovement } from "@/lib/score-snapshots";
 import { getScoreBreakdown } from "@/lib/score-breakdown";
@@ -5,6 +6,9 @@ import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { SubNav } from "@/components/ui/sub-nav";
 import { SectionIcon } from "@/components/section-icon";
+import { Avatar } from "@/components/ui/avatar";
+import { Card } from "@/components/ui/card";
+import { TrophyIcon } from "@/components/ui/icons";
 import LeaderboardTable from "./leaderboard-table";
 import ScoreBreakdownPanel from "./score-breakdown-panel";
 
@@ -32,6 +36,15 @@ export default async function LeaderboardPage({
   const showDetails = await isAdminView(
     session?.user?.role === "admin" || session?.user?.role === "super",
   );
+
+  const rankedRows = rows.filter((r) => r.ranked);
+  const top3 = rankedRows.slice(0, 3);
+  const myPlayerId = session?.user?.playerId ?? null;
+  const myIndex = myPlayerId != null ? rankedRows.findIndex((r) => r.id === myPlayerId) : -1;
+  const me = myIndex >= 0 ? rankedRows[myIndex] : null;
+  const myRank = myIndex >= 0 ? myIndex + 1 : null;
+  const topPct =
+    me && rankedRows.length > 0 ? Math.ceil(((myRank as number) / rankedRows.length) * 100) : null;
 
   const { player } = await searchParams;
   const parsedId = player ? Number(player) : NaN;
@@ -83,6 +96,54 @@ export default async function LeaderboardPage({
             </p>
           )}
         </>
+      ) : null}
+
+      {top3.length === 3 ? (
+        <div className="mt-6 grid grid-cols-3 items-end gap-2">
+          {[top3[1], top3[0], top3[2]].map((r, i) => {
+            const place = [2, 1, 3][i];
+            const bar =
+              place === 1
+                ? "h-16 bg-amber-400"
+                : place === 2
+                  ? "h-12 bg-neutral-300 dark:bg-neutral-600"
+                  : "h-10 bg-orange-400/80";
+            return (
+              <div key={r.id} className="flex flex-col items-center">
+                {place === 1 ? <TrophyIcon className="mb-1 h-5 w-5 text-amber-500" /> : null}
+                <Link
+                  href={`/players/${r.id}`}
+                  className="flex flex-col items-center transition hover:opacity-80"
+                >
+                  <Avatar name={r.name} photoUrl={r.photoUrl} size={place === 1 ? "lg" : "md"} />
+                  <p className="mt-1 max-w-full truncate text-xs font-medium">{r.name}</p>
+                </Link>
+                <p className="text-xs tabular-nums text-neutral-500">{r.final.toFixed(1)}</p>
+                <div className={`mt-1 flex w-full items-center justify-center rounded-t-lg font-heading text-sm font-bold text-white ${bar}`}>
+                  {place}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : null}
+
+      {me ? (
+        <Card accent="#059669" className="mt-4 flex items-center gap-3 bg-emerald-50/50 dark:bg-emerald-950/20">
+          <Avatar name={me.name} photoUrl={me.photoUrl} size="md" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold">
+              {me.name} <span className="font-normal text-neutral-400">· you</span>
+            </p>
+            <p className="text-xs tabular-nums text-neutral-500">
+              Score {me.final.toFixed(1)} · Top {topPct}%
+            </p>
+          </div>
+          <p className="font-heading text-xl font-bold tabular-nums">
+            #{myRank}
+            <span className="text-sm font-normal text-neutral-400"> of {rankedRows.length}</span>
+          </p>
+        </Card>
       ) : null}
 
       <LeaderboardTable

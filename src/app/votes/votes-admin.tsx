@@ -27,6 +27,7 @@ import type {
 import type { MotmTallyRow, MotmVoteDetailRow } from "@/lib/motm";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
+import { TrophyIcon } from "@/components/ui/icons";
 
 const INITIAL: VoteActionState = { ok: false, message: "" };
 
@@ -76,7 +77,7 @@ function EditForm({ vote }: { vote: VoteReviewRow }) {
   const [state, action, pending] = useActionState(editVoteAction, INITIAL);
   useRefreshOnOk(state);
   return (
-    <form action={action} className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+      <form action={action} className="rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
       <VoteKeyFields vote={vote} />
       <div className="grid gap-3 sm:grid-cols-3">
         <label className="block text-sm">
@@ -395,7 +396,7 @@ function AutoFlagPanel({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+        <div className="rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
         <p className="text-sm text-neutral-500">
           Detect suspicious votes that differ strongly from the group for the same player in the same
           match. Buckets with fewer than 4 votes are skipped. Preview first, then apply. New votes are
@@ -561,7 +562,7 @@ function MotmPanel({
             <tbody>
               {tally.map((t, i) => (
                 <tr key={t.playerId} className="border-t border-black/5 dark:border-white/5">
-                  <td className="py-2 pr-4">{i === 0 ? "🏆" : i + 1}</td>
+                    <td className="py-2 pr-4">{i === 0 ? <TrophyIcon className="h-4 w-4 text-amber-500" /> : i + 1}</td>
                   <td className={`py-2 pr-4 ${i === 0 ? "font-semibold" : ""}`}>{t.name}</td>
                   <td className="py-2 pr-4">{t.votes}</td>
                 </tr>

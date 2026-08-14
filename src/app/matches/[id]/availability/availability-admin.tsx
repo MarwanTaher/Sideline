@@ -16,6 +16,7 @@ import {
 } from "./actions";
 import type { PlayerAvailability } from "@/lib/availability";
 import { Button } from "@/components/ui/button";
+import { Avatar } from "@/components/ui/avatar";
 import { FeedbackMessage } from "@/components/ui/banner";
 
 const INITIAL: AvailabilityActionState = { ok: false, message: "" };
@@ -370,11 +371,12 @@ export function AdminPlayerControls({
     <div>
       <ul className="divide-y divide-black/5 dark:divide-white/5">
         {players.map((p) => (
-          <li key={p.playerId} className="flex items-center justify-between gap-2 py-2">
-            <div className="min-w-0">
+          <li key={p.playerId} className="flex flex-col gap-2 py-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-center gap-2">
+              <Avatar name={p.name} photoUrl={p.photoUrl} size="xs" />
               <span className="truncate text-sm">{p.name}</span>
               <span
-                className={`ml-2 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLE[p.status]}`}
+                className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${STATUS_STYLE[p.status]}`}
               >
                 {p.status}
               </span>

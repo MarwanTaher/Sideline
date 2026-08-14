@@ -138,6 +138,26 @@ export const appSettings = pgTable("app_settings", {
 	value: text().default("").notNull(),
 });
 
+export const playerKudos = pgTable("player_kudos", {
+	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "player_kudos_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
+	fromPlayerId: integer("from_player_id").notNull(),
+	toPlayerId: integer("to_player_id").notNull(),
+	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	index("idx_player_kudos_to").using("btree", table.toPlayerId.asc().nullsLast().op("int4_ops")),
+	foreignKey({
+			columns: [table.fromPlayerId],
+			foreignColumns: [players.id],
+			name: "player_kudos_from_player_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.toPlayerId],
+			foreignColumns: [players.id],
+			name: "player_kudos_to_player_id_fkey"
+		}).onDelete("cascade"),
+	unique("player_kudos_pair_uq").on(table.fromPlayerId, table.toPlayerId),
+]);
+
 export const playerStatsSubmissions = pgTable("player_stats_submissions", {
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "player_stats_submissions_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	matchId: integer("match_id").notNull(),

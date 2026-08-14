@@ -12,6 +12,7 @@ import { MatchSettings } from "./match-settings";
 import { MatchNav } from "./match-nav";
 import { TeamsView } from "./teams-view";
 import { MatchSocial } from "./match-social";
+import { SectionIcon } from "@/components/section-icon";
 
 export const metadata = {
   title: "Match · Sideline",
@@ -75,40 +76,43 @@ export default async function MatchDetailPage({
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
       <Link
         href="/matches"
-        className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
+        className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-sm font-semibold text-neutral-700 shadow-sm transition hover:border-emerald-500/40 hover:text-emerald-700 active:scale-[0.97] dark:border-white/15 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:text-emerald-300"
       >
-        ← All matches
+        <span aria-hidden="true">←</span> All matches
       </Link>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Match {match.id}</h1>
-        <span
-          className={`rounded px-1.5 py-0.5 text-xs font-medium capitalize ${MATCHDAY_BADGE[match.matchdayStatus]}`}
-        >
-          {match.matchdayStatus}
-        </span>
-        {match.status === "closed" ? (
-          <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-            closed
-          </span>
-        ) : null}
-      </div>
-
-      <div className="mt-2 flex flex-wrap gap-1.5">
-        {[
-          fmtDate(match.playedOn),
-          fmtMatchTime(match.matchTime),
-          `${match.numTeams} teams`,
-          `${match.teamSize} per side`,
-          `stats scoring ${match.statsScoringEnabled ? "on" : "off"}`,
-        ].map((chip) => (
+      <div className="mt-3 rounded-2xl border border-black/[0.06] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <SectionIcon name="matches" className="h-9 w-9" />
+          <h1 className="text-2xl font-bold tracking-tight">Match {match.id}</h1>
           <span
-            key={chip}
-            className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800/80 dark:text-neutral-300"
+            className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MATCHDAY_BADGE[match.matchdayStatus]}`}
           >
-            {chip}
+            {match.matchdayStatus}
           </span>
-        ))}
+          {match.status === "closed" ? (
+            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+              closed
+            </span>
+          ) : null}
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {[
+            fmtDate(match.playedOn),
+            fmtMatchTime(match.matchTime),
+            `${match.numTeams} teams`,
+            `${match.teamSize} per side`,
+            `stats scoring ${match.statsScoringEnabled ? "on" : "off"}`,
+          ].map((chip) => (
+            <span
+              key={chip}
+              className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800/80 dark:text-neutral-300"
+            >
+              {chip}
+            </span>
+          ))}
+        </div>
       </div>
 
       <MatchNav matchId={match.id} isAdmin={isAdmin} canScore={canScore} />
@@ -138,7 +142,7 @@ export default async function MatchDetailPage({
         {match.stats.length === 0 ? (
           <p className="mt-2 text-sm text-neutral-500">No approved stats for this match.</p>
         ) : (
-          <div className="mt-3 overflow-hidden rounded-xl border border-black/10 dark:border-white/10">
+          <div className="mt-3 overflow-hidden rounded-2xl border border-black/[0.06] shadow-sm dark:border-white/10">
             <table className="w-full text-sm">
               <thead className="bg-neutral-50 text-left text-xs uppercase tracking-wide text-neutral-500 dark:bg-neutral-900">
                 <tr>

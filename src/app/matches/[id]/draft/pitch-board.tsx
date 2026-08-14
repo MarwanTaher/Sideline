@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { POSITIONS, type Position } from "@/lib/positions";
 import type { DraftPlayer } from "@/lib/draft";
+import { Avatar } from "@/components/ui/avatar";
 import { MAX_TEAMS, TEAM_COUNT_OPTIONS, teamGridColumns } from "@/lib/team-constants";
 import {
   autoBalanceAction,
@@ -32,7 +33,7 @@ import {
  * get persisted through the same saveDraftAction as the classic board.
  * ------------------------------------------------------------------------- */
 
-const BRAND = "#a6ce39";
+const BRAND = "#059669";
 const INITIAL: DraftActionState = { ok: false, message: "" };
 
 // Pitch rows, attack-upward (FWD at the top, GK guarding the bottom goal).
@@ -299,7 +300,7 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
                       <button
                         type="submit"
                         disabled={busy || !dirty}
-                        className="w-full rounded-lg px-3 py-2 text-sm font-semibold text-black transition disabled:opacity-40"
+                        className="w-full rounded-lg px-3 py-2 text-sm font-semibold text-white transition disabled:opacity-40"
                         style={{ backgroundColor: BRAND }}
                       >
                         {savePending ? "Saving…" : dirty ? "Save lineup" : "Saved"}
@@ -473,6 +474,7 @@ function TeamListCard({
           {rows.map(({ p, pos }, i) => (
             <li key={p.playerId} className="flex items-center gap-2 px-3 py-2 text-sm">
               <span className="w-4 text-center text-xs text-neutral-600">{i + 1}</span>
+              <Avatar name={p.name} photoUrl={p.photoUrl} size="xs" />
               <span
                 className="w-9 rounded px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase text-neutral-300"
                 style={{ backgroundColor: `${BRAND}22` }}
@@ -554,7 +556,7 @@ function Pitch({
             onChange={(e) => onRename(teamNo, e.target.value)}
             readOnly={!interactive}
             aria-label={`Team ${teamNo} name`}
-            className="min-w-[5ch] rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-black outline-none [field-sizing:content] focus:ring-2 focus:ring-white/40"
+                className="min-w-[5ch] rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-white outline-none [field-sizing:content] focus:ring-2 focus:ring-white/40"
             style={{ backgroundColor: BRAND }}
           />
         </div>
@@ -720,7 +722,7 @@ function PlayerNode({
       </div>
       {showScores ? (
         <span
-          className="rounded px-1.5 text-[9px] font-bold leading-tight text-black"
+            className="rounded px-1.5 text-[9px] font-bold leading-tight text-white"
           style={{ backgroundColor: BRAND }}
         >
           {player.score.toFixed(0)}

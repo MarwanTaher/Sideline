@@ -54,7 +54,7 @@ export function ReviewRow({ sub }: { sub: PendingSubmission }) {
   }, [apState, rjState, router]);
 
   return (
-    <li className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+        <li className="rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="font-semibold">{sub.name}</span>
@@ -157,7 +157,7 @@ export function TrustedSettingsPanel({
   const trusted = new Set(trustedIds);
 
   return (
-    <div className="mt-8 rounded-xl border border-black/10 p-4 dark:border-white/10">
+    <div className="mt-8 rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
       <h2 className="text-sm font-semibold">Trusted players</h2>
       <p className="mt-1 text-xs text-neutral-500">
         When auto-approval is on, stats submitted by trusted players are approved
@@ -214,7 +214,7 @@ export function BackfillPanel() {
   }, [state, router]);
 
   return (
-    <div className="mt-8 rounded-xl border border-black/10 p-4 dark:border-white/10">
+    <div className="mt-8 rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
       <h2 className="text-sm font-semibold">Backfill approved stats</h2>
       <p className="mt-1 text-xs text-neutral-500">
         Rebuilds the stats table from every approved submission and enables stats scoring on
