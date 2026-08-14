@@ -3,13 +3,14 @@ import * as React from "react";
 export type ButtonVariant =
   | "primary"
   | "secondary"
+  | "outline"
   | "danger"
   | "success"
   | "ghost";
 export type ButtonSize = "sm" | "md";
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-xl font-medium transition select-none " +
+  "inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition select-none " +
   "active:scale-[0.98] " +
   "disabled:opacity-40 disabled:pointer-events-none " +
   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 " +
@@ -17,11 +18,14 @@ const base =
 
 const variants: Record<ButtonVariant, string> = {
   primary:
-    "bg-neutral-900 text-white shadow-sm hover:bg-neutral-700 focus-visible:ring-neutral-900/50 " +
-    "dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200 dark:focus-visible:ring-white/50",
+    "bg-emerald-600 text-white shadow-sm hover:bg-emerald-500 focus-visible:ring-emerald-600/50 " +
+    "dark:bg-emerald-500 dark:text-neutral-950 dark:hover:bg-emerald-400",
   secondary:
-    "border border-black/15 hover:bg-neutral-50 focus-visible:ring-neutral-900/30 " +
-    "dark:border-white/15 dark:hover:bg-neutral-800 dark:focus-visible:ring-white/30",
+    "bg-neutral-100 text-neutral-900 hover:bg-neutral-200 focus-visible:ring-neutral-900/20 " +
+    "dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700",
+  outline:
+    "border border-emerald-600 text-emerald-700 hover:bg-emerald-50 focus-visible:ring-emerald-600/40 " +
+    "dark:border-emerald-500 dark:text-emerald-400 dark:hover:bg-emerald-950/40",
   danger:
     "bg-red-600 text-white shadow-sm hover:bg-red-500 focus-visible:ring-red-600/50",
   success:
@@ -32,8 +36,8 @@ const variants: Record<ButtonVariant, string> = {
 };
 
 const sizes: Record<ButtonSize, string> = {
-  sm: "px-2.5 py-1.5 text-xs",
-  md: "px-4 py-2 text-sm",
+  sm: "h-[30px] px-3 text-xs",
+  md: "h-10 px-4 text-sm",
 };
 
 export function buttonClass(opts?: {

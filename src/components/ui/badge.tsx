@@ -41,7 +41,7 @@ export function Badge({
 }: BadgeProps) {
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${tones[tone]} ${className}`.trim()}
+      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-semibold ${tones[tone]} ${className}`.trim()}
       {...rest}
     >
       {dot ? (

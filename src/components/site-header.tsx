@@ -7,6 +7,7 @@ import { getViewMode } from "@/lib/view-mode";
 import { getLockedTabsForPlayer } from "@/lib/admin-access";
 import { getNavSignals } from "@/lib/nav-signals";
 import { getPlayerContact } from "@/lib/player-profile";
+import { Avatar } from "@/components/ui/avatar";
 import { setViewModeAction } from "@/app/actions/view-mode";
 
 export default async function SiteHeader() {
@@ -27,7 +28,6 @@ export default async function SiteHeader() {
 
   const contact = user?.playerId != null ? await getPlayerContact(user.playerId) : null;
   const photoUrl = contact?.photoUrl ?? null;
-  const initial = (user?.name?.trim()?.charAt(0) ?? "?").toUpperCase();
 
   const signOutAction = async () => {
     "use server";
@@ -51,19 +51,9 @@ export default async function SiteHeader() {
                 href="/profile"
                 aria-label={`View your profile, ${user.name}`}
                 title="Your profile"
-                className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-emerald-600 text-sm font-semibold text-white shadow-sm ring-2 ring-emerald-600/20 transition hover:bg-emerald-700"
+                className="rounded-full ring-2 ring-black/5 transition hover:ring-emerald-600/30 dark:ring-white/10"
               >
-                {photoUrl ? (
-                  <Image
-                    src={photoUrl}
-                    alt=""
-                    width={36}
-                    height={36}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  initial
-                )}
+                <Avatar name={user.name} photoUrl={photoUrl} size="md" />
               </Link>
             ) : (
               <span className="text-xs text-neutral-500">{user.name}</span>
@@ -103,19 +93,9 @@ export default async function SiteHeader() {
                     href="/profile"
                     aria-label={`View your profile, ${user.name}`}
                     title="Your profile"
-                    className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-emerald-600 text-xs font-semibold text-white shadow-sm ring-2 ring-emerald-600/20 transition hover:bg-emerald-700"
+                    className="rounded-full ring-2 ring-black/5 transition hover:ring-emerald-600/30 dark:ring-white/10"
                   >
-                    {photoUrl ? (
-                      <Image
-                        src={photoUrl}
-                        alt=""
-                        width={32}
-                        height={32}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      initial
-                    )}
+                    <Avatar name={user.name} photoUrl={photoUrl} size="sm" />
                   </Link>
                 ) : null}
                 {user.playerId == null ? (
