@@ -156,7 +156,7 @@ export default function LeaderboardTable({
                   <td className="px-3 py-2 text-neutral-400">{i + 1}</td>
                   <td className="px-3 py-2">
                     <span className="flex items-center gap-2">
-                      <Avatar name={r.name} size="xs" />
+                      <Avatar name={r.name} photoUrl={r.photoUrl} size="xs" />
                       <span className="font-medium">{r.name}</span>
                     </span>
                   </td>

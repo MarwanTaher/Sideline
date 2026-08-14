@@ -55,7 +55,7 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+      className={`rounded-md px-4 py-1.5 text-sm font-medium transition active:scale-[0.97] ${
         active
           ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
           : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"

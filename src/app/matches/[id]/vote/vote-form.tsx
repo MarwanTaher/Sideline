@@ -176,7 +176,7 @@ export function VoteForm({ matchId, ballot, hasVotedBefore }: VoteFormProps) {
             >
               <div className="flex items-center justify-between gap-3">
                 <span className="flex min-w-0 items-center gap-2.5">
-                  <Avatar name={b.name} size="sm" />
+                  <Avatar name={b.name} photoUrl={b.photoUrl} size="sm" />
                   <span className="min-w-0">
                     <span className="block truncate font-medium">{b.name}</span>
                     <span className="text-xs text-neutral-400">Team {b.teamNo}</span>

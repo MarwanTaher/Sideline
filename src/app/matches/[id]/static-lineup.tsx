@@ -41,7 +41,7 @@ function StaticPitch({ team }: { team: MatchTeam }) {
     >
       <div className="relative z-10 flex items-center justify-between gap-2 px-1 pb-2">
         <span
-          className="min-w-[5ch] max-w-[70%] truncate rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-black"
+          className="min-w-[5ch] max-w-[70%] truncate rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-white"
           style={{ backgroundColor: BRAND }}
         >
           {team.name?.trim() || `Team ${team.teamNo}`}

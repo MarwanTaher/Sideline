@@ -158,7 +158,7 @@ function PlayerCard({ player }: { player: PlayerRow }) {
         className="flex w-full items-center justify-between px-4 py-3 text-left text-sm"
       >
         <span className="flex min-w-0 items-center gap-2.5">
-          <Avatar name={player.name} size="sm" className={player.active ? "" : "opacity-50"} />
+          <Avatar name={player.name} photoUrl={player.photoUrl} size="sm" className={player.active ? "" : "opacity-50"} />
           <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
             <span className="font-medium">{player.name}</span>
             <span className="text-xs uppercase text-neutral-500">{player.preferredPosition}</span>
@@ -479,7 +479,7 @@ export default function PlayersAdmin({
                 className="flex items-center justify-between rounded-lg border border-black/10 px-4 py-2 text-sm dark:border-white/10"
               >
                 <span className="flex items-center gap-2.5">
-                  <Avatar name={p.name} size="sm" />
+                  <Avatar name={p.name} photoUrl={p.photoUrl} size="sm" />
                   <span>
                     <span className="font-medium">{p.name}</span>{" "}
                     <span className="text-neutral-500">({p.preferredPosition})</span>
@@ -539,7 +539,7 @@ export default function PlayersAdmin({
                 className="flex items-center justify-between rounded-lg border border-black/10 px-4 py-2 text-sm dark:border-white/10"
               >
                 <span className="flex items-center gap-2.5">
-                  <Avatar name={p.name} size="sm" />
+                  <Avatar name={p.name} photoUrl={p.photoUrl} size="sm" />
                   <span>
                     <span className="font-medium">{p.name}</span>{" "}
                     <span className="text-neutral-500">({p.preferredPosition})</span>

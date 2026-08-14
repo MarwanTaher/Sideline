@@ -46,7 +46,7 @@ export function MatchesList({ items }: { items: MatchListDisplayItem[] }) {
             type="button"
             onClick={() => setFilter(f.key)}
             aria-pressed={filter === f.key}
-            className={`rounded-lg px-3 py-1.5 font-medium transition ${
+            className={`rounded-lg px-3 py-1.5 font-medium transition active:scale-[0.97] ${
               filter === f.key
                 ? "bg-emerald-600 text-white"
                 : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"

@@ -300,7 +300,7 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
                       <button
                         type="submit"
                         disabled={busy || !dirty}
-                        className="w-full rounded-lg px-3 py-2 text-sm font-semibold text-black transition disabled:opacity-40"
+                        className="w-full rounded-lg px-3 py-2 text-sm font-semibold text-white transition disabled:opacity-40"
                         style={{ backgroundColor: BRAND }}
                       >
                         {savePending ? "Saving…" : dirty ? "Save lineup" : "Saved"}
@@ -556,7 +556,7 @@ function Pitch({
             onChange={(e) => onRename(teamNo, e.target.value)}
             readOnly={!interactive}
             aria-label={`Team ${teamNo} name`}
-            className="min-w-[5ch] rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-black outline-none [field-sizing:content] focus:ring-2 focus:ring-white/40"
+                className="min-w-[5ch] rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-white outline-none [field-sizing:content] focus:ring-2 focus:ring-white/40"
             style={{ backgroundColor: BRAND }}
           />
         </div>
@@ -722,7 +722,7 @@ function PlayerNode({
       </div>
       {showScores ? (
         <span
-          className="rounded px-1.5 text-[9px] font-bold leading-tight text-black"
+            className="rounded px-1.5 text-[9px] font-bold leading-tight text-white"
           style={{ backgroundColor: BRAND }}
         >
           {player.score.toFixed(0)}

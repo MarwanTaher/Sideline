@@ -14,6 +14,7 @@ export interface PlayerRow {
   activeLinkCount: number;
   email: string | null;
   phone: string | null;
+  photoUrl: string | null;
 }
 
 export interface ResetRequestRow {
@@ -39,7 +40,7 @@ function isValidPosition(pos: string): pos is Position {
 export async function getPlayersAdminData(): Promise<PlayersAdminData> {
   const players = (await sqlClient.query(
     `
-    SELECT p.id, p.name, p.preferred_position, p.active, p.email, p.phone,
+    SELECT p.id, p.name, p.preferred_position, p.active, p.email, p.phone, p.photo_url,
            CASE WHEN c.player_id IS NULL THEN 0 ELSE 1 END AS has_password
     FROM players p
     LEFT JOIN player_credentials c ON c.player_id = p.id
@@ -53,6 +54,7 @@ export async function getPlayersAdminData(): Promise<PlayersAdminData> {
     active: number;
     email: string | null;
     phone: string | null;
+    photo_url: string | null;
     has_password: number;
   }>;
 
@@ -67,6 +69,7 @@ export async function getPlayersAdminData(): Promise<PlayersAdminData> {
     activeLinkCount: linkCounts.get(Number(p.id)) ?? 0,
     email: p.email ?? null,
     phone: p.phone ?? null,
+    photoUrl: p.photo_url ?? null,
   }));
 
   const resetRows = (await sqlClient.query(
@@ -195,12 +198,13 @@ export interface DeletedPlayer {
   id: number;
   name: string;
   preferredPosition: string;
+  photoUrl: string | null;
   deletedAt: string;
 }
 
 export async function getDeletedPlayers(): Promise<DeletedPlayer[]> {
   const rows = (await sqlClient.query(
-    `SELECT id, name, preferred_position, deleted_at
+    `SELECT id, name, preferred_position, photo_url, deleted_at
        FROM players
       WHERE deleted_at IS NOT NULL
       ORDER BY deleted_at DESC`,
@@ -208,12 +212,14 @@ export async function getDeletedPlayers(): Promise<DeletedPlayer[]> {
     id: number;
     name: string;
     preferred_position: string;
+    photo_url: string | null;
     deleted_at: string;
   }>;
   return rows.map((r) => ({
     id: Number(r.id),
     name: String(r.name),
     preferredPosition: String(r.preferred_position),
+    photoUrl: r.photo_url ?? null,
     deletedAt: String(r.deleted_at),
   }));
 }

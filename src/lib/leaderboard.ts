@@ -13,6 +13,7 @@ export interface LeaderboardRow {
   id: number;
   name: string;
   position: string;
+  photoUrl: string | null;
   matches: number;
   ranked: boolean;
   peer: number;
@@ -40,8 +41,8 @@ export async function getLeaderboard(): Promise<LeaderboardData> {
   const unratedMinMatches = Math.trunc(policy.unrated_min_matches);
 
   const players = (await sqlClient.query(
-    "SELECT id, name, preferred_position FROM players WHERE active = 1",
-  )) as Array<{ id: number; name: string; preferred_position: string }>;
+    "SELECT id, name, preferred_position, photo_url FROM players WHERE active = 1",
+  )) as Array<{ id: number; name: string; preferred_position: string; photo_url: string | null }>;
 
   const countRows = (await sqlClient.query(
     `
@@ -71,6 +72,7 @@ export async function getLeaderboard(): Promise<LeaderboardData> {
       id,
       name: String(p.name),
       position: String(p.preferred_position),
+      photoUrl: p.photo_url ?? null,
       matches,
       ranked: matches >= unratedMinMatches,
       peer,

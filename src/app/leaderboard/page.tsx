@@ -110,7 +110,7 @@ export default async function LeaderboardPage({
             return (
               <div key={r.id} className="flex flex-col items-center">
                 {place === 1 ? <TrophyIcon className="mb-1 h-5 w-5 text-amber-500" /> : null}
-                <Avatar name={r.name} size={place === 1 ? "lg" : "md"} />
+                <Avatar name={r.name} photoUrl={r.photoUrl} size={place === 1 ? "lg" : "md"} />
                 <p className="mt-1 max-w-full truncate text-xs font-medium">{r.name}</p>
                 <p className="text-xs tabular-nums text-neutral-500">{r.final.toFixed(1)}</p>
                 <div className={`mt-1 flex w-full items-center justify-center rounded-t-lg font-heading text-sm font-bold text-white ${bar}`}>
@@ -124,7 +124,7 @@ export default async function LeaderboardPage({
 
       {me ? (
         <Card accent="#059669" className="mt-4 flex items-center gap-3 bg-emerald-50/50 dark:bg-emerald-950/20">
-          <Avatar name={me.name} size="md" />
+          <Avatar name={me.name} photoUrl={me.photoUrl} size="md" />
           <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold">
               {me.name} <span className="font-normal text-neutral-400">· you</span>
