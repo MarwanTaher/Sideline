@@ -24,6 +24,7 @@ import {
 import { AddGuestForm, GuestList, AdminAddGuestForm } from "./guest-controls";
 import { listGuests, MAX_GUESTS_PER_HOST, type Guest } from "@/lib/guests";
 import { MatchNav } from "../match-nav";
+import { SectionIcon } from "@/components/section-icon";
 
 export const metadata = {
   title: "Availability · Sideline",
@@ -155,17 +156,38 @@ export default async function AvailabilityPage({
 
       <MatchNav matchId={matchId} isAdmin={isAdmin} />
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Availability</h1>
-        <span
-          className={`rounded px-1.5 py-0.5 text-xs font-medium capitalize ${MATCHDAY_BADGE[match.matchdayStatus]}`}
-        >
-          {match.matchdayStatus}
-        </span>
+      <div className="mt-3 rounded-2xl border border-black/[0.06] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <SectionIcon name="availability" className="h-9 w-9" />
+          <h1 className="text-2xl font-bold tracking-tight">Availability</h1>
+          <span
+            className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MATCHDAY_BADGE[match.matchdayStatus]}`}
+          >
+            {match.matchdayStatus}
+          </span>
+        </div>
+        <p className="mt-1 text-sm text-neutral-500">
+          Match {match.id} · {fmtDate(match.playedOn)} at {fmtMatchTime(match.matchTime)}
+        </p>
+        <div className="mt-4 grid grid-cols-3 gap-2">
+          <div className="rounded-xl bg-emerald-50 px-3 py-2 text-center dark:bg-emerald-950/30">
+            <p className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-300">
+              {inPlayers.length}
+            </p>
+            <p className="text-xs text-emerald-700/70 dark:text-emerald-300/70">In</p>
+          </div>
+          <div className="rounded-xl bg-amber-50 px-3 py-2 text-center dark:bg-amber-950/30">
+            <p className="text-lg font-bold tabular-nums text-amber-700 dark:text-amber-300">
+              {outPlayers.length}
+            </p>
+            <p className="text-xs text-amber-700/70 dark:text-amber-300/70">Out</p>
+          </div>
+          <div className="rounded-xl bg-neutral-100 px-3 py-2 text-center dark:bg-neutral-800">
+            <p className="text-lg font-bold tabular-nums">{pendingPlayers.length}</p>
+            <p className="text-xs text-neutral-500">Pending</p>
+          </div>
+        </div>
       </div>
-      <p className="mt-1 text-sm text-neutral-500">
-        Match {match.id} · {fmtDate(match.playedOn)} at {fmtMatchTime(match.matchTime)}
-      </p>
 
       {myPlayerId != null ? (
         <section className="mt-6">

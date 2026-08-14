@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
@@ -57,20 +58,30 @@ export default async function Home() {
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-10">
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-emerald-600 to-emerald-800 p-6 text-white shadow-sm">
-        <div className="pointer-events-none absolute -right-10 -top-12 h-44 w-44 rounded-full bg-white/10 blur-2xl" />
-        <p className="text-xs font-medium uppercase tracking-[0.15em] text-white/70">
-          {isAdmin ? role : "Player"}
-        </p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">Welcome back, {name}</h1>
-        {rankInfo?.ranked ? (
-          <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
-            <span className="tabular-nums">#{rankInfo.rank}</span>
-            <span className="text-white/70">of {rankInfo.total}</span>
-            <span className="text-white/40">·</span>
-            <span className="tabular-nums">Score {rankInfo.final.toFixed(1)}</span>
+      <section className="relative overflow-hidden rounded-3xl p-6 text-white shadow-sm">
+        <Image
+          src="/home-hero.jpg"
+          alt=""
+          fill
+          priority
+          sizes="(max-width: 896px) 100vw, 896px"
+          className="object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-700/90 via-emerald-800/85 to-emerald-950/90" />
+        <div className="relative">
+          <p className="text-xs font-medium uppercase tracking-[0.15em] text-white/70">
+            {isAdmin ? role : "Player"}
           </p>
-        ) : null}
+          <h1 className="mt-1 text-2xl font-bold tracking-tight">Welcome back, {name}</h1>
+          {rankInfo?.ranked ? (
+            <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
+              <span className="tabular-nums">#{rankInfo.rank}</span>
+              <span className="text-white/70">of {rankInfo.total}</span>
+              <span className="text-white/40">·</span>
+              <span className="tabular-nums">Score {rankInfo.final.toFixed(1)}</span>
+            </p>
+          ) : null}
+        </div>
       </section>
 
       <NotificationPrompt />

@@ -23,7 +23,7 @@ type NavItem = {
 const linkBase = "transition";
 const linkInactive =
   "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100";
-const linkActive = "font-medium text-neutral-900 dark:text-neutral-100";
+const linkActive = "font-semibold text-emerald-600 dark:text-emerald-400";
 
 const SEEN_STORAGE_PREFIX = "sideline_seen_";
 
@@ -234,7 +234,7 @@ function AdminMenu({
                 onClick={() => setOpen(false)}
                 className={`block rounded-md px-3 py-1.5 text-sm transition ${
                   active
-                    ? "bg-neutral-100 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100"
+                    ? "bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
                     : "text-neutral-600 hover:bg-neutral-50 hover:text-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
                 }`}
               >
