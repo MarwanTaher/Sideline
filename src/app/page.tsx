@@ -94,7 +94,7 @@ export default async function Home() {
           href={`/matches/${nextMatch.id}/availability`}
           className="mt-6 block"
         >
-          <Card className="flex items-center justify-between gap-3 border-emerald-500/40 bg-emerald-50/60 transition hover:border-emerald-500/70 dark:bg-emerald-950/20">
+          <Card accent="#059669" className="flex items-center justify-between gap-3 bg-emerald-50/60 dark:bg-emerald-950/20">
             <div className="flex items-center gap-3">
               <SectionIcon name="availability" className="h-8 w-8" />
               <div>
@@ -114,7 +114,7 @@ export default async function Home() {
         nextMatch &&
         nextMatch.matchdayStatus === "closed" ? (
         <Link href="/leaderboard" className="mt-6 block">
-          <Card className="flex items-center justify-between gap-3 border-indigo-500/40 bg-indigo-50/60 transition hover:border-indigo-500/70 dark:bg-indigo-950/20">
+          <Card accent="#6366f1" className="flex items-center justify-between gap-3 bg-indigo-50/60 dark:bg-indigo-950/20">
             <div className="flex items-center gap-3">
               <SectionIcon name="leaderboard" className="h-8 w-8" />
               <div>
