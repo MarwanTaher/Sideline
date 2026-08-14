@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { LeaderboardRow } from "@/lib/leaderboard";
 import { Badge } from "@/components/ui/badge";
+import { Avatar } from "@/components/ui/avatar";
 import { DataTable } from "@/components/ui/data-table";
 
 const POSITIONS = ["All", "GK", "DEF", "MID", "FWD"] as const;
@@ -117,7 +118,7 @@ export default function LeaderboardTable({
         </label>
       </div>
 
-      <DataTable className="mt-4 rounded-xl border border-black/10 dark:border-white/10">
+      <DataTable className="mt-4 rounded-2xl border border-black/[0.06] shadow-sm dark:border-white/10">
         <table className="w-full border-collapse text-sm">
           <thead>
             <tr className="border-b border-black/10 bg-neutral-50 text-left dark:border-white/10 dark:bg-neutral-900">
@@ -153,7 +154,12 @@ export default function LeaderboardTable({
                   className="border-b border-black/5 last:border-0 dark:border-white/5"
                 >
                   <td className="px-3 py-2 text-neutral-400">{i + 1}</td>
-                  <td className="px-3 py-2 font-medium">{r.name}</td>
+                  <td className="px-3 py-2">
+                    <span className="flex items-center gap-2">
+                      <Avatar name={r.name} size="xs" />
+                      <span className="font-medium">{r.name}</span>
+                    </span>
+                  </td>
                   <td className="px-3 py-2 text-neutral-500">{r.position}</td>
                   <td className="px-3 py-2 text-right tabular-nums">
                     {r.matches}
