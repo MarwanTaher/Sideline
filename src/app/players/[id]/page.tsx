@@ -159,8 +159,24 @@ export default async function PublicPlayerProfilePage({
       {/* Season totals */}
       <div className="mt-5 grid grid-cols-3 gap-3">
         <StatTile label="Matches" value={season.appearances} />
-        <StatTile label="Goals" value={season.goals} />
-        <StatTile label="Assists" value={season.assists} />
+        <StatTile
+          label="Goals"
+          value={season.goals}
+          sub={
+            season.appearances > 0
+              ? `${(season.goals / season.appearances).toFixed(2)} / matchday`
+              : undefined
+          }
+        />
+        <StatTile
+          label="Assists"
+          value={season.assists}
+          sub={
+            season.appearances > 0
+              ? `${(season.assists / season.appearances).toFixed(2)} / matchday`
+              : undefined
+          }
+        />
       </div>
 
       {/* Last matchday */}
