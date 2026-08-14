@@ -1,10 +1,14 @@
 import { notFound, redirect } from "next/navigation";
+import { unstable_cache } from "next/cache";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { getPlayerContact } from "@/lib/player-profile";
 import { getPlayerSeason } from "@/lib/player-trends";
-import { getPlayerRank } from "@/lib/leaderboard";
+import { getPlayerRank, SCORES_CACHE_TAG } from "@/lib/leaderboard";
 import { getPlayerAchievementsLive } from "@/lib/achievements";
+import { getLastMatchdayStatline } from "@/lib/matchday";
+import { getKudos } from "@/lib/kudos";
 import {
   getAwardsSettings,
   getPlayerBadgeCounts,
@@ -14,13 +18,46 @@ import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
 import BadgeGallery from "@/components/badge-gallery";
 import AchievementsGrid from "@/app/profile/achievements-grid";
+import KudosButton from "./kudos-button";
 
 export const metadata = {
   title: "Player · Sideline",
 };
 
-// Badges/awards are recomputed from live data on every request.
+// The page reads cookies (auth) so it stays dynamic, but the heavy per-player
+// aggregates below are cached and revalidated on score changes for speed.
 export const dynamic = "force-dynamic";
+
+/**
+ * Expensive, player-scoped aggregates (season, rank, badges, achievements,
+ * award history, last-matchday statline). Cached so repeat profile views are
+ * fast; invalidated by the shared scores tag when a matchday closes.
+ */
+const getCachedProfileBundle = unstable_cache(
+  async (pid: number) => {
+    const settings = await getAwardsSettings();
+    const thresholds = {
+      minMatchVotes: settings.matchMinValidVotes,
+      minOverallVotes: settings.overallMinValidVotes,
+    };
+    const [season, rankInfo, achievements, badgeCounts, history, lastMatchday] =
+      await Promise.all([
+        getPlayerSeason(pid),
+        getPlayerRank(pid),
+        getPlayerAchievementsLive(pid),
+        getPlayerBadgeCounts(pid, thresholds),
+        getPlayerAwardHistory(pid, {
+          recentMatchLimit: 8,
+          minMatchVotes: thresholds.minMatchVotes,
+          minOverallVotes: thresholds.minOverallVotes,
+        }),
+        getLastMatchdayStatline(pid),
+      ]);
+    return { season, rankInfo, achievements, badgeCounts, history, lastMatchday };
+  },
+  ["public-player-profile"],
+  { revalidate: 300, tags: [SCORES_CACHE_TAG] },
+);
 
 function StatTile({
   label,
@@ -69,55 +106,53 @@ export default async function PublicPlayerProfilePage({
     notFound();
   }
 
-  const contact = await getPlayerContact(pid);
+  const viewerId = session.user.playerId != null ? Number(session.user.playerId) : null;
+
+  const [contact, bundle, kudos] = await Promise.all([
+    getPlayerContact(pid),
+    getCachedProfileBundle(pid),
+    getKudos(pid, viewerId),
+  ]);
   if (!contact) {
     notFound();
   }
 
-  const settings = await getAwardsSettings();
-  const thresholds = {
-    minMatchVotes: settings.matchMinValidVotes,
-    minOverallVotes: settings.overallMinValidVotes,
-  };
-
-  const [season, rankInfo, achievements, badgeCounts, history] = await Promise.all([
-    getPlayerSeason(pid),
-    getPlayerRank(pid),
-    getPlayerAchievementsLive(pid),
-    getPlayerBadgeCounts(pid, thresholds),
-    getPlayerAwardHistory(pid, {
-      recentMatchLimit: 8,
-      minMatchVotes: thresholds.minMatchVotes,
-      minOverallVotes: thresholds.minOverallVotes,
-    }),
-  ]);
-
+  const { season, rankInfo, achievements, badgeCounts, history, lastMatchday } = bundle;
   const standingLabel = rankInfo?.ranked
     ? `#${rankInfo.rank} · Top ${Math.ceil((rankInfo.rank / rankInfo.total) * 100)}%`
     : "Unranked";
-  const lastMatch = season.lastMatch;
+  const isOwnProfile = viewerId != null && viewerId === pid;
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
       {/* Identity */}
       <Card accent="#059669">
-        <div className="flex items-center gap-4">
-          <Avatar name={contact.name} photoUrl={contact.photoUrl} size="lg" />
-          <div className="min-w-0">
-            <h1 className="truncate text-2xl font-extrabold tracking-tight font-heading">
-              {contact.name}
-            </h1>
-            <div className="mt-1 flex flex-wrap items-center gap-2">
-              {contact.preferredPosition ? (
-                <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                  {contact.preferredPosition}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <Avatar name={contact.name} photoUrl={contact.photoUrl} size="lg" />
+            <div className="min-w-0">
+              <h1 className="truncate text-2xl font-extrabold tracking-tight font-heading">
+                {contact.name}
+              </h1>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {contact.preferredPosition ? (
+                  <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                    {contact.preferredPosition}
+                  </span>
+                ) : null}
+                <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
+                  {standingLabel}
                 </span>
-              ) : null}
-              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300">
-                {standingLabel}
-              </span>
+              </div>
             </div>
           </div>
+          {!isOwnProfile && viewerId != null ? (
+            <KudosButton
+              targetId={pid}
+              initialGiven={kudos.viewerHasGiven}
+              initialCount={kudos.count}
+            />
+          ) : null}
         </div>
       </Card>
 
@@ -128,21 +163,21 @@ export default async function PublicPlayerProfilePage({
         <StatTile label="Assists" value={season.assists} />
       </div>
 
-      {/* Last match */}
+      {/* Last matchday */}
       <div className="mt-3">
         <Card>
           <div className="flex items-center justify-between gap-3">
             <span className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
-              Last match
+              Last matchday
             </span>
-            {lastMatch ? (
+            {lastMatchday ? (
               <span className="text-sm font-semibold">
                 <span className="text-emerald-600 dark:text-emerald-400">
-                  {lastMatch.goals}
+                  {lastMatchday.goals}
                 </span>{" "}
                 <span className="text-neutral-400">G</span>
                 <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">·</span>
-                <span className="text-sky-600 dark:text-sky-400">{lastMatch.assists}</span>{" "}
+                <span className="text-sky-600 dark:text-sky-400">{lastMatchday.assists}</span>{" "}
                 <span className="text-neutral-400">A</span>
               </span>
             ) : (
@@ -150,6 +185,34 @@ export default async function PublicPlayerProfilePage({
             )}
           </div>
         </Card>
+      </div>
+
+      {/* Kudos */}
+      <div className="mt-5">
+        <SectionCard title={`Kudos (${kudos.count})`}>
+          {kudos.givers.length === 0 ? (
+            <p className="text-sm text-neutral-500">
+              No kudos yet.{isOwnProfile ? "" : " Be the first to give some."}
+            </p>
+          ) : (
+            <ul className="flex flex-wrap gap-3">
+              {kudos.givers.map((g) => (
+                <li key={g.playerId}>
+                  <Link
+                    href={`/players/${g.playerId}`}
+                    title={g.name}
+                    className="flex flex-col items-center gap-1 transition hover:opacity-80"
+                  >
+                    <Avatar name={g.name} photoUrl={g.photoUrl} size="md" />
+                    <span className="max-w-[64px] truncate text-[11px] text-neutral-500">
+                      {g.name}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
       </div>
 
       {/* Achievements */}

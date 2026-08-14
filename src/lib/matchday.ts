@@ -582,6 +582,50 @@ export async function getLastMatchdayOutcome(
   };
 }
 
+export interface MatchdayStatline {
+  matchId: number;
+  playedOn: string;
+  goals: number;
+  assists: number;
+}
+
+/**
+ * A player's combined goals + assists across all mini-matches (rounds) of their
+ * most recent closed matchday, read live from the console log (`round_goals`)
+ * rather than the synced season stats.
+ */
+export async function getLastMatchdayStatline(
+  playerId: number,
+): Promise<MatchdayStatline | null> {
+  const matchRows = (await sqlClient.query(
+    `SELECT m.id, m.played_on
+       FROM matches m
+       JOIN match_players mp ON mp.match_id = m.id AND mp.player_id = $1
+      WHERE m.matchday_status = 'closed'
+      ORDER BY m.played_on DESC, m.id DESC
+      LIMIT 1`,
+    [playerId],
+  )) as Array<{ id: number; played_on: string | null }>;
+  if (matchRows.length === 0) return null;
+  const matchId = Number(matchRows[0].id);
+
+  const tally = (await sqlClient.query(
+    `SELECT
+        COALESCE(SUM(CASE WHEN scorer_player_id = $2 THEN 1 ELSE 0 END), 0) AS goals,
+        COALESCE(SUM(CASE WHEN assist_player_id = $2 THEN 1 ELSE 0 END), 0) AS assists
+       FROM round_goals
+      WHERE match_id = $1`,
+    [matchId, playerId],
+  )) as Array<{ goals: number; assists: number }>;
+
+  return {
+    matchId,
+    playedOn: matchRows[0].played_on ?? "",
+    goals: Number(tally[0]?.goals ?? 0),
+    assists: Number(tally[0]?.assists ?? 0),
+  };
+}
+
 // ── Scorekeepers ────────────────────────────────────────────────────────────
 //
 // Admins can delegate live scoring for a specific match to trusted players
