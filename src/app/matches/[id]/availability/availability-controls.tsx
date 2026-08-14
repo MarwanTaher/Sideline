@@ -6,6 +6,7 @@ import { setAvailabilityAction, type AvailabilityActionState } from "./actions";
 import type { AvailabilityStatus } from "@/lib/availability";
 import { Button } from "@/components/ui/button";
 import { Banner, FeedbackMessage } from "@/components/ui/banner";
+import { CheckIcon, XIcon } from "@/components/ui/icons";
 
 const INITIAL: AvailabilityActionState = { ok: false, message: "" };
 
@@ -51,7 +52,7 @@ export function AvailabilityControls({
               pending={pending}
               pendingLabel="Marking…"
             >
-              <span aria-hidden="true">✅</span> Mark IN
+              <CheckIcon className="h-4 w-4" /> Mark IN
             </Button>
           </form>
           <form action={formAction} className="flex-1">
@@ -65,7 +66,7 @@ export function AvailabilityControls({
               pending={pending}
               pendingLabel="Marking…"
             >
-              <span aria-hidden="true">❌</span> Mark OUT
+              <XIcon className="h-4 w-4" /> Mark OUT
             </Button>
           </form>
         </div>

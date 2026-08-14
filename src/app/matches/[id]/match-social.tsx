@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import type { ReactionSummaryItem } from "@/lib/reactions";
 import { ShareButton } from "@/components/share-button";
 import { reactAction, type SocialActionState } from "./social/actions";
+import { CalendarIcon } from "@/components/ui/icons";
 
 const INITIAL: SocialActionState = { ok: false, message: "" };
 
@@ -38,7 +39,7 @@ export function MatchSocial({
           href={icsHref}
           className="inline-flex items-center gap-1.5 rounded-lg border border-black/15 px-3 py-1.5 text-sm font-medium text-neutral-600 transition hover:bg-neutral-50 dark:border-white/15 dark:text-neutral-300 dark:hover:bg-neutral-900"
         >
-          📅 Add to calendar
+          <CalendarIcon className="h-4 w-4" /> Add to calendar
         </a>
       </div>
 

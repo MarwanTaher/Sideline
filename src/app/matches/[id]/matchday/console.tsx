@@ -9,6 +9,7 @@ import {
   useTransition,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { BallIcon, SwapIcon, UndoIcon, PlusIcon, MedalIcon } from "@/components/ui/icons";
 import type { MatchTeam, MatchTeamPlayer } from "@/lib/matches";
 import type {
   MatchdayConsole as ConsoleData,
@@ -993,7 +994,7 @@ function RoundCard({
             benched={benched}
             onSubOut={onSubOut}
             onBringBack={onBringBack}
-            submitLabel="⚽ Log goal"
+            submitLabel="Log goal"
             allowOwnGoal
             onOwnGoal={() => {
               onAddGoal(round, picker, null, null, true);
@@ -1102,7 +1103,7 @@ function GoalButton({
       }`}
     >
       <span className="text-2xl" aria-hidden="true">
-        ⚽
+        <BallIcon className="h-6 w-6" />
       </span>
       Goal · {label}
     </button>
@@ -1211,7 +1212,7 @@ function GoalPicker({
                 onClick={() => startSub(p.playerId)}
                 className="inline-flex items-center gap-1 rounded-lg border border-black/10 px-2 py-1 text-xs transition hover:bg-black/5 dark:border-white/15 dark:hover:bg-white/10"
               >
-                <span aria-hidden="true">⇄</span> Sub {p.name}
+                <SwapIcon className="h-3.5 w-3.5" /> Sub {p.name}
               </button>
             ))}
           </div>
@@ -1225,7 +1226,7 @@ function GoalPicker({
                 onClick={() => onBringBack?.(p.playerId)}
                 className="inline-flex items-center gap-1 rounded-lg border border-dashed border-black/20 px-2 py-1 text-xs text-neutral-500 transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
               >
-                <span aria-hidden="true">↩</span> Bring back {p.name}
+                <UndoIcon className="h-3.5 w-3.5" /> Bring back {p.name}
               </button>
             ))}
           </div>
@@ -1260,7 +1261,7 @@ function GoalPicker({
                   onClick={() => addPlayer(p)}
                   className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm transition hover:bg-black/5 dark:hover:bg-white/10"
                 >
-                  <span aria-hidden="true">＋</span>
+                  <PlusIcon className="h-4 w-4" />
                   <span className="font-medium">{p.name}</span>
                 </button>
               ))
@@ -1278,9 +1279,9 @@ function GoalPicker({
         <button
           type="button"
           onClick={() => setShowAdd(true)}
-          className="rounded-lg border border-dashed border-black/20 px-3 py-2 text-sm font-medium transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
+          className="inline-flex items-center gap-1 rounded-lg border border-dashed border-black/20 px-3 py-2 text-sm font-medium transition hover:bg-black/5 dark:border-white/25 dark:hover:bg-white/10"
         >
-          ＋ Add or loan a player to {teamName}
+          <PlusIcon className="h-4 w-4" /> Add or loan a player to {teamName}
         </button>
       )}
     </div>
@@ -1455,7 +1456,7 @@ function GoalLog({
                 className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-200 text-base dark:bg-neutral-700"
                 aria-hidden="true"
               >
-                ⚽
+                <BallIcon className="h-5 w-5" />
               </span>
             ) : (
               <Avatar name={g.scorer.name} photoUrl={photoOf(g.scorer)} theme={theme} className="h-9 w-9" />
@@ -1509,7 +1510,6 @@ function DayTally({
 }) {
   const [pending, startTransition] = useTransition();
   const [note, setNote] = useState("");
-  const medals = ["🥇", "🥈", "🥉"];
 
   return (
     <div className="rounded-2xl border border-black/10 p-4 dark:border-white/10">
@@ -1550,7 +1550,13 @@ function DayTally({
                 key={t.key}
                 className="flex items-center gap-3 rounded-xl px-2 py-1.5 text-sm odd:bg-black/[0.02] dark:odd:bg-white/[0.03]"
               >
-                <span className="w-6 text-center text-base">{medals[i] ?? ""}</span>
+                <span className="flex w-6 justify-center">
+                  {i < 3 ? (
+                    <MedalIcon place={i + 1} className="h-5 w-5" />
+                  ) : (
+                    <span className="text-xs tabular-nums text-neutral-400">{i + 1}</span>
+                  )}
+                </span>
                 <Avatar name={t.name} photoUrl={photoOf(ref)} theme={THEMES[i % THEMES.length]} className="h-8 w-8" />
                 <span className="min-w-0 flex-1 truncate font-medium">{t.name}</span>
                 <span className="tabular-nums">

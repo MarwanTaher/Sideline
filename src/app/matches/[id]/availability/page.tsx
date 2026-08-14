@@ -354,9 +354,9 @@ export default async function AvailabilityPage({
       </section>
 
       <section className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatusList title={<><span aria-hidden="true">✅</span> In</>} players={inPlayers} guests={approvedGuests} />
-        <StatusList title={<><span aria-hidden="true">❌</span> Out</>} players={outPlayers} />
-        <StatusList title={<><span aria-hidden="true">⏳</span> Pending</>} players={pendingPlayers} />
+        <StatusList title={<span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> In</span>} players={inPlayers} guests={approvedGuests} />
+        <StatusList title={<span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" /> Out</span>} players={outPlayers} />
+        <StatusList title={<span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-neutral-400" /> Pending</span>} players={pendingPlayers} />
       </section>
     </main>
   );

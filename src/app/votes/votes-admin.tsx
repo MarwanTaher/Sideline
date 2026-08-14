@@ -27,6 +27,7 @@ import type {
 import type { MotmTallyRow, MotmVoteDetailRow } from "@/lib/motm";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
+import { TrophyIcon } from "@/components/ui/icons";
 
 const INITIAL: VoteActionState = { ok: false, message: "" };
 
@@ -561,7 +562,7 @@ function MotmPanel({
             <tbody>
               {tally.map((t, i) => (
                 <tr key={t.playerId} className="border-t border-black/5 dark:border-white/5">
-                  <td className="py-2 pr-4">{i === 0 ? "🏆" : i + 1}</td>
+                    <td className="py-2 pr-4">{i === 0 ? <TrophyIcon className="h-4 w-4 text-amber-500" /> : i + 1}</td>
                   <td className={`py-2 pr-4 ${i === 0 ? "font-semibold" : ""}`}>{t.name}</td>
                   <td className="py-2 pr-4">{t.votes}</td>
                 </tr>

@@ -126,7 +126,7 @@ export default function NotificationPrompt() {
         <div className="min-w-0 flex-1">
           {mode === "done" ? (
             <p className="text-sm font-medium">
-              Notifications enabled — you&apos;re all set. ⚽
+              Notifications enabled — you&apos;re all set.
             </p>
           ) : mode === "enable" ? (
             <>

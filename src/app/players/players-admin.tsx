@@ -20,6 +20,7 @@ import {
 import { POSITIONS } from "@/lib/positions";
 import type { PlayerRow, ResetRequestRow, DeletedPlayer } from "@/lib/players-admin";
 import { ShareButton } from "@/components/share-button";
+import { LockIcon, KeyIcon } from "@/components/ui/icons";
 
 const INITIAL: PlayerActionState = { ok: false, message: "" };
 
@@ -166,8 +167,8 @@ function PlayerCard({ player }: { player: PlayerRow }) {
           <span className="font-medium">{player.name}</span>
           <span className="ml-2 text-neutral-500">{player.preferredPosition}</span>
           {player.hasPassword && (
-            <span className="ml-2 text-xs text-neutral-400">
-              <span aria-hidden="true">🔒</span> password set
+            <span className="ml-2 inline-flex items-center gap-1 text-xs text-neutral-400">
+              <LockIcon className="h-3.5 w-3.5" /> password set
             </span>
           )}
           {player.activeLinkCount > 0 && (
@@ -454,8 +455,8 @@ export default function PlayersAdmin({
 
       {resetRequests.length > 0 && (
         <section>
-          <h2 className="text-lg font-semibold tracking-tight">
-            🔑 Password reset requests ({resetRequests.length})
+          <h2 className="flex items-center gap-2 text-lg font-semibold tracking-tight">
+            <KeyIcon className="h-5 w-5 text-neutral-400" /> Password reset requests ({resetRequests.length})
           </h2>
           <div className="mt-3 space-y-3">
             {resetRequests.map((req) => (
