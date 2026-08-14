@@ -44,7 +44,7 @@ function OverrideRow({
   }, [applyState, clearState, router]);
 
   return (
-    <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+    <div className="rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold">{item.label}</h3>
         {item.isOverride ? (

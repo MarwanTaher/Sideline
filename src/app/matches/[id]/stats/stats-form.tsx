@@ -39,7 +39,7 @@ export function StatsForm({ matchId, open, current }: StatsFormProps) {
   const statusLabel = current?.status;
 
   return (
-    <div className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+    <div className="rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10">
       {current ? (
         <div className="mb-3 space-y-1">
           <div className="flex flex-wrap items-center gap-2 text-sm">

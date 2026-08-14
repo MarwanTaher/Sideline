@@ -5,7 +5,7 @@ import { teamGridColumns } from "@/lib/team-constants";
 /* Read-only pitch view of a saved draft, shown on the match overview. Mirrors
  * the Lineup Builder's look but has no drag/drop or controls. */
 
-const BRAND = "#a6ce39";
+const BRAND = "#059669";
 const ROW_ORDER = ["FWD", "MID", "DEF", "GK"] as const;
 type Row = (typeof ROW_ORDER)[number];
 
@@ -41,7 +41,7 @@ function StaticPitch({ team }: { team: MatchTeam }) {
     >
       <div className="relative z-10 flex items-center justify-between gap-2 px-1 pb-2">
         <span
-          className="min-w-[5ch] max-w-[70%] truncate rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-black"
+          className="min-w-[5ch] max-w-[70%] truncate rounded-md px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-white"
           style={{ backgroundColor: BRAND }}
         >
           {team.name?.trim() || `Team ${team.teamNo}`}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { MatchTeam } from "@/lib/matches";
 import { StaticLineup } from "./static-lineup";
 import { teamGridColumns } from "@/lib/team-constants";
@@ -55,7 +56,7 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-md px-4 py-1.5 text-sm font-medium transition ${
+      className={`rounded-md px-4 py-1.5 text-sm font-medium transition active:scale-[0.97] ${
         active
           ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
           : "text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
@@ -72,7 +73,7 @@ function TeamList({ teams }: { teams: MatchTeam[] }) {
       {teams.map((team) => (
         <div
           key={team.teamNo}
-          className="rounded-xl border border-black/10 p-4 dark:border-white/10"
+          className="rounded-2xl border border-black/[0.06] p-4 shadow-sm dark:border-white/10"
         >
           <h3 className="text-sm font-semibold">
             {team.name?.trim() || `Team ${team.teamNo}`}{" "}
@@ -87,7 +88,16 @@ function TeamList({ teams }: { teams: MatchTeam[] }) {
                       Guest
                     </span>
                   ) : null}
-                  <span>{p.name}</span>
+                  {p.isGuest ? (
+                    <span>{p.name}</span>
+                  ) : (
+                    <Link
+                      href={`/players/${p.playerId}`}
+                      className="transition hover:text-emerald-600 dark:hover:text-emerald-400"
+                    >
+                      {p.name}
+                    </Link>
+                  )}
                   {p.isGuest && p.hostName ? (
                     <span className="text-xs text-neutral-500"> · of {p.hostName}</span>
                   ) : null}

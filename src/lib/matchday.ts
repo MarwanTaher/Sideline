@@ -522,6 +522,110 @@ export async function syncMatchdayToStats(matchId: number): Promise<number> {
   return rows.length;
 }
 
+export interface MatchdayOutcome {
+  matchId: number;
+  playedOn: string;
+  won: number;
+  drawn: number;
+  lost: number;
+  rounds: number;
+}
+
+/** A player's win/draw/loss across the rounds of their most recent closed match. */
+export async function getLastMatchdayOutcome(
+  playerId: number,
+): Promise<MatchdayOutcome | null> {
+  const matchRows = (await sqlClient.query(
+    `SELECT m.id, m.played_on, mp.team_no
+       FROM matches m
+       JOIN match_players mp ON mp.match_id = m.id AND mp.player_id = $1
+      WHERE m.matchday_status = 'closed'
+      ORDER BY m.played_on DESC, m.id DESC
+      LIMIT 1`,
+    [playerId],
+  )) as Array<{ id: number; played_on: string | null; team_no: number }>;
+  if (matchRows.length === 0) return null;
+  const matchId = Number(matchRows[0].id);
+  const myTeam = Number(matchRows[0].team_no);
+
+  const roundRows = (await sqlClient.query(
+    `SELECT mr.team_a, mr.team_b,
+            COALESCE(SUM(CASE WHEN rg.team_no = mr.team_a THEN 1 ELSE 0 END), 0) AS a,
+            COALESCE(SUM(CASE WHEN rg.team_no = mr.team_b THEN 1 ELSE 0 END), 0) AS b
+       FROM match_rounds mr
+       LEFT JOIN round_goals rg ON rg.round_id = mr.id
+      WHERE mr.match_id = $1 AND mr.status = 'done'
+      GROUP BY mr.id, mr.team_a, mr.team_b`,
+    [matchId],
+  )) as Array<{ team_a: number; team_b: number; a: number; b: number }>;
+
+  let won = 0;
+  let drawn = 0;
+  let lost = 0;
+  for (const r of roundRows) {
+    const ta = Number(r.team_a);
+    const tb = Number(r.team_b);
+    if (ta !== myTeam && tb !== myTeam) continue;
+    const mine = ta === myTeam ? Number(r.a) : Number(r.b);
+    const theirs = ta === myTeam ? Number(r.b) : Number(r.a);
+    if (mine > theirs) won += 1;
+    else if (mine < theirs) lost += 1;
+    else drawn += 1;
+  }
+  return {
+    matchId,
+    playedOn: matchRows[0].played_on ?? "",
+    won,
+    drawn,
+    lost,
+    rounds: won + drawn + lost,
+  };
+}
+
+export interface MatchdayStatline {
+  matchId: number;
+  playedOn: string;
+  goals: number;
+  assists: number;
+}
+
+/**
+ * A player's combined goals + assists across all mini-matches (rounds) of their
+ * most recent closed matchday, read live from the console log (`round_goals`)
+ * rather than the synced season stats.
+ */
+export async function getLastMatchdayStatline(
+  playerId: number,
+): Promise<MatchdayStatline | null> {
+  const matchRows = (await sqlClient.query(
+    `SELECT m.id, m.played_on
+       FROM matches m
+       JOIN match_players mp ON mp.match_id = m.id AND mp.player_id = $1
+      WHERE m.matchday_status = 'closed'
+      ORDER BY m.played_on DESC, m.id DESC
+      LIMIT 1`,
+    [playerId],
+  )) as Array<{ id: number; played_on: string | null }>;
+  if (matchRows.length === 0) return null;
+  const matchId = Number(matchRows[0].id);
+
+  const tally = (await sqlClient.query(
+    `SELECT
+        COALESCE(SUM(CASE WHEN scorer_player_id = $2 THEN 1 ELSE 0 END), 0) AS goals,
+        COALESCE(SUM(CASE WHEN assist_player_id = $2 THEN 1 ELSE 0 END), 0) AS assists
+       FROM round_goals
+      WHERE match_id = $1`,
+    [matchId, playerId],
+  )) as Array<{ goals: number; assists: number }>;
+
+  return {
+    matchId,
+    playedOn: matchRows[0].played_on ?? "",
+    goals: Number(tally[0]?.goals ?? 0),
+    assists: Number(tally[0]?.assists ?? 0),
+  };
+}
+
 // ── Scorekeepers ────────────────────────────────────────────────────────────
 //
 // Admins can delegate live scoring for a specific match to trusted players

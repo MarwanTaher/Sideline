@@ -8,6 +8,7 @@ export interface BallotPlayer {
   playerId: number;
   name: string;
   teamNo: number;
+  photoUrl: string | null;
   priorRating: number | null;
   skipped: boolean;
 }
@@ -39,6 +40,7 @@ interface RosterRow {
   player_id: number;
   name: string;
   team_no: number;
+  photo_url: string | null;
 }
 
 interface PriorRow {
@@ -71,7 +73,7 @@ export async function getVotingState(
   const matchdayStatus = normMatchday(metaRows[0].matchday_status);
 
   const rosterRaw = await sqlClient.query(
-    `SELECT mp.player_id, p.name, mp.team_no
+    `SELECT mp.player_id, p.name, mp.team_no, p.photo_url
        FROM match_players mp
        JOIN players p ON p.id = mp.player_id
       WHERE mp.match_id = $1
@@ -111,6 +113,7 @@ export async function getVotingState(
         playerId,
         name: r.name,
         teamNo: Number(r.team_no),
+        photoUrl: r.photo_url ?? null,
         priorRating,
         skipped,
       };

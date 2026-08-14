@@ -7,6 +7,6 @@
   <rect x="40" y="97" width="90" height="6" fill="#FFFFFF" />
   <rect x="50" y="129" width="80" height="6" fill="#FFFFFF" />
   
-  <!-- Vertical Line (Green) -->
-  <rect x="145" y="55" width="6" height="90" fill="#A6CE39" />
+  <!-- Vertical Line (Emerald) -->
+  <rect x="145" y="55" width="6" height="90" fill="#059669" />
 </svg>

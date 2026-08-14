@@ -27,7 +27,7 @@ export function AnimatedLogo({ size = 96, loop = false, className = "" }: Animat
       <rect className="s-line s-line-1" x="50" y="65" width="80" height="6" fill="#FFFFFF" />
       <rect className="s-line s-line-2" x="40" y="97" width="90" height="6" fill="#FFFFFF" />
       <rect className="s-line s-line-3" x="50" y="129" width="80" height="6" fill="#FFFFFF" />
-      <rect className="s-vline" x="145" y="55" width="6" height="90" fill="#A6CE39" />
+      <rect className="s-vline" x="145" y="55" width="6" height="90" fill="#059669" />
     </svg>
   );
 }

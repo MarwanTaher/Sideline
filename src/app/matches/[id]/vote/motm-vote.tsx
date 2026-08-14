@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import type { MotmTallyRow } from "@/lib/motm";
 import { castMotmAction, type SocialActionState } from "../social/actions";
+import { TrophyIcon } from "@/components/ui/icons";
 
 const INITIAL: SocialActionState = { ok: false, message: "" };
 
@@ -82,7 +83,7 @@ export function MotmVote({
             {tally.map((t, i) => (
               <li key={t.playerId} className="flex items-center gap-2 text-sm">
                 {i === 0 ? (
-                  <span>🏆</span>
+                  <TrophyIcon className="h-4 w-4 text-amber-500" />
                 ) : (
                   <span className="w-4 text-center text-neutral-400">{i + 1}</span>
                 )}

@@ -19,6 +19,8 @@ interface ProfileDetailsProps {
   email: string | null;
   phone: string | null;
   photoUrl: string | null;
+  standingLabel?: string | null;
+  roleLabel?: string | null;
 }
 
 /**
@@ -54,6 +56,8 @@ export default function ProfileDetails({
   email,
   phone,
   photoUrl,
+  standingLabel,
+  roleLabel,
 }: ProfileDetailsProps) {
   const router = useRouter();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -187,7 +191,18 @@ export default function ProfileDetails({
               {position}
             </span>
           ) : null}
+          {roleLabel ? (
+            <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold capitalize text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
+              {roleLabel}
+            </span>
+          ) : null}
         </div>
+        {standingLabel ? (
+          <p className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-neutral-500">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+            {standingLabel}
+          </p>
+        ) : null}
 
         <form action={contactAction} className="mt-4 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">

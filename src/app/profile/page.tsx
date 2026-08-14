@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import {
@@ -7,6 +8,7 @@ import {
   getPlayerAwardHistory,
 } from "@/lib/awards";
 import BadgeGallery from "@/components/badge-gallery";
+import { Avatar } from "@/components/ui/avatar";
 import ChangePassword from "./change-password";
 import ProfileDetails from "./profile-details";
 import NotificationsToggle from "./notifications-toggle";
@@ -16,8 +18,10 @@ import AchievementsGrid from "./achievements-grid";
 import ChemistryPanel from "./chemistry-panel";
 import { getPlayerContact } from "@/lib/player-profile";
 import { getPlayerSeason } from "@/lib/player-trends";
+import { getPlayerRank } from "@/lib/leaderboard";
 import { getPlayerAchievementsLive } from "@/lib/achievements";
 import { getChemistry } from "@/lib/chemistry";
+import { getKudos } from "@/lib/kudos";
 
 export const metadata = {
   title: "Profile · Sideline",
@@ -72,13 +76,20 @@ export default async function ProfilePage() {
     }),
   ]);
 
-  const [season, achievements, chemistry] = await Promise.all([
+  const [season, achievements, chemistry, kudos] = await Promise.all([
     getPlayerSeason(pid),
     getPlayerAchievementsLive(pid),
     getChemistry(pid, { minShared: 3 }),
+    getKudos(pid, pid),
   ]);
 
   const displayName = contact?.name ?? session.user.name ?? "Player";
+  const rankInfo = await getPlayerRank(pid);
+  const standingLabel = rankInfo?.ranked
+    ? `Ranked #${rankInfo.rank} · Top ${Math.ceil((rankInfo.rank / rankInfo.total) * 100)}%`
+    : "Unranked";
+  const roleLabel =
+    session.user.role && session.user.role !== "player" ? session.user.role : null;
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
@@ -93,12 +104,40 @@ export default async function ProfilePage() {
             email={contact?.email ?? null}
             phone={contact?.phone ?? null}
             photoUrl={contact?.photoUrl ?? null}
+            standingLabel={standingLabel}
+            roleLabel={roleLabel}
           />
         </section>
 
         {/* Your season: form, trends, highlights */}
         <Card title="Your season">
           <YourSeason season={season} />
+        </Card>
+
+        {/* Kudos received from teammates */}
+        <Card title={`Kudos received (${kudos.count})`}>
+          {kudos.givers.length === 0 ? (
+            <p className="text-sm text-neutral-500">
+              No kudos yet — teammates can give you kudos from your profile.
+            </p>
+          ) : (
+            <ul className="flex flex-wrap gap-3">
+              {kudos.givers.map((g) => (
+                <li key={g.playerId}>
+                  <Link
+                    href={`/players/${g.playerId}`}
+                    title={g.name}
+                    className="flex flex-col items-center gap-1 transition hover:opacity-80"
+                  >
+                    <Avatar name={g.name} photoUrl={g.photoUrl} size="md" />
+                    <span className="max-w-[64px] truncate text-[11px] text-neutral-500">
+                      {g.name}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </Card>
 
         {/* Badges you can earn */}

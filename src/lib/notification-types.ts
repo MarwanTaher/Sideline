@@ -26,6 +26,7 @@ export type NotificationTypeKey =
   | "guest_request"
   | "guest_decision"
   | "achievement_unlocked"
+  | "kudos"
   | "announcement";
 
 export type NotificationType = {
@@ -154,6 +155,16 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     label: "Achievement unlocked",
     description:
       "Sent to a player when they unlock a new badge (hat-trick, appearances milestones, MOTM, and more).",
+    defaultEnabled: true,
+    audience: "players",
+    audienceOverridable: false,
+    userConfigurable: true,
+  },
+  {
+    key: "kudos",
+    label: "Kudos received",
+    description:
+      "Sent to a player when a teammate gives them kudos on their profile.",
     defaultEnabled: true,
     audience: "players",
     audienceOverridable: false,

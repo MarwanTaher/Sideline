@@ -1,12 +1,13 @@
 import Link from "next/link";
-import Image from "next/image";
 import { auth, signOut } from "@/auth";
 import MainNav from "@/components/main-nav";
-import MobileNav from "@/components/mobile-nav";
+import BottomNav from "@/components/bottom-nav";
 import { getViewMode } from "@/lib/view-mode";
 import { getLockedTabsForPlayer } from "@/lib/admin-access";
 import { getNavSignals } from "@/lib/nav-signals";
 import { getPlayerContact } from "@/lib/player-profile";
+import { Avatar } from "@/components/ui/avatar";
+import { LogoMark } from "@/components/logo-mark";
 import { setViewModeAction } from "@/app/actions/view-mode";
 
 export default async function SiteHeader() {
@@ -27,49 +28,21 @@ export default async function SiteHeader() {
 
   const contact = user?.playerId != null ? await getPlayerContact(user.playerId) : null;
   const photoUrl = contact?.photoUrl ?? null;
-  const initial = (user?.name?.trim()?.charAt(0) ?? "?").toUpperCase();
+
+  const signOutAction = async () => {
+    "use server";
+    await signOut({ redirectTo: "/login" });
+  };
 
   return (
-    <header className="sticky top-0 z-10 border-b border-black/10 bg-white/80 backdrop-blur relative dark:border-white/10 dark:bg-neutral-950/80">
+    <>
+      <header className="sticky top-0 z-10 border-b border-black/10 bg-white/80 backdrop-blur relative dark:border-white/10 dark:bg-neutral-950/80">
       <div className="mx-auto w-full max-w-4xl px-4 py-3">
-        {/* Mobile app bar: menu · brand · profile */}
-        <div className="relative flex items-center justify-between md:hidden">
-          {user ? (
-            <MobileNav>
-              <MainNav adminView={adminView} isSuper={isSuper} lockedTabs={lockedTabs} signals={navSignals ?? undefined} />
-              {canToggle ? <ViewToggle mode={mode} /> : null}
-              {user.playerId != null ? (
-                <Link
-                  href="/profile"
-                  className="font-semibold text-emerald-600 underline decoration-emerald-600/30 decoration-2 underline-offset-4 transition hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
-                >
-                  View your profile
-                </Link>
-              ) : null}
-              <form
-                action={async () => {
-                  "use server";
-                  await signOut({ redirectTo: "/login" });
-                }}
-              >
-                <button
-                  type="submit"
-                  className="rounded-lg border border-black/10 px-2.5 py-1 text-xs font-medium transition hover:bg-neutral-50 dark:border-white/15 dark:hover:bg-neutral-800"
-                >
-                  Sign out
-                </button>
-              </form>
-            </MobileNav>
-          ) : (
-            <span className="h-9 w-9" aria-hidden />
-          )}
-
-          <Link
-            href="/"
-            className="absolute left-1/2 flex -translate-x-1/2 items-center gap-2"
-          >
-            <Image src="/logo-mark.svg" alt="" width={24} height={24} className="rounded-md" />
-            <span className="text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
+        {/* Mobile top bar: brand left · profile right (nav is the bottom bar) */}
+        <div className="flex items-center justify-between md:hidden">
+          <Link href="/" className="flex items-center gap-2">
+            <LogoMark className="h-6 w-6 rounded-md" />
+            <span className="font-heading text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
           </Link>
 
           {user ? (
@@ -78,19 +51,9 @@ export default async function SiteHeader() {
                 href="/profile"
                 aria-label={`View your profile, ${user.name}`}
                 title="Your profile"
-                className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-full bg-emerald-600 text-sm font-semibold text-white shadow-sm ring-2 ring-emerald-600/20 transition hover:bg-emerald-700"
+                className="inline-flex rounded-full ring-2 ring-black/5 transition hover:ring-emerald-600/30 dark:ring-white/10"
               >
-                {photoUrl ? (
-                  <Image
-                    src={photoUrl}
-                    alt=""
-                    width={36}
-                    height={36}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  initial
-                )}
+                <Avatar name={user.name} photoUrl={photoUrl} size="md" />
               </Link>
             ) : (
               <span className="text-xs text-neutral-500">{user.name}</span>
@@ -108,8 +71,8 @@ export default async function SiteHeader() {
         {/* Desktop bar: brand left · inline nav right */}
         <div className="hidden items-center justify-between md:flex">
           <Link href="/" className="flex items-center gap-2">
-            <Image src="/logo-mark.svg" alt="" width={26} height={26} className="rounded-md" />
-            <span className="text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
+            <LogoMark className="h-[26px] w-[26px] rounded-md" />
+            <span className="font-heading text-sm font-bold uppercase tracking-[0.2em]">Sideline</span>
           </Link>
 
           <div className="flex items-center gap-4">
@@ -130,19 +93,9 @@ export default async function SiteHeader() {
                     href="/profile"
                     aria-label={`View your profile, ${user.name}`}
                     title="Your profile"
-                    className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-emerald-600 text-xs font-semibold text-white shadow-sm ring-2 ring-emerald-600/20 transition hover:bg-emerald-700"
+                    className="inline-flex rounded-full ring-2 ring-black/5 transition hover:ring-emerald-600/30 dark:ring-white/10"
                   >
-                    {photoUrl ? (
-                      <Image
-                        src={photoUrl}
-                        alt=""
-                        width={32}
-                        height={32}
-                        className="h-full w-full object-cover"
-                      />
-                    ) : (
-                      initial
-                    )}
+                    <Avatar name={user.name} photoUrl={photoUrl} size="sm" />
                   </Link>
                 ) : null}
                 {user.playerId == null ? (
@@ -172,6 +125,17 @@ export default async function SiteHeader() {
         </div>
       </div>
     </header>
+      {user ? (
+        <BottomNav
+          adminView={adminView}
+          isSuper={isSuper}
+          lockedTabs={lockedTabs}
+          canToggle={canToggle}
+          mode={mode}
+          signOutAction={signOutAction}
+        />
+      ) : null}
+    </>
   );
 }
 
