@@ -6,11 +6,11 @@ import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
 import { getPlayerRank } from "@/lib/leaderboard";
 import { getPlayerSeason } from "@/lib/player-trends";
+import { getPendingVoteObligation } from "@/lib/voting";
 import { getStatsReviewCounts } from "@/lib/stats";
 import { getPlayersAdminData } from "@/lib/players-admin";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { StatBar } from "@/components/ui/stat-bar";
 import { SegmentedBar } from "@/components/ui/segmented-bar";
 import { BallIcon, BarsIcon, TrophyIcon } from "@/components/ui/icons";
 import { SectionIcon } from "@/components/section-icon";
@@ -49,10 +49,7 @@ export default async function Home() {
   }
 
   const season = playerId != null ? await getPlayerSeason(playerId) : null;
-  const avgRating =
-    season && season.ratingSeries.length > 0
-      ? season.ratingSeries.reduce((s, p) => s + p.value, 0) / season.ratingSeries.length
-      : (rankInfo?.final ?? 0);
+  const voteObligation = playerId != null ? await getPendingVoteObligation(playerId) : null;
   const wdl = season
     ? {
         W: season.form.filter((r) => r === "W").length,
@@ -104,6 +101,25 @@ export default async function Home() {
 
       <NotificationPrompt />
       <InstallPrompt />
+
+      {voteObligation ? (
+        <Link href={`/matches/${voteObligation.matchId}/vote`} className="mt-4 block">
+          <Card accent="#059669" className="flex items-center justify-between gap-3 bg-emerald-50/60 dark:bg-emerald-950/20">
+            <div className="flex items-center gap-3">
+              <SectionIcon name="votes" className="h-8 w-8" />
+              <div>
+                <p className="text-sm font-semibold">Rate match {voteObligation.matchId}</p>
+                <p className="text-sm text-neutral-500">
+                  Voting is open — rate how your teammates played.
+                </p>
+              </div>
+            </div>
+            <span aria-hidden className="text-lg text-emerald-600 dark:text-emerald-400">
+              &rarr;
+            </span>
+          </Card>
+        </Link>
+      ) : null}
 
       {playerId != null &&
       nextMatch &&
@@ -225,6 +241,11 @@ export default async function Home() {
               </p>
               <p className="mt-0.5 text-sm tabular-nums text-neutral-500">
                 Score {rankInfo.final.toFixed(1)}
+                {rankInfo.ranked && rankInfo.total > 0 ? (
+                  <span className="ml-2 font-medium text-emerald-600 dark:text-emerald-400">
+                    Top {Math.ceil((rankInfo.rank / rankInfo.total) * 100)}%
+                  </span>
+                ) : null}
               </p>
               {rankInfo.ranked && rankInfo.total > 0 ? (
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
@@ -238,18 +259,6 @@ export default async function Home() {
           </Link>
         ) : null}
       </div>
-
-      {season && season.appearances > 0 ? (
-        <Card className="mt-4">
-          <h2 className="text-sm font-semibold text-neutral-500">Season performance</h2>
-          <div className="mt-3 space-y-2.5">
-            <StatBar label="Matches" value={season.appearances} max={Math.max(matches.length, season.appearances, 1)} colorClass="bg-emerald-500" />
-            <StatBar label="Goals" value={season.goals} max={Math.max(season.appearances, season.goals, 1)} colorClass="bg-emerald-500" />
-            <StatBar label="Assists" value={season.assists} max={Math.max(season.appearances, season.assists, 1)} colorClass="bg-sky-500" />
-            <StatBar label="Avg" value={avgRating} max={10} display={avgRating.toFixed(1)} colorClass="bg-amber-500" />
-          </div>
-        </Card>
-      ) : null}
 
       {wdl && wdl.W + wdl.D + wdl.L > 0 ? (
         <Card className="mt-4">

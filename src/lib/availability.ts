@@ -7,6 +7,7 @@ export interface PlayerAvailability {
   playerId: number;
   name: string;
   preferredPosition: string;
+  photoUrl: string | null;
   status: AvailabilityStatus;
   updatedAt: string | null;
 }
@@ -71,6 +72,7 @@ interface AvailabilityRow {
   player_id: number;
   name: string;
   preferred_position: string | null;
+  photo_url: string | null;
   status: string;
   updated_at: string | null;
 }
@@ -84,7 +86,7 @@ export async function getAvailabilityAllPlayers(
   matchId: number,
 ): Promise<PlayerAvailability[]> {
   const raw = await sqlClient.query(
-    `SELECT p.id AS player_id, p.name, p.preferred_position,
+    `SELECT p.id AS player_id, p.name, p.preferred_position, p.photo_url,
             COALESCE(ma.status, 'pending') AS status,
             ma.updated_at
        FROM players p
@@ -105,6 +107,7 @@ export async function getAvailabilityAllPlayers(
     playerId: Number(r.player_id),
     name: r.name,
     preferredPosition: r.preferred_position ?? "",
+    photoUrl: r.photo_url ?? null,
     status: (r.status === "in" || r.status === "out" ? r.status : "pending") as AvailabilityStatus,
     updatedAt: r.updated_at ?? null,
   }));
