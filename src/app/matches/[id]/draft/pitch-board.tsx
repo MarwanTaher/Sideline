@@ -17,6 +17,7 @@ import {
 } from "@dnd-kit/core";
 import { POSITIONS, type Position } from "@/lib/positions";
 import type { DraftPlayer } from "@/lib/draft";
+import { Avatar } from "@/components/ui/avatar";
 import { MAX_TEAMS, TEAM_COUNT_OPTIONS, teamGridColumns } from "@/lib/team-constants";
 import {
   autoBalanceAction,
@@ -473,6 +474,7 @@ function TeamListCard({
           {rows.map(({ p, pos }, i) => (
             <li key={p.playerId} className="flex items-center gap-2 px-3 py-2 text-sm">
               <span className="w-4 text-center text-xs text-neutral-600">{i + 1}</span>
+              <Avatar name={p.name} photoUrl={p.photoUrl} size="xs" />
               <span
                 className="w-9 rounded px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase text-neutral-300"
                 style={{ backgroundColor: `${BRAND}22` }}
