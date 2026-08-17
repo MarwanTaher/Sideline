@@ -1,17 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
 
 /**
  * Pull-to-refresh for the installed (standalone) app, where the browser's own
  * pull-to-refresh is unavailable. Only activates in standalone display mode;
  * in a normal browser tab the native gesture is left alone. Pulling down from
- * the top past the threshold triggers a soft router refresh (re-fetches server
- * data without a full reload).
+ * the top past the threshold triggers a full page reload.
  */
 export default function PullToRefresh() {
-  const router = useRouter();
   const [offset, setOffset] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
   const startY = useRef<number | null>(null);
@@ -63,12 +60,8 @@ export default function PullToRefresh() {
         refreshingRef.current = true;
         setRefreshing(true);
         set(44);
-        router.refresh();
-        window.setTimeout(() => {
-          refreshingRef.current = false;
-          setRefreshing(false);
-          set(0);
-        }, 900);
+        // Hard reload so the whole app re-fetches, not just RSC data.
+        window.location.reload();
       } else {
         set(0);
       }
@@ -84,7 +77,7 @@ export default function PullToRefresh() {
       window.removeEventListener("touchend", onEnd);
       window.removeEventListener("touchcancel", onEnd);
     };
-  }, [router]);
+  }, []);
 
   const visible = offset > 0 || refreshing;
 
