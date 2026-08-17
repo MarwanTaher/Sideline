@@ -4,6 +4,7 @@ import "./globals.css";
 import SiteHeader from "@/components/site-header";
 import { SplashScreen } from "@/components/splash-screen";
 import OnboardingFlow from "@/components/onboarding-flow";
+import PullToRefresh from "@/components/pull-to-refresh";
 import { auth } from "@/auth";
 
 const inter = Inter({
@@ -65,6 +66,7 @@ export default async function RootLayout({
     >
       <body className="min-h-full flex flex-col pb-20 md:pb-0">
         <SplashScreen />
+        <PullToRefresh />
         <SiteHeader />
         {children}
         <OnboardingFlow show={Boolean(session?.user)} />
