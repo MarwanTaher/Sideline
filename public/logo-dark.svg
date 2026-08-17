@@ -12,7 +12,7 @@
   <rect x="105" y="115" width="165" height="8" fill="#FFFFFF" />
   
   <!-- Vertical Line (Emerald) -->
-  <rect x="280" y="25" width="8" height="130" fill="#059669" />
+  <rect x="280" y="25" width="8" height="130" fill="#10b981" />
   
   <!-- Text -->
   <text x="315" y="70" class="text-side">SIDE</text>
