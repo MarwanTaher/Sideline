@@ -51,7 +51,7 @@ export function AvailabilityControls({
             <input type="hidden" name="status" value="in" />
             <button
               type="submit"
-              disabled={pending}
+              disabled={pending || currentStatus === "in"}
               className={`flex w-full flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60 ${
                 currentStatus === "in"
                   ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
@@ -69,7 +69,7 @@ export function AvailabilityControls({
             <input type="hidden" name="status" value="out" />
             <button
               type="submit"
-              disabled={pending}
+              disabled={pending || currentStatus === "out"}
               className={`flex w-full flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60 ${
                 currentStatus === "out"
                   ? "border-red-600 bg-red-600 text-white shadow-sm"
