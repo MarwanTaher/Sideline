@@ -170,6 +170,19 @@ export async function countInPlayers(matchId: number): Promise<number> {
   return Number(rows[0]?.c ?? 0);
 }
 
+/** A single player's stored availability for a match ("pending" when no row). */
+export async function getPlayerAvailabilityStatus(
+  matchId: number,
+  playerId: number,
+): Promise<AvailabilityStatus> {
+  const rows = (await sqlClient.query(
+    `SELECT status FROM match_availability WHERE match_id = $1 AND player_id = $2`,
+    [matchId, playerId],
+  )) as Array<{ status: string }>;
+  const s = rows[0]?.status;
+  return s === "in" || s === "out" ? s : "pending";
+}
+
 // ── Waitlist (#9) ──────────────────────────────────────────────────────────
 // The match_availability.status CHECK constraint only allows 'in'/'out', so the
 // waitlist is kept as an ordered list of player ids in app_settings, keyed per

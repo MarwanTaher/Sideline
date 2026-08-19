@@ -27,9 +27,9 @@ const passwordSchema = z
   .max(200, "Password is too long.");
 
 /**
- * Public self-registration with instant activation. Creates an active player
- * with a password so they can sign in immediately, and notifies admins that a
- * new player has joined. Names must be unique (case-insensitive).
+ * Public self-registration pending admin approval. Creates an inactive player
+ * with a password; they cannot sign in until an admin activates their account.
+ * Notifies admins so they can approve. Names must be unique (case-insensitive).
  */
 export async function registerAction(
   _prev: RegisterState,
@@ -72,11 +72,11 @@ export async function registerAction(
 
     await setPlayerPassword(playerId, password);
 
-    // Let admins know a new player has joined (never block registration on this).
+    // Let admins know a new player needs approval (never block registration on this).
     try {
       await notify("new_player", {
-        title: "New player joined \u26bd",
-        body: `${name} (${position}) just registered.`,
+        title: "New player awaiting approval",
+        body: `${name} (${position}) registered and needs approval.`,
         url: "/players",
         tag: `new-player-${playerId}`,
       });
@@ -86,7 +86,8 @@ export async function registerAction(
 
     return {
       ok: true,
-      message: "You're all set! You can sign in now with your name and password.",
+      message:
+        "Thanks! Your account is pending admin approval. You'll be able to sign in once an admin activates it.",
     };
   } catch (err) {
     if (err instanceof z.ZodError) {

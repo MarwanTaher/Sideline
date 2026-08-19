@@ -134,9 +134,10 @@ export class DuplicateNameError extends Error {
 }
 
 /**
- * Insert a new self-registered player (instantly active) and return its id.
- * Names must be unique case-insensitively; throws {@link DuplicateNameError}
- * when the name already exists.
+ * Insert a new self-registered player as inactive (pending admin approval) and
+ * return its id. They cannot sign in until an admin activates them. Names must
+ * be unique case-insensitively; throws {@link DuplicateNameError} when the name
+ * already exists.
  */
 export async function createSelfRegisteredPlayer(
   name: string,
@@ -154,7 +155,7 @@ export async function createSelfRegisteredPlayer(
 
   try {
     const rows = (await sqlClient.query(
-      "INSERT INTO players (name, preferred_position, active) VALUES ($1, $2, 1) RETURNING id",
+      "INSERT INTO players (name, preferred_position, active) VALUES ($1, $2, 0) RETURNING id",
       [trimmed, pos],
     )) as unknown as Array<{ id: number }>;
     return Number(rows[0].id);

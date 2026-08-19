@@ -7,6 +7,7 @@ import {
   setPlayerAvailability,
   clearPlayerAvailability,
   getAvailabilityMatch,
+  getPlayerAvailabilityStatus,
   countInPlayers,
   addToWaitlist,
   removeFromWaitlist,
@@ -160,6 +161,18 @@ export async function setAvailabilityAction(
       return { ok: false, message: "Availability is closed for this match." };
     }
 
+    // If the player is already IN (e.g. an admin added them to the lineup),
+    // marking IN again is a no-op — never waitlist a player who is already in
+    // the lineup. Also clear any stray waitlist entry for them.
+    if (status === "in") {
+      const currentStatus = await getPlayerAvailabilityStatus(matchId, playerId);
+      if (currentStatus === "in") {
+        await removeFromWaitlist(matchId, playerId);
+        revalidateAvailability(matchId);
+        return { ok: true, message: "You're already marked IN." };
+      }
+    }
+
     // Voting nudge (admin-toggled): a player who was in their last game but
     // hasn't rated anyone yet must vote before they can claim a spot in a new
     // match. Any cast vote clears the block. Only gates marking IN — going OUT
@@ -207,6 +220,10 @@ export async function setAvailabilityAction(
     }
 
     await setPlayerAvailability(matchId, playerId, status);
+    if (status === "in") {
+      // Now in the lineup — drop from the waitlist if they were queued.
+      await removeFromWaitlist(matchId, playerId);
+    }
     if (status === "out") {
       // Guests follow their host — if the host is out, so are their guests.
       await deleteGuestsForHost(matchId, playerId);
@@ -247,6 +264,10 @@ export async function adminSetAvailabilityAction(
       await clearPlayerAvailability(matchId, playerId);
     } else {
       await setPlayerAvailability(matchId, playerId, status);
+    }
+    // A player placed IN by an admin joins the lineup — remove any waitlist entry.
+    if (status === "in") {
+      await removeFromWaitlist(matchId, playerId);
     }
     // Guests follow their host off the sheet when the host is no longer IN.
     if (status === "out" || status === "pending") {
