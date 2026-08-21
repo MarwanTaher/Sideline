@@ -12,6 +12,7 @@ export type MatchListDisplayItem = {
   playerCount: number;
   statsScoringEnabled: boolean;
   dateLabel: string;
+  locationName?: string;
 };
 
 const MATCHDAY_BADGE: Record<MatchdayStatus, string> = {
@@ -82,6 +83,11 @@ export function MatchesList({ items }: { items: MatchListDisplayItem[] }) {
                     ) : null}
                   </div>
                   <div className="mt-1 text-sm text-neutral-500">{m.dateLabel}</div>
+                  {m.locationName ? (
+                    <div className="mt-0.5 truncate text-xs text-neutral-400">
+                      {m.locationName.split(",")[0]}
+                    </div>
+                  ) : null}
                 </div>
                 <div className="text-right text-sm text-neutral-500">
                   <div className="tabular-nums">

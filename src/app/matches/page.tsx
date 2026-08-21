@@ -78,6 +78,7 @@ export default async function MatchesPage() {
             playerCount: m.playerCount,
             statsScoringEnabled: m.statsScoringEnabled,
             dateLabel: `${fmtDate(m.playedOn)} at ${fmtMatchTime(m.matchTime)}`,
+            locationName: m.locationName || undefined,
           }))}
         />
       )}

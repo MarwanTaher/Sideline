@@ -22,6 +22,9 @@ export const matches = pgTable("matches", {
 	availabilityOpen: integer("availability_open").default(1).notNull(),
 	paymentsActive: integer("payments_active").default(0).notNull(),
 	teamNames: text("team_names"),
+	locationName: text("location_name"),
+	locationLat: doublePrecision("location_lat"),
+	locationLng: doublePrecision("location_lng"),
 }, (table) => [
 	index("idx_matches_status_played_on").using("btree", table.status.asc().nullsLast().op("text_ops"), table.playedOn.asc().nullsLast().op("text_ops")),
 	check("matches_num_teams_check", sql`num_teams >= 2 AND num_teams <= 5`),

@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import Link from "next/link";
 import { createMatchAction, type MatchActionState } from "../actions";
+import { LocationPicker } from "../location-picker";
 import { TEAM_COUNT_OPTIONS } from "@/lib/team-constants";
 
 const INITIAL: MatchActionState = { ok: false, message: "" };
@@ -58,6 +59,8 @@ export function CreateMatchForm() {
           </select>
         </label>
       </div>
+
+      <LocationPicker />
 
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="statsScoringEnabled" className="h-4 w-4" />

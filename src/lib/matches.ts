@@ -13,6 +13,7 @@ export interface MatchListItem {
   statsScoringEnabled: boolean;
   playerCount: number;
   availabilityOpen: boolean;
+  locationName: string;
 }
 
 export interface MatchTeamPlayer {
@@ -45,6 +46,9 @@ export interface MatchDetail {
   status: MatchStatus;
   matchdayStatus: MatchdayStatus;
   statsScoringEnabled: boolean;
+  locationName: string;
+  locationLat: number | null;
+  locationLng: number | null;
   teams: MatchTeam[];
   stats: MatchStatRow[];
 }
@@ -90,11 +94,12 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
            COALESCE(m.status, 'open') AS status,
            COALESCE(m.stats_scoring_enabled, 1) AS stats_scoring_enabled,
            COALESCE(m.availability_open, 1) AS availability_open,
+           COALESCE(m.location_name, '') AS location_name,
            COUNT(mp.player_id) AS player_count
     FROM matches m
     LEFT JOIN match_players mp ON mp.match_id = m.id
     ${restrict ? "WHERE (EXISTS (SELECT 1 FROM match_players mpx WHERE mpx.match_id = m.id AND mpx.player_id = $1) OR COALESCE(m.matchday_status, 'draft') IN ('draft', 'active'))" : ""}
-    GROUP BY m.id, m.played_on, m.match_time, m.matchday_status, m.status, m.stats_scoring_enabled, m.availability_open
+    GROUP BY m.id, m.played_on, m.match_time, m.matchday_status, m.status, m.stats_scoring_enabled, m.availability_open, m.location_name
     ORDER BY m.id DESC
     `,
     restrict ? [forPlayerId] : [],
@@ -106,6 +111,7 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
     status: string;
     stats_scoring_enabled: number;
     availability_open: number;
+    location_name: string;
     player_count: number;
   }>;
 
@@ -118,6 +124,7 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
     statsScoringEnabled: Number(r.stats_scoring_enabled) === 1,
     playerCount: Number(r.player_count),
     availabilityOpen: Number(r.availability_open) === 1,
+    locationName: String(r.location_name ?? ""),
   }));
 }
 
@@ -148,6 +155,9 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
            COALESCE(status, 'open') AS status,
            COALESCE(matchday_status, 'draft') AS matchday_status,
            COALESCE(stats_scoring_enabled, 1) AS stats_scoring_enabled,
+           COALESCE(location_name, '') AS location_name,
+           location_lat,
+           location_lng,
            team_names
     FROM matches
     WHERE id = $1
@@ -162,6 +172,9 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
     status: string;
     matchday_status: string;
     stats_scoring_enabled: number;
+    location_name: string;
+    location_lat: number | null;
+    location_lng: number | null;
     team_names: string | null;
   }>;
 
@@ -245,6 +258,9 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
     status: normStatus(meta.status),
     matchdayStatus: normMatchday(meta.matchday_status),
     statsScoringEnabled: Number(meta.stats_scoring_enabled) === 1,
+    locationName: String(meta.location_name ?? ""),
+    locationLat: meta.location_lat == null ? null : Number(meta.location_lat),
+    locationLng: meta.location_lng == null ? null : Number(meta.location_lng),
     teams,
     stats,
   };
