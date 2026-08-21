@@ -12,10 +12,12 @@ export function LocationPicker({
   initialName = "",
   initialLat = null,
   initialLng = null,
+  initialVenue = null,
 }: {
   initialName?: string;
   initialLat?: number | null;
   initialLng?: number | null;
+  initialVenue?: "indoor" | "outdoor" | null;
 }) {
   const [name, setName] = useState(initialName);
   const [lat, setLat] = useState<number | null>(initialLat);
@@ -55,7 +57,19 @@ export function LocationPicker({
 
   return (
     <div className="space-y-2">
-      <span className="text-sm font-medium">Field location</span>
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium">Field location</span>
+        <select
+          name="venue"
+          defaultValue={initialVenue ?? ""}
+          aria-label="Indoor or outdoor"
+          className="rounded-lg border border-black/15 bg-white px-2.5 py-1 text-sm dark:border-white/15 dark:bg-neutral-900"
+        >
+          <option value="">Indoor / Outdoor</option>
+          <option value="outdoor">Outdoor</option>
+          <option value="indoor">Indoor</option>
+        </select>
+      </div>
 
       {/* Submitted with the parent form */}
       <input type="hidden" name="locationName" value={name} />

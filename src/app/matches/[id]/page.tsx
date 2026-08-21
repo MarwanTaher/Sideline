@@ -10,6 +10,7 @@ import { getMatchDigest, buildDigestShareText } from "@/lib/match-digest";
 import { getBaseUrl } from "@/lib/site-url";
 import { getMatchWeather } from "@/lib/weather";
 import { googleMapsUrl } from "@/lib/geo-links";
+import { WeatherIcon } from "@/components/ui/weather-icon";
 import { MatchSettings } from "./match-settings";
 import { MatchNav } from "./match-nav";
 import { TeamsView } from "./teams-view";
@@ -69,7 +70,9 @@ export default async function MatchDetailPage({
     getReactionSummary(matchId, viewerPlayerId ?? null),
     getMatchDigest(matchId),
     getBaseUrl(),
-    getMatchWeather(match.locationLat, match.locationLng, match.playedOn, match.matchTime),
+    match.venue === "indoor"
+      ? Promise.resolve(null)
+      : getMatchWeather(match.locationLat, match.locationLng, match.playedOn, match.matchTime),
   ]);
   const shareUrl = baseUrl ? `${baseUrl}/share/match/${matchId}` : "";
   const shareText = digest ? buildDigestShareText(digest, shareUrl) : "";
@@ -117,18 +120,31 @@ export default async function MatchDetailPage({
           ))}
         </div>
 
-        {match.locationName || (match.locationLat != null && match.locationLng != null) ? (
+        {match.locationName || (match.locationLat != null && match.locationLng != null) || match.venue ? (
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-black/5 pt-3 text-sm dark:border-white/10">
-            <span
-              className="inline-flex min-w-0 items-center gap-1.5 font-medium"
-              title={match.locationName || undefined}
-            >
-              <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true">
-                <path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-                <circle cx="12" cy="11" r="2.2" stroke="currentColor" strokeWidth="1.8" />
-              </svg>
-              <span className="truncate">{match.locationName.split(",")[0] || "Field location"}</span>
-            </span>
+            {match.locationName || (match.locationLat != null && match.locationLng != null) ? (
+              <span
+                className="inline-flex min-w-0 items-center gap-1.5 font-medium"
+                title={match.locationName || undefined}
+              >
+                <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden="true">
+                  <path d="M12 21s-6-5.3-6-10a6 6 0 1 1 12 0c0 4.7-6 10-6 10z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+                  <circle cx="12" cy="11" r="2.2" stroke="currentColor" strokeWidth="1.8" />
+                </svg>
+                <span className="truncate">{match.locationName.split(",")[0] || "Field location"}</span>
+              </span>
+            ) : null}
+            {match.venue ? (
+              <span
+                className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  match.venue === "indoor"
+                    ? "bg-violet-100 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300"
+                    : "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                }`}
+              >
+                {match.venue === "indoor" ? "Indoor" : "Outdoor"}
+              </span>
+            ) : null}
             {match.locationLat != null && match.locationLng != null ? (
               <a
                 href={googleMapsUrl(match.locationLat, match.locationLng)}
@@ -145,6 +161,7 @@ export default async function MatchDetailPage({
         {weather ? (
           <div className="mt-2">
             <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-lg bg-sky-50 px-2.5 py-1.5 text-xs font-medium text-sky-800 dark:bg-sky-950/40 dark:text-sky-200">
+              <WeatherIcon code={weather.code} className="h-5 w-5 shrink-0" />
               <span className="font-semibold">Forecast · {weather.timeLabel}</span>
               <span>{weather.tempC}°C</span>
               <span className="text-sky-400">·</span>

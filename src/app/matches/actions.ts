@@ -53,6 +53,7 @@ function parseLocation(formData: FormData): {
   locationName: string | null;
   locationLat: number | null;
   locationLng: number | null;
+  venue: "indoor" | "outdoor" | null;
 } {
   const name = String(formData.get("locationName") ?? "").trim() || null;
   const latRaw = String(formData.get("locationLat") ?? "").trim();
@@ -61,7 +62,9 @@ function parseLocation(formData: FormData): {
   const lng = lngRaw ? Number(lngRaw) : null;
   const validLat = lat != null && Number.isFinite(lat) && lat >= -90 && lat <= 90 ? lat : null;
   const validLng = lng != null && Number.isFinite(lng) && lng >= -180 && lng <= 180 ? lng : null;
-  return { locationName: name, locationLat: validLat, locationLng: validLng };
+  const venueRaw = String(formData.get("venue") ?? "").trim();
+  const venue = venueRaw === "indoor" || venueRaw === "outdoor" ? venueRaw : null;
+  return { locationName: name, locationLat: validLat, locationLng: validLng, venue };
 }
 
 /** Admin place search for the field-location picker (OpenStreetMap, no key). */

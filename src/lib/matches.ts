@@ -49,6 +49,7 @@ export interface MatchDetail {
   locationName: string;
   locationLat: number | null;
   locationLng: number | null;
+  venue: "indoor" | "outdoor" | null;
   teams: MatchTeam[];
   stats: MatchStatRow[];
 }
@@ -158,6 +159,7 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
            COALESCE(location_name, '') AS location_name,
            location_lat,
            location_lng,
+           venue,
            team_names
     FROM matches
     WHERE id = $1
@@ -175,6 +177,7 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
     location_name: string;
     location_lat: number | null;
     location_lng: number | null;
+    venue: string | null;
     team_names: string | null;
   }>;
 
@@ -261,6 +264,7 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
     locationName: String(meta.location_name ?? ""),
     locationLat: meta.location_lat == null ? null : Number(meta.location_lat),
     locationLng: meta.location_lng == null ? null : Number(meta.location_lng),
+    venue: meta.venue === "indoor" || meta.venue === "outdoor" ? meta.venue : null,
     teams,
     stats,
   };

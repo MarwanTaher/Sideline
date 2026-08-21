@@ -25,6 +25,7 @@ export const matches = pgTable("matches", {
 	locationName: text("location_name"),
 	locationLat: doublePrecision("location_lat"),
 	locationLng: doublePrecision("location_lng"),
+	venue: text("venue"),
 }, (table) => [
 	index("idx_matches_status_played_on").using("btree", table.status.asc().nullsLast().op("text_ops"), table.playedOn.asc().nullsLast().op("text_ops")),
 	check("matches_num_teams_check", sql`num_teams >= 2 AND num_teams <= 5`),

@@ -163,6 +163,7 @@ export function MatchSettings({ match }: { match: MatchAdmin }) {
             initialName={match.locationName}
             initialLat={match.locationLat}
             initialLng={match.locationLng}
+            initialVenue={match.venue}
           />
           <label className="flex items-center gap-2 text-sm">
             <input
