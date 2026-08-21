@@ -70,9 +70,7 @@ export default async function MatchDetailPage({
     getReactionSummary(matchId, viewerPlayerId ?? null),
     getMatchDigest(matchId),
     getBaseUrl(),
-    match.venue === "indoor"
-      ? Promise.resolve(null)
-      : getMatchWeather(match.locationLat, match.locationLng, match.playedOn, match.matchTime),
+    getMatchWeather(match.locationLat, match.locationLng, match.playedOn, match.matchTime),
   ]);
   const shareUrl = baseUrl ? `${baseUrl}/share/match/${matchId}` : "";
   const shareText = digest ? buildDigestShareText(digest, shareUrl) : "";
