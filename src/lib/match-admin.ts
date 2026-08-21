@@ -21,6 +21,10 @@ export interface MatchAdmin {
   matchdayStatus: MatchdayStatus;
   maxPlayers: number;
   availabilityOpen: boolean;
+  locationName: string;
+  locationLat: number | null;
+  locationLng: number | null;
+  venue: "indoor" | "outdoor" | null;
 }
 
 /** Default cap on how many players can mark themselves IN for a match. */
@@ -31,6 +35,10 @@ export interface CreateMatchInput {
   matchTime: string; // "hh:mm am/pm"
   numTeams: number; // 2 | 3
   statsScoringEnabled: boolean;
+  locationName?: string | null;
+  locationLat?: number | null;
+  locationLng?: number | null;
+  venue?: "indoor" | "outdoor" | null;
 }
 
 export interface UpdateMatchInput {
@@ -38,6 +46,10 @@ export interface UpdateMatchInput {
   matchTime: string;
   numTeams: number;
   statsScoringEnabled: boolean;
+  locationName?: string | null;
+  locationLat?: number | null;
+  locationLng?: number | null;
+  venue?: "indoor" | "outdoor" | null;
 }
 
 /**
@@ -92,12 +104,17 @@ interface MatchAdminRow {
   matchday_status: string | null;
   max_players: number | null;
   availability_open: number | null;
+  location_name: string | null;
+  location_lat: number | null;
+  location_lng: number | null;
+  venue: string | null;
 }
 
 export async function getMatchAdmin(matchId: number): Promise<MatchAdmin | null> {
   const raw = await sqlClient.query(
     `SELECT id, played_on, match_time, num_teams, team_size,
             stats_scoring_enabled, status, matchday_status,
+            location_name, location_lat, location_lng, venue,
             COALESCE(max_players, ${DEFAULT_MAX_PLAYERS}) AS max_players,
             COALESCE(availability_open, 1) AS availability_open
        FROM matches WHERE id = $1`,
@@ -117,6 +134,10 @@ export async function getMatchAdmin(matchId: number): Promise<MatchAdmin | null>
     matchdayStatus: normMatchday(m.matchday_status),
     maxPlayers: Number(m.max_players ?? DEFAULT_MAX_PLAYERS),
     availabilityOpen: Number(m.availability_open ?? 1) === 1,
+    locationName: m.location_name ?? "",
+    locationLat: m.location_lat == null ? null : Number(m.location_lat),
+    locationLng: m.location_lng == null ? null : Number(m.location_lng),
+    venue: m.venue === "indoor" || m.venue === "outdoor" ? m.venue : null,
   };
 }
 
@@ -128,14 +149,19 @@ export async function getMatchAdmin(matchId: number): Promise<MatchAdmin | null>
 export async function createMatch(input: CreateMatchInput): Promise<number> {
   const raw = await sqlClient.query(
     `INSERT INTO matches
-       (played_on, match_time, num_teams, team_size, total_payment, stats_scoring_enabled, status)
-     VALUES ($1, $2, $3, 0, 0, $4, 'open')
+       (played_on, match_time, num_teams, team_size, total_payment, stats_scoring_enabled, status,
+        location_name, location_lat, location_lng, venue)
+     VALUES ($1, $2, $3, 0, 0, $4, 'open', $5, $6, $7, $8)
      RETURNING id`,
     [
       input.playedOn,
       normalizeMatchTime(input.matchTime),
       input.numTeams,
       input.statsScoringEnabled ? 1 : 0,
+      input.locationName?.trim() || null,
+      input.locationLat ?? null,
+      input.locationLng ?? null,
+      input.venue ?? null,
     ],
   );
   const rows = raw as { id: number }[];
@@ -166,7 +192,11 @@ export async function updateMatchSettings(
         SET played_on = $1,
             match_time = $2,
             num_teams = $3,
-            stats_scoring_enabled = $4
+            stats_scoring_enabled = $4,
+            location_name = $6,
+            location_lat = $7,
+            location_lng = $8,
+            venue = $9
       WHERE id = $5`,
     [
       input.playedOn,
@@ -174,6 +204,10 @@ export async function updateMatchSettings(
       input.numTeams,
       input.statsScoringEnabled ? 1 : 0,
       matchId,
+      input.locationName?.trim() || null,
+      input.locationLat ?? null,
+      input.locationLng ?? null,
+      input.venue ?? null,
     ],
   );
 }

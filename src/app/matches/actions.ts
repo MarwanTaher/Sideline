@@ -12,6 +12,7 @@ import {
   setMatchStatus,
   deleteMatch,
 } from "@/lib/match-admin";
+import { searchPlaces, type PlaceResult } from "@/lib/geo";
 import { revalidateScores } from "@/lib/scores-cache";
 
 export interface MatchActionState {
@@ -47,6 +48,31 @@ function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Something went wrong.";
 }
 
+/** Pull an optional field location (name + coordinates) out of the form. */
+function parseLocation(formData: FormData): {
+  locationName: string | null;
+  locationLat: number | null;
+  locationLng: number | null;
+  venue: "indoor" | "outdoor" | null;
+} {
+  const name = String(formData.get("locationName") ?? "").trim() || null;
+  const latRaw = String(formData.get("locationLat") ?? "").trim();
+  const lngRaw = String(formData.get("locationLng") ?? "").trim();
+  const lat = latRaw ? Number(latRaw) : null;
+  const lng = lngRaw ? Number(lngRaw) : null;
+  const validLat = lat != null && Number.isFinite(lat) && lat >= -90 && lat <= 90 ? lat : null;
+  const validLng = lng != null && Number.isFinite(lng) && lng >= -180 && lng <= 180 ? lng : null;
+  const venueRaw = String(formData.get("venue") ?? "").trim();
+  const venue = venueRaw === "indoor" || venueRaw === "outdoor" ? venueRaw : null;
+  return { locationName: name, locationLat: validLat, locationLng: validLng, venue };
+}
+
+/** Admin place search for the field-location picker (OpenStreetMap, no key). */
+export async function searchPlacesAction(query: string): Promise<PlaceResult[]> {
+  await requireAdmin();
+  return searchPlaces(query);
+}
+
 export async function createMatchAction(
   _prev: MatchActionState,
   formData: FormData,
@@ -58,8 +84,9 @@ export async function createMatchAction(
     const matchTime = timeSchema.parse(formData.get("matchTime"));
     const numTeams = numTeamsSchema.parse(formData.get("numTeams"));
     const statsScoringEnabled = formData.get("statsScoringEnabled") === "on";
+    const location = parseLocation(formData);
 
-    newId = await createMatch({ playedOn, matchTime, numTeams, statsScoringEnabled });
+    newId = await createMatch({ playedOn, matchTime, numTeams, statsScoringEnabled, ...location });
     revalidatePath("/matches");
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
@@ -79,8 +106,9 @@ export async function updateMatchSettingsAction(
     const matchTime = timeSchema.parse(formData.get("matchTime"));
     const numTeams = numTeamsSchema.parse(formData.get("numTeams"));
     const statsScoringEnabled = formData.get("statsScoringEnabled") === "on";
+    const location = parseLocation(formData);
 
-    await updateMatchSettings(matchId, { playedOn, matchTime, numTeams, statsScoringEnabled });
+    await updateMatchSettings(matchId, { playedOn, matchTime, numTeams, statsScoringEnabled, ...location });
     revalidateScores();
     revalidatePath(`/matches/${matchId}`);
     revalidatePath("/matches");

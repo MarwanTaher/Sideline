@@ -10,6 +10,7 @@ import {
   type MatchActionState,
 } from "../actions";
 import type { MatchAdmin, MatchdayStatus } from "@/lib/match-admin";
+import { LocationPicker } from "../location-picker";
 import { TEAM_COUNT_OPTIONS } from "@/lib/team-constants";
 import { useEffect } from "react";
 
@@ -158,6 +159,12 @@ export function MatchSettings({ match }: { match: MatchAdmin }) {
               </select>
             </label>
           </div>
+          <LocationPicker
+            initialName={match.locationName}
+            initialLat={match.locationLat}
+            initialLng={match.locationLng}
+            initialVenue={match.venue}
+          />
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
