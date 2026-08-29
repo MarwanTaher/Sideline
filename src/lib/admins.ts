@@ -61,8 +61,25 @@ export async function grantPlayerAdmin(playerId: number): Promise<void> {
       .where(eq(schema.admins.id, existing[0].id));
     return;
   }
+  // Name the admin row after the player; usernames must be unique, so fall
+  // back to a suffixed variant on collision.
+  const prow = await db
+    .select({ name: schema.players.name })
+    .from(schema.players)
+    .where(eq(schema.players.id, playerId))
+    .limit(1);
+  const base = (prow[0]?.name ?? "").trim() || `player-${playerId}`;
+  const taken = new Set(
+    (await db.select({ u: schema.admins.username }).from(schema.admins)).map((r) =>
+      r.u.toLowerCase(),
+    ),
+  );
+  let username = base;
+  if (taken.has(username.toLowerCase())) username = `${base}-${playerId}`;
+  if (taken.has(username.toLowerCase())) username = `${base}-${randomBytes(2).toString("hex")}`;
+
   await db.insert(schema.admins).values({
-    username: `player-${playerId}-${randomBytes(3).toString("hex")}`,
+    username,
     passwordSalt: randomBytes(16).toString("hex"),
     passwordHash: randomBytes(32).toString("hex"),
     isSuper: 0,
