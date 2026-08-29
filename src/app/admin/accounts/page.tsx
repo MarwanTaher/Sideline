@@ -5,8 +5,10 @@ import {
   getAdminAccounts,
   getLinkablePlayers,
   getTabLocksByAdmin,
+  getPlayerAdminStatuses,
 } from "@/lib/admins";
 import AccountsAdmin from "./accounts-admin";
+import PlayerAdmins from "./player-admins";
 
 export const metadata = {
   title: "Accounts · Sideline",
@@ -29,6 +31,8 @@ export default async function AccountsPage() {
     accounts.map((a) => [a.id, tabLocks.get(a.id) ?? []]),
   );
 
+  const playerAdmins = await getPlayerAdminStatuses();
+
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
       <h1 className="text-2xl font-semibold tracking-tight">Admin accounts</h1>
@@ -44,6 +48,8 @@ export default async function AccountsPage() {
         players={players}
         lockedByAdmin={lockedByAdmin}
       />
+
+      <PlayerAdmins players={playerAdmins} />
     </main>
   );
 }
