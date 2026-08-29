@@ -1,17 +1,12 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
-import {
-  getAdminAccounts,
-  getLinkablePlayers,
-  getTabLocksByAdmin,
-  getPlayerAdminStatuses,
-} from "@/lib/admins";
-import AccountsAdmin from "./accounts-admin";
+import { getTabLocksByAdmin, getPlayerAdminStatuses } from "@/lib/admins";
+import type { AdminTabKey } from "@/lib/admin-tabs";
 import PlayerAdmins from "./player-admins";
 
 export const metadata = {
-  title: "Accounts · Sideline",
+  title: "Admin control · Sideline",
 };
 
 export const dynamic = "force-dynamic";
@@ -21,35 +16,23 @@ export default async function AccountsPage() {
   if (!session?.user) redirect("/login");
   if (!(await isAdminView(session.user.role === "super"))) redirect("/leaderboard");
 
-  const [accounts, players] = await Promise.all([
-    getAdminAccounts(),
-    getLinkablePlayers(),
+  const [playerAdmins, tabLocks] = await Promise.all([
+    getPlayerAdminStatuses(),
+    getTabLocksByAdmin(),
   ]);
 
-  const tabLocks = await getTabLocksByAdmin();
-  const lockedByAdmin = Object.fromEntries(
-    accounts.map((a) => [a.id, tabLocks.get(a.id) ?? []]),
-  );
-
-  const playerAdmins = await getPlayerAdminStatuses();
+  const lockedByAdmin: Record<number, AdminTabKey[]> = {};
+  for (const [adminId, keys] of tabLocks) lockedByAdmin[adminId] = keys;
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
-      <h1 className="text-2xl font-semibold tracking-tight">Admin accounts</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">Admin control</h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Link an admin account to a player so the same person can administer and
-        also vote, set availability, and appear on the leaderboard — all with one
-        login. Leave unlinked for admins who never play. Lock individual tabs to
-        limit what a non-super admin can access.
+        Promote a player to admin or remove their access, and control which
+        sections each admin can use.
       </p>
 
-      <AccountsAdmin
-        accounts={accounts}
-        players={players}
-        lockedByAdmin={lockedByAdmin}
-      />
-
-      <PlayerAdmins players={playerAdmins} />
+      <PlayerAdmins players={playerAdmins} lockedByAdmin={lockedByAdmin} />
     </main>
   );
 }

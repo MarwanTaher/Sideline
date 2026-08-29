@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { setAdminPlayerLink, setTabLock, grantPlayerAdmin, revokePlayerAdmin } from "@/lib/admins";
+import { setTabLock, grantPlayerAdmin, revokePlayerAdmin } from "@/lib/admins";
 import { ADMIN_TAB_KEYS, type AdminTabKey } from "@/lib/admin-tabs";
 
 export interface AccountActionState {
@@ -14,16 +14,9 @@ export interface AccountActionState {
 async function requireSuper(): Promise<void> {
   const session = await auth();
   if (session?.user?.role !== "super") {
-    throw new Error("Only a super admin can manage account links.");
+    throw new Error("Only a super admin can manage admin access.");
   }
 }
-
-const linkSchema = z.object({
-  adminId: z.coerce.number().int().positive(),
-  playerId: z
-    .union([z.literal(""), z.coerce.number().int().positive()])
-    .transform((v) => (v === "" ? null : v)),
-});
 
 function fail(err: unknown): AccountActionState {
   if (err instanceof z.ZodError) {
@@ -33,27 +26,6 @@ function fail(err: unknown): AccountActionState {
     ok: false,
     message: err instanceof Error ? err.message : "Something went wrong.",
   };
-}
-
-export async function linkAccountAction(
-  _prev: AccountActionState,
-  formData: FormData,
-): Promise<AccountActionState> {
-  try {
-    await requireSuper();
-    const { adminId, playerId } = linkSchema.parse({
-      adminId: formData.get("adminId"),
-      playerId: formData.get("playerId") ?? "",
-    });
-    await setAdminPlayerLink(adminId, playerId);
-    revalidatePath("/admin/accounts");
-    return {
-      ok: true,
-      message: playerId ? "Account linked to player." : "Account unlinked.",
-    };
-  } catch (err) {
-    return fail(err);
-  }
 }
 
 const tabLockSchema = z.object({

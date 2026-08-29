@@ -105,7 +105,7 @@ export default function BottomNav({
       href: t.href,
       label: t.label,
     })),
-    ...(isSuper ? [{ href: "/admin/accounts", label: "Accounts" }] : []),
+    ...(isSuper ? [{ href: "/admin/accounts", label: "Admin control" }] : []),
   ];
 
   const itemCls = (active: boolean) =>
