@@ -123,7 +123,7 @@ export default function MainNav({
       href: t.href,
       label: t.label,
     })),
-    ...(isSuper ? [{ href: "/admin/accounts", label: "Accounts" }] : []),
+    ...(isSuper ? [{ href: "/admin/accounts", label: "Admin control" }] : []),
   ];
 
   return (
