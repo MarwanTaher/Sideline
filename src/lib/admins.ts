@@ -1,4 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
+import { randomBytes } from "node:crypto";
 import { db, schema } from "@/lib/db";
 import type { AdminTabKey } from "@/lib/admin-tabs";
 
@@ -65,6 +66,78 @@ export async function setAdminPlayerLink(
     .update(schema.admins)
     .set({ playerId })
     .where(eq(schema.admins.id, adminId));
+}
+
+export interface PlayerAdminStatus {
+  playerId: number;
+  name: string;
+  isAdmin: boolean;
+  isSuper: boolean;
+}
+
+/** Active players with their current admin/super status (for role management). */
+export async function getPlayerAdminStatuses(): Promise<PlayerAdminStatus[]> {
+  const rows = await db
+    .select({
+      playerId: schema.players.id,
+      name: schema.players.name,
+      playerActive: schema.players.active,
+      adminActive: schema.admins.active,
+      isSuper: schema.admins.isSuper,
+    })
+    .from(schema.players)
+    .leftJoin(schema.admins, eq(schema.admins.playerId, schema.players.id))
+    .orderBy(asc(schema.players.name));
+
+  const byPlayer = new Map<number, PlayerAdminStatus>();
+  for (const r of rows) {
+    if (r.playerActive !== 1) continue;
+    const cur =
+      byPlayer.get(r.playerId) ??
+      { playerId: r.playerId, name: r.name, isAdmin: false, isSuper: false };
+    if (r.adminActive === 1) {
+      cur.isAdmin = true;
+      if (r.isSuper === 1) cur.isSuper = true;
+    }
+    byPlayer.set(r.playerId, cur);
+  }
+  return [...byPlayer.values()];
+}
+
+/**
+ * Promote a player to admin. Reactivates an existing linked admin row, or
+ * creates one. The admin row's own username/password is never used — the app
+ * has a single unified player login and derives the role from this link.
+ */
+export async function grantPlayerAdmin(playerId: number): Promise<void> {
+  const existing = await db
+    .select({ id: schema.admins.id })
+    .from(schema.admins)
+    .where(eq(schema.admins.playerId, playerId))
+    .limit(1);
+  if (existing[0]) {
+    await db
+      .update(schema.admins)
+      .set({ active: 1 })
+      .where(eq(schema.admins.id, existing[0].id));
+    return;
+  }
+  await db.insert(schema.admins).values({
+    username: `player-${playerId}-${randomBytes(3).toString("hex")}`,
+    passwordSalt: randomBytes(16).toString("hex"),
+    passwordHash: randomBytes(32).toString("hex"),
+    isSuper: 0,
+    active: 1,
+    playerId,
+  });
+}
+
+/** Remove a player's admin access. Super accounts are never touched here. */
+export async function revokePlayerAdmin(playerId: number): Promise<void> {
+  await db
+    .update(schema.admins)
+    .set({ active: 0 })
+    .where(and(eq(schema.admins.playerId, playerId), eq(schema.admins.isSuper, 0)));
 }
 
 /** All tab locks, grouped by admin account id. */

@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { setAdminPlayerLink, setTabLock } from "@/lib/admins";
+import { setAdminPlayerLink, setTabLock, grantPlayerAdmin, revokePlayerAdmin } from "@/lib/admins";
 import { ADMIN_TAB_KEYS, type AdminTabKey } from "@/lib/admin-tabs";
 
 export interface AccountActionState {
@@ -81,6 +81,38 @@ export async function setTabLockAction(
       ok: true,
       message: locked ? "Tab locked." : "Tab unlocked.",
     };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+const playerSchema = z.object({ playerId: z.coerce.number().int().positive() });
+
+export async function grantAdminAction(
+  _prev: AccountActionState,
+  formData: FormData,
+): Promise<AccountActionState> {
+  try {
+    await requireSuper();
+    const { playerId } = playerSchema.parse({ playerId: formData.get("playerId") });
+    await grantPlayerAdmin(playerId);
+    revalidatePath("/admin/accounts");
+    return { ok: true, message: "Player is now an admin." };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+export async function revokeAdminAction(
+  _prev: AccountActionState,
+  formData: FormData,
+): Promise<AccountActionState> {
+  try {
+    await requireSuper();
+    const { playerId } = playerSchema.parse({ playerId: formData.get("playerId") });
+    await revokePlayerAdmin(playerId);
+    revalidatePath("/admin/accounts");
+    return { ok: true, message: "Admin access removed." };
   } catch (err) {
     return fail(err);
   }
