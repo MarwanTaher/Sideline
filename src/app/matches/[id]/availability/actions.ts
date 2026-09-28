@@ -23,7 +23,10 @@ import {
   setWaitlistVisibleToPlayers,
   isVoteGateEnabled,
   setVoteGate,
+  isAvailabilityLockEnabled,
+  setAvailabilityLock,
 } from "@/lib/feature-settings";
+import { isWithinAvailabilityLock } from "@/lib/match-schedule";
 import { getPendingVoteObligation } from "@/lib/voting";
 import { notify } from "@/lib/push";
 
@@ -159,6 +162,20 @@ export async function setAvailabilityAction(
     }
     if (!match.availabilityOpen) {
       return { ok: false, message: "Availability is closed for this match." };
+    }
+
+    // 24h lock (admin-toggled): players cannot change their own availability
+    // within 24 hours of kickoff. Admins can still change it via the admin
+    // controls, which use a separate action.
+    if (
+      (await isAvailabilityLockEnabled()) &&
+      isWithinAvailabilityLock(match.playedOn, match.matchTime)
+    ) {
+      return {
+        ok: false,
+        message:
+          "Availability is locked within 24 hours of kickoff. Please contact an admin to change it.",
+      };
     }
 
     // If the player is already IN (e.g. an admin added them to the lineup),
@@ -401,6 +418,33 @@ export async function setVoteGateAction(
     return {
       ok: true,
       message: enabled ? "Vote-gate on." : "Vote-gate off.",
+    };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
+/**
+ * Admin: turn the 24h availability lock on/off (global). When on, players can't
+ * change their own availability within 24 hours of kickoff and are told to
+ * contact an admin. Admin overrides are always allowed.
+ */
+export async function setAvailabilityLockAction(
+  _prev: AvailabilityActionState,
+  formData: FormData,
+): Promise<AvailabilityActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const enabled = String(formData.get("enabled")) === "true";
+
+    await setAvailabilityLock(enabled);
+    revalidateAvailability(matchId);
+    return {
+      ok: true,
+      message: enabled
+        ? "Availability locks 24h before kickoff."
+        : "24h availability lock off.",
     };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };

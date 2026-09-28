@@ -36,10 +36,10 @@ export function MatchNav({
     { href: `/matches/${matchId}/stats`, icon: "stats", text: "Stats" },
     { href: `/matches/${matchId}/payments`, icon: "payments", text: "Payments" },
     ...(isAdmin || canScore
-      ? [{ href: `/matches/${matchId}/matchday`, icon: "scoring", text: "Matchday" } as MatchTab]
+      ? [{ href: `/matches/${matchId}/matchday`, icon: "scoring", text: "Matchday", admin: true } as MatchTab]
       : []),
     ...(isAdmin
-      ? [{ href: `/matches/${matchId}/draft`, icon: "draft", text: "Draft" } as MatchTab]
+      ? [{ href: `/matches/${matchId}/draft`, icon: "draft", text: "Draft", admin: true } as MatchTab]
       : []),
   ];
 

@@ -12,7 +12,8 @@ import {
   type MatchdayStatus,
   type PlayerAvailability,
 } from "@/lib/availability";
-import { isWaitlistAutoPromoteEnabled, isWaitlistVisibleToPlayers, isVoteGateEnabled } from "@/lib/feature-settings";
+import { isWaitlistAutoPromoteEnabled, isWaitlistVisibleToPlayers, isVoteGateEnabled, isAvailabilityLockEnabled } from "@/lib/feature-settings";
+import { isWithinAvailabilityLock } from "@/lib/match-schedule";
 import { AvailabilityControls } from "./availability-controls";
 import {
   AvailabilityOpenToggle,
@@ -20,6 +21,7 @@ import {
   AdminPlayerControls,
   WaitlistToggle,
   VoteGateToggle,
+  AvailabilityLockToggle,
 } from "./availability-admin";
 import { AddGuestForm, GuestList, AdminAddGuestForm } from "./guest-controls";
 import { listGuests, MAX_GUESTS_PER_HOST, type Guest } from "@/lib/guests";
@@ -118,6 +120,12 @@ export default async function AvailabilityPage({
   const summary = summarize(players);
   const open = match.availabilityOpen;
 
+  // 24h availability lock (admin-toggled). Players can't change within 24h of
+  // kickoff; admins always can.
+  const availabilityLockEnabled = await isAvailabilityLockEnabled();
+  const availabilityLocked =
+    availabilityLockEnabled && isWithinAvailabilityLock(match.playedOn, match.matchTime);
+
   const inPlayers = players.filter((p) => p.status === "in");
   const outPlayers = players.filter((p) => p.status === "out");
   const pendingPlayers = players.filter((p) => p.status === "pending");
@@ -200,6 +208,7 @@ export default async function AvailabilityPage({
             matchId={matchId}
             currentStatus={mine?.status ?? "pending"}
             open={open}
+            locked={availabilityLocked}
           />
         </section>
       ) : (
@@ -298,6 +307,10 @@ export default async function AvailabilityPage({
             <div className="border-t border-black/5 pt-4 dark:border-white/5">
               <h3 className="mb-2 text-sm font-medium">Vote-gate</h3>
               <VoteGateToggle matchId={matchId} enabled={voteGateEnabled} />
+            </div>
+            <div className="border-t border-black/5 pt-4 dark:border-white/5">
+              <h3 className="mb-2 text-sm font-medium">Lock 24h before kickoff</h3>
+              <AvailabilityLockToggle matchId={matchId} enabled={availabilityLockEnabled} />
             </div>
             <div className="border-t border-black/5 pt-4 dark:border-white/5">
               <h3 className="mb-2 text-sm font-medium">Set player availability</h3>

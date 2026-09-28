@@ -13,12 +13,14 @@ export interface AvailabilityControlsProps {
   matchId: number;
   currentStatus: AvailabilityStatus;
   open: boolean;
+  locked?: boolean;
 }
 
 export function AvailabilityControls({
   matchId,
   currentStatus,
   open,
+  locked = false,
 }: AvailabilityControlsProps) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(setAvailabilityAction, INITIAL);
@@ -51,7 +53,7 @@ export function AvailabilityControls({
             <input type="hidden" name="status" value="in" />
             <button
               type="submit"
-              disabled={pending || currentStatus === "in"}
+              disabled={pending || currentStatus === "in" || locked}
               className={`flex w-full flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60 ${
                 currentStatus === "in"
                   ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
@@ -69,7 +71,7 @@ export function AvailabilityControls({
             <input type="hidden" name="status" value="out" />
             <button
               type="submit"
-              disabled={pending || currentStatus === "out"}
+              disabled={pending || currentStatus === "out" || locked}
               className={`flex w-full flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60 ${
                 currentStatus === "out"
                   ? "border-red-600 bg-red-600 text-white shadow-sm"
@@ -86,6 +88,13 @@ export function AvailabilityControls({
       ) : (
         <p className="mt-3 text-sm text-neutral-500">Availability is closed for this match.</p>
       )}
+
+      {open && locked ? (
+        <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+          Availability is locked within 24 hours of kickoff. Please contact an
+          admin if you need to change it.
+        </p>
+      ) : null}
 
       <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
     </div>

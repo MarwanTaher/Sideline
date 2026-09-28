@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getTabLocksByAdmin, getPlayerAdminStatuses } from "@/lib/admins";
@@ -33,6 +34,20 @@ export default async function AccountsPage() {
       </p>
 
       <PlayerAdmins players={playerAdmins} lockedByAdmin={lockedByAdmin} />
+
+      <section className="mt-8 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
+        <h2 className="text-sm font-semibold">Diagnostics</h2>
+        <p className="mt-1 text-xs text-neutral-500">
+          Low-level database and scoring checks. Kept out of the admin menu to
+          keep it short.
+        </p>
+        <Link
+          href="/diagnostics"
+          className="mt-3 inline-flex rounded-xl border border-black/10 px-3 py-2 text-sm font-medium transition hover:bg-neutral-50 dark:border-white/10 dark:hover:bg-neutral-800"
+        >
+          Open diagnostics
+        </Link>
+      </section>
     </main>
   );
 }
