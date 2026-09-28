@@ -5,7 +5,13 @@ import { usePathname } from "next/navigation";
 import { useEffect, useState, type ReactElement } from "react";
 import type { SectionIconName } from "@/components/section-icon";
 
-export type MatchTab = { href: string; icon: SectionIconName; text: string };
+export type MatchTab = {
+  href: string;
+  icon: SectionIconName;
+  text: string;
+  /** Admin-only section; grouped separately in the More sheet. */
+  admin?: boolean;
+};
 
 type IconProps = { className?: string };
 
@@ -145,6 +151,26 @@ export function MatchTabsMobile({
         : "text-neutral-500 dark:text-neutral-400"
     }`;
 
+  const renderTile = (t: MatchTab) => {
+    const Icon = ICONS[t.icon];
+    const active = isActive(t.href);
+    return (
+      <Link
+        key={t.href}
+        href={t.href}
+        aria-current={active ? "page" : undefined}
+        className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-medium transition ${
+          active
+            ? "border-emerald-500/40 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+            : "border-black/10 text-neutral-600 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-neutral-800"
+        }`}
+      >
+        <Icon className="h-6 w-6" />
+        {t.text}
+      </Link>
+    );
+  };
+
   return (
     <>
       {moreOpen ? (
@@ -165,26 +191,19 @@ export function MatchTabsMobile({
               Back to all matches
             </Link>
             <div className="grid grid-cols-3 gap-1.5">
-              {tabs.map((t) => {
-                const Icon = ICONS[t.icon];
-                const active = isActive(t.href);
-                return (
-                  <Link
-                    key={t.href}
-                    href={t.href}
-                    aria-current={active ? "page" : undefined}
-                    className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-medium transition ${
-                      active
-                        ? "border-emerald-500/40 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                        : "border-black/10 text-neutral-600 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-neutral-800"
-                    }`}
-                  >
-                    <Icon className="h-6 w-6" />
-                    {t.text}
-                  </Link>
-                );
-              })}
+              {tabs.filter((t) => !t.admin).map(renderTile)}
             </div>
+
+            {tabs.some((t) => t.admin) ? (
+              <>
+                <p className="mb-1 mt-4 px-1 text-[11px] font-medium uppercase tracking-wide text-neutral-400">
+                  Admin
+                </p>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {tabs.filter((t) => t.admin).map(renderTile)}
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       ) : null}
