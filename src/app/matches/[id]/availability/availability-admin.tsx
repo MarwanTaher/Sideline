@@ -12,6 +12,7 @@ import {
   adminRemoveFromWaitlistAction,
   adminMoveWaitlistAction,
   setVoteGateAction,
+  setAvailabilityLockAction,
   type AvailabilityActionState,
 } from "./actions";
 import type { PlayerAvailability } from "@/lib/availability";
@@ -329,6 +330,56 @@ export function VoteGateToggle({
           . When on, a player who was in their last game but hasn&apos;t rated
           anyone yet can&apos;t mark themselves IN for a new match until they
           vote. Casting any vote clears the block; going OUT is always allowed.
+        </p>
+        <form action={formAction}>
+          <input type="hidden" name="matchId" value={matchId} />
+          <input type="hidden" name="enabled" value={enabled ? "false" : "true"} />
+          <Button
+            type="submit"
+            variant={enabled ? "secondary" : "success"}
+            pending={pending}
+            pendingLabel="Saving…"
+          >
+            {enabled ? "Turn off" : "Turn on"}
+          </Button>
+        </form>
+      </div>
+      <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+    </div>
+  );
+}
+
+export function AvailabilityLockToggle({
+  matchId,
+  enabled,
+}: {
+  matchId: number;
+  enabled: boolean;
+}) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(setAvailabilityLockAction, INITIAL);
+
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+
+  return (
+    <div>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-neutral-500">
+          24h lock is{" "}
+          <span
+            className={
+              enabled
+                ? "font-semibold text-emerald-600 dark:text-emerald-400"
+                : "font-semibold text-neutral-500"
+            }
+          >
+            {enabled ? "on" : "off"}
+          </span>
+          . When on, players can&apos;t change their own availability within 24
+          hours of kickoff and are asked to contact an admin. Admin changes here
+          are always allowed.
         </p>
         <form action={formAction}>
           <input type="hidden" name="matchId" value={matchId} />

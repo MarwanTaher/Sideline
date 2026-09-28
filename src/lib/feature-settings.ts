@@ -13,6 +13,7 @@ const TRUSTED_PLAYER_IDS_KEY = "stats_trusted_player_ids";
 const WAITLIST_AUTO_PROMOTE_KEY = "waitlist_auto_promote";
 const WAITLIST_VISIBLE_KEY = "waitlist_visible_to_players";
 const AVAILABILITY_VOTE_GATE_KEY = "availability_vote_gate";
+const AVAILABILITY_LOCK_24H_KEY = "availability_lock_24h";
 
 async function getSetting(key: string): Promise<string | null> {
   const rows = (await sqlClient.query(
@@ -92,4 +93,16 @@ export async function isVoteGateEnabled(): Promise<boolean> {
 
 export async function setVoteGate(enabled: boolean): Promise<void> {
   await setSetting(AVAILABILITY_VOTE_GATE_KEY, enabled ? "1" : "0");
+}
+
+// ── Availability lock 24h before kickoff ─────────────────────────────────
+// When on, players cannot change their own availability within 24 hours of
+// kickoff — they are told to contact an admin. Admin overrides are unaffected.
+
+export async function isAvailabilityLockEnabled(): Promise<boolean> {
+  return (await getSetting(AVAILABILITY_LOCK_24H_KEY)) === "1";
+}
+
+export async function setAvailabilityLock(enabled: boolean): Promise<void> {
+  await setSetting(AVAILABILITY_LOCK_24H_KEY, enabled ? "1" : "0");
 }
