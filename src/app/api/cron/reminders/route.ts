@@ -9,14 +9,19 @@ import { AVAILABILITY_LOCK_MS, formatDuration, kickoffMs } from "@/lib/match-sch
  * Scheduled nudges. Everything else in the app fires because an admin pressed a
  * button, so players who simply forget are never chased.
  *
- * Runs hourly (see vercel.json). Each reminder is sent at most once per match,
- * recorded in app_settings, so re-runs and retries are harmless.
+ * Runs once a day (Vercel Hobby allows no more; see vercel.json). Each reminder
+ * is sent at most once per match, recorded in app_settings, so re-runs and
+ * retries are harmless.
  */
 
 export const dynamic = "force-dynamic";
 
-/** Nudge non-responders this long before changes close. */
-const NUDGE_BEFORE_LOCK_MS = 12 * 60 * 60 * 1000;
+/**
+ * Nudge non-responders this long before changes close. Must exceed 24h: with a
+ * single daily run, a narrower window could fall between two runs and never
+ * match. The once-per-match flag keeps the wide window from repeating.
+ */
+const NUDGE_BEFORE_LOCK_MS = 36 * 60 * 60 * 1000;
 
 type UpcomingMatch = {
   id: number;

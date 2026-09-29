@@ -35,8 +35,10 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Protect everything except Next internals, the auth API, and static assets.
+  // Protect everything except Next internals, the auth + cron APIs, and static
+  // assets. Cron requests carry no session cookie and authenticate themselves
+  // with CRON_SECRET, so a redirect to /login would silently disable them.
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!api/auth|api/cron|_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };
