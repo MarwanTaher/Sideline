@@ -15,7 +15,7 @@ const WAITLIST_VISIBLE_KEY = "waitlist_visible_to_players";
 const AVAILABILITY_VOTE_GATE_KEY = "availability_vote_gate";
 const AVAILABILITY_LOCK_24H_KEY = "availability_lock_24h";
 
-async function getSetting(key: string): Promise<string | null> {
+export async function getSetting(key: string): Promise<string | null> {
   const rows = (await sqlClient.query(
     `SELECT value FROM app_settings WHERE key = $1`,
     [key],
@@ -23,7 +23,7 @@ async function getSetting(key: string): Promise<string | null> {
   return rows.length > 0 ? rows[0].value : null;
 }
 
-async function setSetting(key: string, value: string): Promise<void> {
+export async function setSetting(key: string, value: string): Promise<void> {
   await sqlClient.query(
     `INSERT INTO app_settings(key, value) VALUES ($1, $2)
      ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,

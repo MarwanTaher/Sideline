@@ -11,6 +11,8 @@ import { Card } from "@/components/ui/card";
 import { TrophyIcon } from "@/components/ui/icons";
 import LeaderboardTable from "./leaderboard-table";
 import ScoreBreakdownPanel from "./score-breakdown-panel";
+import SeasonStandings from "./season-standings";
+import { listSeasons, getSeasonStandings, type Season } from "@/lib/seasons";
 
 export const metadata = {
   title: "Leaderboard · Sideline",
@@ -19,7 +21,7 @@ export const metadata = {
 export default async function LeaderboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ player?: string }>;
+  searchParams: Promise<{ player?: string; season?: string }>;
 }) {
   const [{ rows, peerWeightPct, statWeightPct, unratedMinMatches }, movementMap] =
     await Promise.all([getCachedLeaderboard(), getLeaderboardMovement()]);
@@ -46,7 +48,34 @@ export default async function LeaderboardPage({
   const topPct =
     me && rankedRows.length > 0 ? Math.ceil(((myRank as number) / rankedRows.length) * 100) : null;
 
-  const { player } = await searchParams;
+  const { player, season } = await searchParams;
+  const seasons = await listSeasons();
+  const seasonId = season ? Number(season) : NaN;
+  const selectedSeason =
+    Number.isFinite(seasonId) ? seasons.find((s) => s.id === seasonId) ?? null : null;
+
+  if (selectedSeason) {
+    const standings = await getSeasonStandings(selectedSeason.id);
+    return (
+      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
+        <SubNav
+          className="mb-6"
+          ariaLabel="Standings"
+          items={[
+            { href: "/leaderboard", label: "Leaderboard" },
+            { href: "/awards", label: "Awards" },
+          ]}
+        />
+        <div className="flex items-center gap-3">
+          <SectionIcon name="leaderboard" className="h-9 w-9" />
+          <h1 className="text-2xl font-semibold tracking-tight">{selectedSeason.name}</h1>
+        </div>
+        <SeasonPicker seasons={seasons} activeId={selectedSeason.id} />
+        <SeasonStandings season={selectedSeason} rows={standings} />
+      </main>
+    );
+  }
+
   const parsedId = player ? Number(player) : NaN;
   const selectedId =
     showDetails && Number.isFinite(parsedId) && rows.some((r) => r.id === parsedId)
@@ -68,6 +97,8 @@ export default async function LeaderboardPage({
         <SectionIcon name="leaderboard" className="h-9 w-9" />
         <h1 className="text-2xl font-semibold tracking-tight">Leaderboard</h1>
       </div>
+
+      <SeasonPicker seasons={seasons} activeId={null} />
 
       <p className="mt-1 text-sm text-neutral-500">
         Curious how these are worked out?{" "}
@@ -163,5 +194,38 @@ export default async function LeaderboardPage({
         />
       ) : null}
     </main>
+  );
+}
+
+/** All-time plus one entry per season; seasons keep the table catchable. */
+function SeasonPicker({
+  seasons,
+  activeId,
+}: {
+  seasons: Season[];
+  activeId: number | null;
+}) {
+  if (seasons.length === 0) return null;
+  const chip = (active: boolean) =>
+    `rounded-full px-3 py-1 text-xs font-medium transition ${
+      active
+        ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
+        : "border border-black/10 text-neutral-600 hover:bg-neutral-50 dark:border-white/15 dark:text-neutral-300 dark:hover:bg-neutral-800"
+    }`;
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      <Link href="/leaderboard" className={chip(activeId === null)}>
+        All time
+      </Link>
+      {seasons.map((s) => (
+        <Link
+          key={s.id}
+          href={`/leaderboard?season=${s.id}`}
+          className={chip(activeId === s.id)}
+        >
+          {s.name}
+        </Link>
+      ))}
+    </div>
   );
 }
