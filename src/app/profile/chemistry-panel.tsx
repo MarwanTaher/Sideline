@@ -16,9 +16,9 @@ export default function ChemistryPanel({ report }: { report: ChemistryReport }) 
 
   return (
     <div className="space-y-5">
-      {report.bestPartner ? (
+      {report.bestPartner && report.bestPartner.winRate != null ? (
         <p className="rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
-          🤝 You win {Math.round(report.bestPartner.winRate * 100)}% of matches on{" "}
+          🤝 You win {Math.round(report.bestPartner.winRate * 100)}% of mini-matches on{" "}
           {report.bestPartner.name}&apos;s team
         </p>
       ) : null}
@@ -31,7 +31,15 @@ export default function ChemistryPanel({ report }: { report: ChemistryReport }) 
               <li key={p.playerId} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <span className="font-medium">{p.name}</span>
                 <span className="text-xs text-neutral-400">
-                  {Math.round(p.winRate * 100)}% win · {p.shared} together
+                  {p.winRate == null ? (
+                    <>No results yet</>
+                  ) : (
+                    <>
+                      {Math.round(p.winRate * 100)}% win · {p.record.wins}W-{p.record.draws}D-
+                      {p.record.losses}L
+                    </>
+                  )}{" "}
+                  · {p.shared} together
                 </span>
               </li>
             ))}
@@ -47,7 +55,8 @@ export default function ChemistryPanel({ report }: { report: ChemistryReport }) 
               <li key={o.playerId} className="flex items-center justify-between gap-3 py-2 text-sm">
                 <span className="font-medium">vs {o.name}</span>
                 <span className="text-xs text-neutral-400">
-                  {o.wins}–{o.losses} in {o.faced} meetings
+                  {o.wins}W-{o.draws}D-{o.losses}L in {o.faced} mini-match
+                  {o.faced === 1 ? "" : "es"}
                 </span>
               </li>
             ))}

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
+import { matchLabel } from "@/lib/format";
 import { SectionIcon } from "@/components/section-icon";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MatchesList } from "./matches-list";
@@ -73,6 +74,7 @@ export default async function MatchesPage() {
         <MatchesList
           items={matches.map((m) => ({
             id: m.id,
+            title: matchLabel(m.playedOn),
             matchdayStatus: m.matchdayStatus,
             closed: m.status === "closed",
             playerCount: m.playerCount,

@@ -10,6 +10,14 @@ import {
 export type MatchdayStatus = "draft" | "active" | "closed";
 export type MatchStatus = "open" | "closed";
 
+/**
+ * Kickoff is entered as club-local wall time ("2026-09-25", "09:00 pm") but must
+ * be stored as a true instant. Postgres does the conversion so the app never
+ * depends on the server's clock zone (UTC on Vercel).
+ */
+export const CLUB_TIME_ZONE = "Europe/Warsaw";
+const KICKOFF_FROM_LOCAL = `(to_timestamp($1 || ' ' || COALESCE(NULLIF(btrim($2), ''), '09:00 pm'), 'YYYY-MM-DD HH12:MI am')::timestamp AT TIME ZONE '${CLUB_TIME_ZONE}')`;
+
 export interface MatchAdmin {
   id: number;
   playedOn: string;
@@ -149,9 +157,9 @@ export async function getMatchAdmin(matchId: number): Promise<MatchAdmin | null>
 export async function createMatch(input: CreateMatchInput): Promise<number> {
   const raw = await sqlClient.query(
     `INSERT INTO matches
-       (played_on, match_time, num_teams, team_size, total_payment, stats_scoring_enabled, status,
+       (played_on, match_time, kickoff_at, num_teams, team_size, total_payment, stats_scoring_enabled, status,
         location_name, location_lat, location_lng, venue)
-     VALUES ($1, $2, $3, 0, 0, $4, 'open', $5, $6, $7, $8)
+     VALUES ($1, $2, ${KICKOFF_FROM_LOCAL}, $3, 0, 0, $4, 'open', $5, $6, $7, $8)
      RETURNING id`,
     [
       input.playedOn,
@@ -191,6 +199,7 @@ export async function updateMatchSettings(
     `UPDATE matches
         SET played_on = $1,
             match_time = $2,
+            kickoff_at = ${KICKOFF_FROM_LOCAL},
             num_teams = $3,
             stats_scoring_enabled = $4,
             location_name = $6,

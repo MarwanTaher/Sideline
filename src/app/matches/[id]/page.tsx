@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
+import { matchLabel } from "@/lib/format";
 import { getMatchDetail, fmtDate, fmtMatchTime, isPlayerInMatch, type MatchdayStatus } from "@/lib/matches";
 import { getMatchAdmin } from "@/lib/match-admin";
 import { canRunMatchday } from "@/lib/matchday";
@@ -88,7 +89,7 @@ export default async function MatchDetailPage({
       <div className="mt-3 rounded-2xl border border-black/[0.06] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
         <div className="flex flex-wrap items-center gap-2.5">
           <SectionIcon name="matches" className="h-9 w-9" />
-          <h1 className="text-2xl font-bold tracking-tight">Match {match.id}</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{matchLabel(match.playedOn)}</h1>
           <span
             className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MATCHDAY_BADGE[match.matchdayStatus]}`}
           >

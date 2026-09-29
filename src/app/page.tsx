@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
+import { matchLabel } from "@/lib/format";
+import KickoffCountdown from "@/components/kickoff-countdown";
 import { getPlayerRank } from "@/lib/leaderboard";
 import { getPendingVoteObligation } from "@/lib/voting";
 import { getLastMatchdayOutcome } from "@/lib/matchday";
@@ -12,7 +14,6 @@ import { getPlayersAdminData } from "@/lib/players-admin";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { SegmentedBar } from "@/components/ui/segmented-bar";
-import { BallIcon, BarsIcon, TrophyIcon } from "@/components/ui/icons";
 import { SectionIcon } from "@/components/section-icon";
 import NotificationPrompt from "@/components/notification-prompt";
 import InstallPrompt from "@/components/install-prompt";
@@ -78,11 +79,7 @@ export default async function Home() {
         <div className="absolute inset-0 bg-[radial-gradient(90%_120%_at_100%_0%,rgba(163,230,53,0.35),transparent_55%)]" />
         <div className="absolute inset-0 bg-[radial-gradient(80%_120%_at_0%_100%,rgba(45,212,191,0.30),transparent_55%)]" />
         <div className="relative">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-medium capitalize backdrop-blur">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />
-            {isAdmin ? role : "Player"}
-          </span>
-          <h1 className="mt-2 text-2xl font-bold tracking-tight">Welcome back, {name}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Welcome back, {name}</h1>
           {rankInfo?.ranked ? (
             <p className="mt-3 inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur">
               <span className="tabular-nums">#{rankInfo.rank}</span>
@@ -103,7 +100,7 @@ export default async function Home() {
             <div className="flex items-center gap-3">
               <SectionIcon name="votes" className="h-8 w-8" />
               <div>
-                <p className="text-sm font-semibold">Rate match {voteObligation.matchId}</p>
+                <p className="text-sm font-semibold">Rate {matchLabel(voteObligation.playedOn)}</p>
                 <p className="text-sm text-neutral-500">
                   Voting is open — rate how your teammates played.
                 </p>
@@ -206,12 +203,13 @@ export default async function Home() {
                   {nextMatch.matchdayStatus}
                 </Badge>
               </div>
-              <p className="mt-2 text-lg font-semibold">Match {nextMatch.id}</p>
+              <p className="mt-2 text-lg font-semibold">{matchLabel(nextMatch.playedOn)}</p>
               <p className="mt-0.5 text-sm text-neutral-500">
                 {fmtDate(nextMatch.playedOn)} at{" "}
                 {fmtMatchTime(nextMatch.matchTime)} · {nextMatch.playerCount}{" "}
                 players
               </p>
+              <KickoffCountdown kickoffAt={nextMatch.kickoffAt} />
             </Card>
           </Link>
         ) : null}
@@ -259,7 +257,7 @@ export default async function Home() {
         <Card className="mt-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-neutral-500">
-              Last matchday · Match {lastMatchday.matchId}
+              Last matchday · {matchLabel(lastMatchday.playedOn)}
             </h2>
             <span className="text-xs text-neutral-400">{lastMatchday.rounds} mini-matches</span>
           </div>
@@ -274,42 +272,6 @@ export default async function Home() {
           </div>
         </Card>
       ) : null}
-
-      <div className="mt-4 grid gap-4 sm:grid-cols-3">
-        <Link href="/matches" className="block">
-          <Card className="h-full transition hover:shadow-md">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
-              <BallIcon className="h-6 w-6" />
-            </span>
-            <h2 className="mt-3 font-semibold">Matches</h2>
-            <p className="mt-1 text-sm text-neutral-500">
-              Browse matches, teams, and approved stats.
-            </p>
-          </Card>
-        </Link>
-        <Link href="/leaderboard" className="block">
-          <Card className="h-full transition hover:shadow-md">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-sky-50 text-sky-600 dark:bg-sky-950/40 dark:text-sky-400">
-              <BarsIcon className="h-6 w-6" />
-            </span>
-            <h2 className="mt-3 font-semibold">Leaderboard</h2>
-            <p className="mt-1 text-sm text-neutral-500">
-              Rankings with the peer/stat blend.
-            </p>
-          </Card>
-        </Link>
-        <Link href="/awards" className="block">
-          <Card className="h-full transition hover:shadow-md">
-            <span className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
-              <TrophyIcon className="h-6 w-6" />
-            </span>
-            <h2 className="mt-3 font-semibold">Awards</h2>
-            <p className="mt-1 text-sm text-neutral-500">
-              Top scorer, defender, MOTM, and your badges.
-            </p>
-          </Card>
-        </Link>
-      </div>
     </main>
   );
 }

@@ -4,7 +4,9 @@ import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getTabLocksByAdmin, getPlayerAdminStatuses } from "@/lib/admins";
 import type { AdminTabKey } from "@/lib/admin-tabs";
+import { listSeasons } from "@/lib/seasons";
 import PlayerAdmins from "./player-admins";
+import SeasonsAdmin from "./seasons-admin";
 
 export const metadata = {
   title: "Admin control · Sideline",
@@ -17,9 +19,10 @@ export default async function AccountsPage() {
   if (!session?.user) redirect("/login");
   if (!(await isAdminView(session.user.role === "super"))) redirect("/leaderboard");
 
-  const [playerAdmins, tabLocks] = await Promise.all([
+  const [playerAdmins, tabLocks, seasons] = await Promise.all([
     getPlayerAdminStatuses(),
     getTabLocksByAdmin(),
+    listSeasons(),
   ]);
 
   const lockedByAdmin: Record<number, AdminTabKey[]> = {};
@@ -34,6 +37,8 @@ export default async function AccountsPage() {
       </p>
 
       <PlayerAdmins players={playerAdmins} lockedByAdmin={lockedByAdmin} />
+
+      <SeasonsAdmin seasons={seasons} />
 
       <section className="mt-8 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
         <h2 className="text-sm font-semibold">Diagnostics</h2>

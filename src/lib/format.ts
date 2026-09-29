@@ -13,6 +13,34 @@ export function fmtDate(d: string): string {
   return m ? `${m[3]}-${m[2]}-${m[1]}` : String(d);
 }
 
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTHS = [
+  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/**
+ * How people actually refer to a match: "Fri 25 Sep". The database id is an
+ * implementation detail, not a name — it stays available as secondary metadata
+ * for admin screens that genuinely need to disambiguate.
+ */
+export function matchLabel(playedOn: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(playedOn ?? ""));
+  if (!m) return "Match";
+  const [, y, mo, d] = m;
+  // Noon UTC keeps the weekday stable regardless of the runtime's zone.
+  const date = new Date(Date.UTC(Number(y), Number(mo) - 1, Number(d), 12));
+  return `${WEEKDAYS[date.getUTCDay()]} ${Number(d)} ${MONTHS[Number(mo) - 1]}`;
+}
+
+/** "Fri 25 Sep · 09:00 pm" — the full human name for a match. */
+export function matchLabelWithTime(
+  playedOn: string | null | undefined,
+  matchTime: string | null | undefined,
+): string {
+  return `${matchLabel(playedOn)} · ${fmtMatchTime(matchTime)}`;
+}
+
 /**
  * Reduce a full name to "First L." for public sharing so we never leak full
  * identities on the read-only summary card.

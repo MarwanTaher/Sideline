@@ -17,6 +17,7 @@ export type NotificationTypeKey =
   | "match_created"
   | "match_activated"
   | "availability_open"
+  | "availability_reminder"
   | "payment_due"
   | "stats_approved"
   | "results_in"
@@ -70,6 +71,16 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     defaultEnabled: true,
     audience: "all",
     audienceOverridable: true,
+    userConfigurable: true,
+  },
+  {
+    key: "availability_reminder",
+    label: "Availability reminder",
+    description:
+      "Sent automatically to anyone who hasn't marked themselves in or out, shortly before changes close.",
+    defaultEnabled: true,
+    audience: "players",
+    audienceOverridable: false,
     userConfigurable: true,
   },
   {

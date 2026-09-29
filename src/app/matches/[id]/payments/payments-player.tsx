@@ -9,6 +9,7 @@ import {
 } from "./actions";
 import type { PlayerPaymentMatch } from "@/lib/payments";
 import { fmtDate } from "@/lib/format";
+import { matchLabel } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FeedbackMessage } from "@/components/ui/banner";
@@ -123,7 +124,7 @@ function MatchCard({ m, showHeader = true }: { m: PlayerPaymentMatch; showHeader
       <div className="flex flex-wrap items-center justify-between gap-2">
         {showHeader ? (
           <div>
-            <h2 className="text-lg font-semibold">Match {m.matchId}</h2>
+            <h2 className="text-lg font-semibold">{matchLabel(m.playedOn)}</h2>
             <p className="text-sm text-neutral-500">{fmtDate(m.playedOn)}</p>
           </div>
         ) : (

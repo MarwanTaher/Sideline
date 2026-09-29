@@ -48,6 +48,8 @@ export default function YourSeason({ season }: { season: PlayerSeason }) {
     return <p className="text-sm text-neutral-500">Play a match to start building your season.</p>;
   }
 
+  const played = season.record.wins + season.record.draws + season.record.losses;
+
   return (
     <div>
       {/* Highlights lead the section. */}
@@ -76,6 +78,37 @@ export default function YourSeason({ season }: { season: PlayerSeason }) {
           </div>
         ))}
       </div>
+
+      {played > 0 ? (
+        <div className="mt-4 rounded-xl border border-black/10 p-3 dark:border-white/10">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs uppercase tracking-wide text-neutral-400">Mini-match record</p>
+            <p className="text-sm font-semibold tabular-nums">
+              {Math.round((season.record.wins / played) * 100)}% win
+            </p>
+          </div>
+          <p className="mt-1 text-sm tabular-nums text-neutral-500">
+            {season.record.wins}W · {season.record.draws}D · {season.record.losses}L
+            <span className="text-neutral-400"> in {played}</span>
+          </p>
+          {season.form.length > 0 ? (
+            <div className="mt-2 flex items-center gap-1.5">
+              <span className="text-xs uppercase tracking-wide text-neutral-400">Form</span>
+              {season.form.map((r, i) => (
+                <span
+                  key={i}
+                  title={r === "W" ? "Won" : r === "L" ? "Lost" : "Drawn"}
+                  className={`flex h-5 w-5 items-center justify-center rounded text-[10px] font-bold text-white ${
+                    r === "W" ? "bg-emerald-500" : r === "L" ? "bg-red-500" : "bg-neutral-400"
+                  }`}
+                >
+                  {r}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {season.hasEnoughData && season.ratingSeries.length >= 2 ? (
         <div className="mt-4">

@@ -11,6 +11,7 @@ import {
   type StatsReviewState,
 } from "./actions";
 import { fmtDate } from "@/lib/format";
+import { matchLabel } from "@/lib/format";
 import type { PendingSubmission } from "@/lib/stats";
 import { Button } from "@/components/ui/button";
 import { FeedbackMessage } from "@/components/ui/banner";
@@ -59,7 +60,7 @@ export function ReviewRow({ sub }: { sub: PendingSubmission }) {
         <div>
           <span className="font-semibold">{sub.name}</span>
           <span className="ml-2 text-sm text-neutral-500">
-            Match {sub.matchId} · {fmtDate(sub.playedOn)}
+            {matchLabel(sub.playedOn)}
           </span>
         </div>
       </div>

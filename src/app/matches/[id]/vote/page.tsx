@@ -46,7 +46,7 @@ export default async function VotePage({
         href={`/matches/${matchId}`}
         className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
       >
-        ← Match {matchId}
+        ← Back to match
       </Link>
       <MatchNav matchId={matchId} isAdmin={isAdmin} />
     </>

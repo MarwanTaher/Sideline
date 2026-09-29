@@ -19,7 +19,6 @@ import type {
   MatchOption,
   OutlierSensitivity,
   ParticipantOption,
-  VoteAuditRow,
   VoteReviewCounts,
   VoteReviewRow,
   VoteSubmissionRow,
@@ -31,7 +30,7 @@ import { TrophyIcon } from "@/components/ui/icons";
 
 const INITIAL: VoteActionState = { ok: false, message: "" };
 
-const TABS = ["Votes Table", "Submissions", "MOTM Votes", "Edit Vote", "Add Vote", "Auto-flag", "Change Log"] as const;
+const TABS = ["Votes Table", "Submissions", "MOTM Votes", "Edit Vote", "Add Vote", "Auto-flag"] as const;
 type Tab = (typeof TABS)[number];
 
 function Banner({ state }: { state: VoteActionState }) {
@@ -604,7 +603,6 @@ export function VotesAdmin({
   selectedMatchId,
   votes,
   counts,
-  audit,
   participants,
   submissions,
   motmTally,
@@ -614,7 +612,6 @@ export function VotesAdmin({
   selectedMatchId: number;
   votes: VoteReviewRow[];
   counts: VoteReviewCounts;
-  audit: VoteAuditRow[];
   participants: ParticipantOption[];
   submissions: VoteSubmissionRow[];
   motmTally: MotmTallyRow[];
@@ -721,53 +718,6 @@ export function VotesAdmin({
         ) : null}
         {tab === "Add Vote" ? <AddPanel matchId={selectedMatchId} participants={participants} /> : null}
         {tab === "Auto-flag" ? <AutoFlagPanel matches={matches} selectedMatchId={selectedMatchId} /> : null}
-
-        {tab === "Change Log" ? (
-          audit.length === 0 ? (
-            <p className="text-sm text-neutral-500">No admin vote changes logged yet.</p>
-          ) : (
-            <DataTable>
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs text-neutral-500">
-                  <tr>
-                    <th scope="col" className="py-2 pr-4">When</th>
-                    <th scope="col" className="py-2 pr-4">Who</th>
-                    <th scope="col" className="py-2 pr-4">Action</th>
-                    <th scope="col" className="py-2 pr-4">Match</th>
-                    <th scope="col" className="py-2 pr-4">Vote</th>
-                    <th scope="col" className="py-2 pr-4">Rating</th>
-                    <th scope="col" className="py-2 pr-4">Include</th>
-                    <th scope="col" className="py-2 pr-4">Scope</th>
-                    <th scope="col" className="py-2 pr-4">Note</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {audit.map((r, i) => (
-                    <tr key={i} className="border-t border-black/5 dark:border-white/5">
-                      <td className="py-2 pr-4 text-xs text-neutral-500">{r.changedAt}</td>
-                      <td className="py-2 pr-4">{r.actor}</td>
-                      <td className="py-2 pr-4">{r.action}</td>
-                      <td className="py-2 pr-4">{r.matchId}</td>
-                      <td className="py-2 pr-4">
-                        {r.voterName} → {r.votedForName}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {r.oldRating ?? "—"} → {r.newRating ?? "—"}
-                      </td>
-                      <td className="py-2 pr-4">
-                        {r.oldInclude ?? "—"} → {r.newInclude ?? "—"}
-                      </td>
-                      <td className="py-2 pr-4 text-xs">
-                        {r.oldScopeStatus ?? "—"} → {r.newScopeStatus ?? "—"}
-                      </td>
-                      <td className="py-2 pr-4 text-xs text-neutral-500">{r.note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </DataTable>
-          )
-        ) : null}
       </div>
     </div>
   );
