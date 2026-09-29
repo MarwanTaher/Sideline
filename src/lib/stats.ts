@@ -340,14 +340,6 @@ export async function setPlayerMatchStats(
   assists: number,
   actor: string,
 ): Promise<void> {
-  const priorRaw = await sqlClient.query(
-    `SELECT goals, assists FROM stats WHERE match_id = $1 AND player_id = $2`,
-    [matchId, playerId],
-  );
-  const priorRows = priorRaw as { goals: number; assists: number }[];
-  const oldGoals = priorRows.length > 0 ? Number(priorRows[0].goals) : null;
-  const oldAssists = priorRows.length > 0 ? Number(priorRows[0].assists) : null;
-
   await sqlClient.query(
     `INSERT INTO stats(match_id, player_id, goals, assists)
      VALUES ($1, $2, $3, $4)
@@ -378,13 +370,6 @@ export async function setPlayerMatchStats(
        reviewed_by = EXCLUDED.reviewed_by,
        reviewed_at = CURRENT_TIMESTAMP`,
     [matchId, playerId, goals, actor],
-  );
-
-  await sqlClient.query(
-    `INSERT INTO stats_audit(match_id, player_id, action, actor,
-                             old_goals, new_goals, old_assists, new_assists, note)
-     VALUES ($1, $2, 'admin_edit', $3, $4, $5, $6, $7, $8)`,
-    [matchId, playerId, actor, oldGoals, goals, oldAssists, assists, "Admin direct edit"],
   );
 }
 
@@ -467,15 +452,6 @@ export async function approveStatsSubmission(
   if (subRows.length === 0) return null;
   const { match_id, player_id, goals, assists } = subRows[0];
 
-  // Prior approved values for the audit trail (null on first approval).
-  const priorRaw = await sqlClient.query(
-    `SELECT goals, assists FROM stats WHERE match_id = $1 AND player_id = $2`,
-    [match_id, player_id],
-  );
-  const priorRows = priorRaw as { goals: number; assists: number }[];
-  const oldGoals = priorRows.length > 0 ? Number(priorRows[0].goals) : null;
-  const oldAssists = priorRows.length > 0 ? Number(priorRows[0].assists) : null;
-
   await sqlClient.query(
     `UPDATE player_stats_submissions
         SET status = 'approved', reviewed_by = $1, reviewed_at = CURRENT_TIMESTAMP
@@ -501,22 +477,6 @@ export async function approveStatsSubmission(
        reviewed_by = EXCLUDED.reviewed_by,
        reviewed_at = CURRENT_TIMESTAMP`,
     [match_id, player_id, goals, actor],
-  );
-
-  await sqlClient.query(
-    `INSERT INTO stats_audit(match_id, player_id, action, actor,
-                             old_goals, new_goals, old_assists, new_assists, note)
-     VALUES ($1, $2, 'approve', $3, $4, $5, $6, $7, $8)`,
-    [
-      match_id,
-      player_id,
-      actor,
-      oldGoals,
-      goals,
-      oldAssists,
-      assists,
-      "Approved from player submission",
-    ],
   );
 
   return { playerId: Number(player_id), matchId: Number(match_id) };

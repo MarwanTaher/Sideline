@@ -698,8 +698,8 @@ export async function getActivePlayers(): Promise<ActivePlayer[]> {
 }
 
 /**
- * Port of app.py set_award_override — upserts an override and records an audit
- * row. Enforcement of who may call this lives in the server action.
+ * Port of app.py set_award_override — upserts an override. Enforcement of who
+ * may call this lives in the server action.
  */
 export async function setAwardOverride(
   scopeType: "match" | "overall",
@@ -728,18 +728,10 @@ export async function setAwardOverride(
     `,
     [key, scopeType, mid, awardType, winnerJson, reason, actor],
   );
-  await sqlClient.query(
-    `
-    INSERT INTO award_override_audit(scope_key, scope_type, match_id, award_type, winner_player_ids, reason, actor, changed_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-    `,
-    [key, scopeType, mid, awardType, winnerJson, reason, actor],
-  );
 }
 
 /**
- * Port of app.py clear_award_override — deletes an override and records an
- * audit row noting the clear.
+ * Port of app.py clear_award_override — deletes an override.
  */
 export async function clearAwardOverride(
   scopeType: "match" | "overall",
@@ -749,17 +741,9 @@ export async function clearAwardOverride(
 ): Promise<void> {
   if (!AWARD_TYPES.includes(awardType)) throw new Error("invalid award_type");
   const key = scopeKey(scopeType, matchId);
-  const mid = scopeType === "overall" ? null : Math.trunc(Number(matchId));
 
   await sqlClient.query(
     "DELETE FROM award_overrides WHERE scope_key = $1 AND award_type = $2",
     [key, awardType],
-  );
-  await sqlClient.query(
-    `
-    INSERT INTO award_override_audit(scope_key, scope_type, match_id, award_type, winner_player_ids, reason, actor, changed_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
-    `,
-    [key, scopeType, mid, awardType, "[]", "override_cleared", actor],
   );
 }

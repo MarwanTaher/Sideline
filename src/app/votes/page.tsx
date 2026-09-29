@@ -4,7 +4,6 @@ import { isAdminView } from "@/lib/view-mode";
 import { isTabLockedForCurrentUser } from "@/lib/admin-access";
 import {
   getMatchParticipants,
-  getVoteAuditRows,
   getVoteSubmissionStatus,
   getVotesForReview,
   listMatchesForReview,
@@ -38,10 +37,9 @@ export default async function VotesPage({
   const parsed = Number(match);
   const selectedMatchId = Number.isInteger(parsed) && parsed > 0 ? parsed : 0;
 
-  const [matches, votes, audit, participants] = await Promise.all([
+  const [matches, votes, participants] = await Promise.all([
     listMatchesForReview(),
     getVotesForReview(selectedMatchId),
-    getVoteAuditRows(selectedMatchId),
     selectedMatchId > 0 ? getMatchParticipants(selectedMatchId) : Promise.resolve([]),
   ]);
 
@@ -63,7 +61,7 @@ export default async function VotesPage({
         <h1 className="text-2xl font-semibold tracking-tight">Vote management</h1>
       </div>
       <p className="mt-1 text-sm text-neutral-500">
-        Review, edit, add, exclude and auto-flag peer votes. Every change is recorded in the audit log.
+          Review, edit, add, exclude and auto-flag peer votes.
       </p>
 
       <VotesAdmin
@@ -71,7 +69,6 @@ export default async function VotesPage({
         selectedMatchId={selectedMatchId}
         votes={votes}
         counts={reviewCounts(votes)}
-        audit={audit}
         participants={participants}
         submissions={submissions}
         motmTally={motmTally}
