@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ScoreBreakdown } from "@/lib/score-breakdown";
+import { matchLabel } from "@/lib/format";
 
 interface PlayerOption {
   id: number;
@@ -88,7 +89,7 @@ export default function ScoreBreakdownPanel({
                             href={`/matches/${m.matchId}`}
                             className="text-neutral-900 underline-offset-2 hover:underline dark:text-neutral-100"
                           >
-                            Match {m.matchId}
+                            {matchLabel(m.date)}
                           </Link>
                         </td>
                         <td className="px-3 py-2">{m.date}</td>

@@ -8,6 +8,7 @@ export interface MatchListItem {
   id: number;
   playedOn: string;
   matchTime: string;
+  kickoffAt: string | null;
   matchdayStatus: MatchdayStatus;
   status: MatchStatus;
   statsScoringEnabled: boolean;
@@ -91,6 +92,7 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
     SELECT m.id,
            m.played_on,
            COALESCE(m.match_time, '') AS match_time,
+           m.kickoff_at,
            COALESCE(m.matchday_status, 'draft') AS matchday_status,
            COALESCE(m.status, 'open') AS status,
            COALESCE(m.stats_scoring_enabled, 1) AS stats_scoring_enabled,
@@ -100,7 +102,7 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
     FROM matches m
     LEFT JOIN match_players mp ON mp.match_id = m.id
     ${restrict ? "WHERE (EXISTS (SELECT 1 FROM match_players mpx WHERE mpx.match_id = m.id AND mpx.player_id = $1) OR COALESCE(m.matchday_status, 'draft') IN ('draft', 'active'))" : ""}
-    GROUP BY m.id, m.played_on, m.match_time, m.matchday_status, m.status, m.stats_scoring_enabled, m.availability_open, m.location_name
+    GROUP BY m.id, m.played_on, m.match_time, m.kickoff_at, m.matchday_status, m.status, m.stats_scoring_enabled, m.availability_open, m.location_name
     ORDER BY m.id DESC
     `,
     restrict ? [forPlayerId] : [],
@@ -108,6 +110,7 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
     id: number;
     played_on: string;
     match_time: string;
+    kickoff_at: string | Date | null;
     matchday_status: string;
     status: string;
     stats_scoring_enabled: number;
@@ -120,6 +123,12 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
     id: Number(r.id),
     playedOn: String(r.played_on),
     matchTime: String(r.match_time),
+    kickoffAt:
+      r.kickoff_at == null
+        ? null
+        : r.kickoff_at instanceof Date
+          ? r.kickoff_at.toISOString()
+          : String(r.kickoff_at),
     matchdayStatus: normMatchday(r.matchday_status),
     status: normStatus(r.status),
     statsScoringEnabled: Number(r.stats_scoring_enabled) === 1,

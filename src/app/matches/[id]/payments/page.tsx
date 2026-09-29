@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { fmtDate, fmtMatchTime } from "@/lib/matches";
+import { matchLabelWithTime } from "@/lib/format";
 import { getAvailabilityMatch } from "@/lib/availability";
 import {
   computeSummary,
@@ -47,14 +48,14 @@ export default async function MatchPaymentsPage({
         href={`/matches/${matchId}`}
         className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
       >
-        ← Match {matchId}
+        ← Back to match
       </Link>
 
       <MatchNav matchId={matchId} isAdmin={isAdmin} />
 
       <h1 className="mt-3 text-2xl font-semibold tracking-tight">Payments</h1>
       <p className="mt-1 text-sm text-neutral-500">
-        Match {match.id} · {fmtDate(match.playedOn)} at {fmtMatchTime(match.matchTime)}
+          {matchLabelWithTime(match.playedOn, match.matchTime)}
       </p>
 
       {isAdmin ? (

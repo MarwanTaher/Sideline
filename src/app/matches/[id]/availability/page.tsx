@@ -14,6 +14,7 @@ import {
 } from "@/lib/availability";
 import { isWaitlistAutoPromoteEnabled, isWaitlistVisibleToPlayers, isVoteGateEnabled, isAvailabilityLockEnabled } from "@/lib/feature-settings";
 import { isWithinAvailabilityLock, msUntilLock } from "@/lib/match-schedule";
+import { matchLabel, matchLabelWithTime } from "@/lib/format";
 import { AvailabilityControls } from "./availability-controls";
 import {
   AvailabilityOpenToggle,
@@ -169,7 +170,7 @@ export default async function AvailabilityPage({
         href={`/matches/${matchId}`}
         className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
       >
-        ← Match {matchId}
+        ← {matchLabel(match.playedOn)}
       </Link>
 
       <MatchNav matchId={matchId} isAdmin={isAdmin} />
@@ -185,7 +186,7 @@ export default async function AvailabilityPage({
           </span>
         </div>
         <p className="mt-1 text-sm text-neutral-500">
-          Match {match.id} · {fmtDate(match.playedOn)} at {fmtMatchTime(match.matchTime)}
+          {matchLabelWithTime(match.playedOn, match.matchTime)}
         </p>
         {match.maxPlayers ? (
           <div className="mt-4">
@@ -288,16 +289,31 @@ export default async function AvailabilityPage({
           <summary className="cursor-pointer text-sm font-semibold">
             Availability control (admin)
           </summary>
-          <p className="mt-2 text-xs text-neutral-500">
-            Open or close responses, set the player cap, and mark players in or out.
-          </p>
-          <div className="mt-3 space-y-4">
+
+          <h3 className="mt-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">
+            This match only
+          </h3>
+          <div className="mt-2 space-y-4">
             <AvailabilityOpenToggle matchId={matchId} open={open} />
             <div className="border-t border-black/5 pt-4 dark:border-white/5">
               <MaxPlayersForm matchId={matchId} maxPlayers={match.maxPlayers} />
             </div>
             <div className="border-t border-black/5 pt-4 dark:border-white/5">
-              <h3 className="mb-2 text-sm font-medium">Waitlist</h3>
+              <h4 className="mb-2 text-sm font-medium">Set player availability</h4>
+              <AdminPlayerControls matchId={matchId} players={players} />
+            </div>
+          </div>
+
+          <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+            Applies to every match
+          </h3>
+          <p className="mt-1 text-xs text-neutral-500">
+            These are club-wide defaults. Changing one here changes it for all
+            matches, not just this one.
+          </p>
+          <div className="mt-2 space-y-4 rounded-xl border border-amber-500/30 bg-amber-50/40 p-3 dark:bg-amber-950/10">
+            <div>
+              <h4 className="mb-2 text-sm font-medium">Waitlist</h4>
               <WaitlistToggle
                 matchId={matchId}
                 enabled={waitlistEnabled}
@@ -306,17 +322,13 @@ export default async function AvailabilityPage({
                 candidates={waitlistCandidates}
               />
             </div>
-            <div className="border-t border-black/5 pt-4 dark:border-white/5">
-              <h3 className="mb-2 text-sm font-medium">Vote-gate</h3>
+            <div className="border-t border-amber-500/20 pt-4">
+              <h4 className="mb-2 text-sm font-medium">Vote-gate</h4>
               <VoteGateToggle matchId={matchId} enabled={voteGateEnabled} />
             </div>
-            <div className="border-t border-black/5 pt-4 dark:border-white/5">
-              <h3 className="mb-2 text-sm font-medium">Lock 24h before kickoff</h3>
+            <div className="border-t border-amber-500/20 pt-4">
+              <h4 className="mb-2 text-sm font-medium">Lock 24h before kickoff</h4>
               <AvailabilityLockToggle matchId={matchId} enabled={availabilityLockEnabled} />
-            </div>
-            <div className="border-t border-black/5 pt-4 dark:border-white/5">
-              <h3 className="mb-2 text-sm font-medium">Set player availability</h3>
-              <AdminPlayerControls matchId={matchId} players={players} />
             </div>
           </div>
         </details>

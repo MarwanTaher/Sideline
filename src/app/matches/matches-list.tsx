@@ -7,6 +7,7 @@ type MatchdayStatus = "draft" | "active" | "closed";
 
 export type MatchListDisplayItem = {
   id: number;
+  title: string;
   matchdayStatus: MatchdayStatus;
   closed: boolean;
   playerCount: number;
@@ -70,7 +71,7 @@ export function MatchesList({ items }: { items: MatchListDisplayItem[] }) {
               >
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold">Match {m.id}</span>
+                    <span className="font-semibold">{m.title}</span>
                     <span
                       className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MATCHDAY_BADGE[m.matchdayStatus]}`}
                     >

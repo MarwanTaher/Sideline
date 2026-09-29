@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useState, useTransition } from "react";
 import type { AwardMatch } from "@/lib/awards";
+import { matchLabel } from "@/lib/format";
 
 /** YYYY-MM-DD → DD-MM-YYYY (mirrors app.py _fmt_date). */
 function fmtDate(d: string): string {
@@ -100,7 +101,7 @@ export default function AwardsControls({
         >
           {matches.map((m) => (
             <option key={m.id} value={m.id}>
-              Match {m.id} ({fmtDate(m.played_on)})
+              {matchLabel(m.played_on)}
             </option>
           ))}
         </select>
