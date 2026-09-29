@@ -22,6 +22,8 @@ export interface AvailabilityMatch {
   id: number;
   playedOn: string;
   matchTime: string;
+  /** True kickoff instant as an ISO string, or null if never scheduled. */
+  kickoffAt: string | null;
   matchdayStatus: MatchdayStatus;
   maxPlayers: number;
   availabilityOpen: boolean;
@@ -39,6 +41,7 @@ interface MatchMetaRow {
   id: number;
   played_on: string | null;
   match_time: string | null;
+  kickoff_at: string | Date | null;
   matchday_status: string | null;
   max_players: number | null;
   availability_open: number | null;
@@ -49,7 +52,7 @@ export async function getAvailabilityMatch(
   matchId: number,
 ): Promise<AvailabilityMatch | null> {
   const raw = await sqlClient.query(
-    `SELECT id, played_on, match_time, matchday_status,
+    `SELECT id, played_on, match_time, kickoff_at, matchday_status,
             COALESCE(max_players, ${DEFAULT_MAX_PLAYERS}) AS max_players,
             COALESCE(availability_open, 1) AS availability_open
        FROM matches WHERE id = $1`,
@@ -62,6 +65,12 @@ export async function getAvailabilityMatch(
     id: Number(m.id),
     playedOn: m.played_on ?? "",
     matchTime: m.match_time ?? "",
+    kickoffAt:
+      m.kickoff_at == null
+        ? null
+        : m.kickoff_at instanceof Date
+          ? m.kickoff_at.toISOString()
+          : String(m.kickoff_at),
     matchdayStatus: normMatchday(m.matchday_status),
     maxPlayers: Number(m.max_players ?? DEFAULT_MAX_PLAYERS),
     availabilityOpen: Number(m.availability_open ?? 1) === 1,

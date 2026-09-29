@@ -4,16 +4,22 @@ import { useEffect, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import { setAvailabilityAction, type AvailabilityActionState } from "./actions";
 import type { AvailabilityStatus } from "@/lib/availability";
+import { formatDuration } from "@/lib/match-schedule";
 import { FeedbackMessage } from "@/components/ui/banner";
 import { CheckIcon, XIcon } from "@/components/ui/icons";
 
 const INITIAL: AvailabilityActionState = { ok: false, message: "" };
+
+/** Start nagging a day before the lock actually bites. */
+const LOCK_WARNING_MS = 24 * 60 * 60 * 1000;
 
 export interface AvailabilityControlsProps {
   matchId: number;
   currentStatus: AvailabilityStatus;
   open: boolean;
   locked?: boolean;
+  /** Ms until changes close; negative once locked, null when not applicable. */
+  msToLock?: number | null;
 }
 
 export function AvailabilityControls({
@@ -21,6 +27,7 @@ export function AvailabilityControls({
   currentStatus,
   open,
   locked = false,
+  msToLock = null,
 }: AvailabilityControlsProps) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(setAvailabilityAction, INITIAL);
@@ -93,6 +100,11 @@ export function AvailabilityControls({
         <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
           Availability is locked within 24 hours of kickoff. Please contact an
           admin if you need to change it.
+        </p>
+      ) : open && msToLock != null && msToLock > 0 && msToLock <= LOCK_WARNING_MS ? (
+        <p className="mt-3 rounded-xl bg-amber-50/70 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
+          Changes close in {formatDuration(msToLock)} — after that only an admin
+          can change your availability.
         </p>
       ) : null}
 

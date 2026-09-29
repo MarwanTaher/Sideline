@@ -169,7 +169,7 @@ export async function setAvailabilityAction(
     // controls, which use a separate action.
     if (
       (await isAvailabilityLockEnabled()) &&
-      isWithinAvailabilityLock(match.playedOn, match.matchTime)
+      isWithinAvailabilityLock(match.kickoffAt)
     ) {
       return {
         ok: false,

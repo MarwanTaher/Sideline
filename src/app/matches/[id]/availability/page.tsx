@@ -13,7 +13,7 @@ import {
   type PlayerAvailability,
 } from "@/lib/availability";
 import { isWaitlistAutoPromoteEnabled, isWaitlistVisibleToPlayers, isVoteGateEnabled, isAvailabilityLockEnabled } from "@/lib/feature-settings";
-import { isWithinAvailabilityLock } from "@/lib/match-schedule";
+import { isWithinAvailabilityLock, msUntilLock } from "@/lib/match-schedule";
 import { AvailabilityControls } from "./availability-controls";
 import {
   AvailabilityOpenToggle,
@@ -124,7 +124,8 @@ export default async function AvailabilityPage({
   // kickoff; admins always can.
   const availabilityLockEnabled = await isAvailabilityLockEnabled();
   const availabilityLocked =
-    availabilityLockEnabled && isWithinAvailabilityLock(match.playedOn, match.matchTime);
+    availabilityLockEnabled && isWithinAvailabilityLock(match.kickoffAt);
+  const msToLock = availabilityLockEnabled ? msUntilLock(match.kickoffAt) : null;
 
   const inPlayers = players.filter((p) => p.status === "in");
   const outPlayers = players.filter((p) => p.status === "out");
@@ -209,6 +210,7 @@ export default async function AvailabilityPage({
             currentStatus={mine?.status ?? "pending"}
             open={open}
             locked={availabilityLocked}
+            msToLock={msToLock}
           />
         </section>
       ) : (
