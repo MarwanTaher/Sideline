@@ -1,5 +1,13 @@
 import "server-only";
 import { sqlClient } from "./db";
+import {
+  getRoundOutcomes,
+  groupRoundsByMatch,
+  matchResultFor,
+  recordForTeam,
+  recordPlayed,
+  type MatchResult,
+} from "./results";
 
 /**
  * "Your season" — personal form, trends and highlights. A number is a lookup; a
@@ -9,7 +17,7 @@ import { sqlClient } from "./db";
  */
 
 export type SeriesPoint = { matchId: number; label: string; value: number };
-export type MatchResult = "W" | "D" | "L";
+export type { MatchResult };
 
 export type PlayerSeason = {
   appearances: number;
@@ -19,6 +27,8 @@ export type PlayerSeason = {
   ratingSeries: SeriesPoint[];
   goalsSeries: SeriesPoint[];
   form: MatchResult[];
+  /** Mini-matches won/drawn/lost across every matchday with recorded rounds. */
+  record: { wins: number; draws: number; losses: number };
   highlights: string[];
   hasEnoughData: boolean;
 };
@@ -44,48 +54,28 @@ export async function getPlayerSeason(playerId: number): Promise<PlayerSeason> {
 
   const matchIds = matchRows.map((r) => Number(r.match_id));
 
-  // Team goal totals for the player's matches to infer results.
-  const winnerByMatch = new Map<number, number | null>();
-  if (matchIds.length > 0) {
-    const teamRows = (await sqlClient.query(
-      `SELECT mp.match_id, mp.team_no, COALESCE(SUM(s.goals), 0) AS goals
-         FROM match_players mp
-         LEFT JOIN stats s ON s.match_id = mp.match_id AND s.player_id = mp.player_id
-        WHERE mp.match_id = ANY($1)
-        GROUP BY mp.match_id, mp.team_no`,
-      [matchIds],
-    )) as Array<{ match_id: number; team_no: number; goals: number }>;
-    const perMatch = new Map<number, Array<{ team: number; goals: number }>>();
-    for (const r of teamRows) {
-      const mid = Number(r.match_id);
-      if (!perMatch.has(mid)) perMatch.set(mid, []);
-      perMatch.get(mid)!.push({ team: Number(r.team_no), goals: Number(r.goals) });
-    }
-    for (const [mid, teams] of perMatch) {
-      let best = -1;
-      let winner: number | null = null;
-      let tie = false;
-      for (const t of teams) {
-        if (t.goals > best) { best = t.goals; winner = t.team; tie = false; }
-        else if (t.goals === best) tie = true;
-      }
-      winnerByMatch.set(mid, tie || best <= 0 ? null : winner);
-    }
-  }
+  // Results come from the recorded mini-matches. A matchday with no rounds has
+  // no result at all, rather than being counted as a draw.
+  const roundsByMatch = groupRoundsByMatch(await getRoundOutcomes(matchIds));
 
   let goals = 0;
   let assists = 0;
   const goalsSeries: SeriesPoint[] = [];
-  const results: { matchId: number; result: MatchResult | null }[] = [];
+  const results: (MatchResult | null)[] = [];
+  const record = { wins: 0, draws: 0, losses: 0 };
   for (const r of matchRows) {
     goals += Number(r.goals);
     assists += Number(r.assists);
     goalsSeries.push({ matchId: Number(r.match_id), label: shortDate(String(r.played_on)), value: Number(r.goals) });
-    const winner = winnerByMatch.get(Number(r.match_id));
-    let result: MatchResult | null = null;
-    if (winner != null) result = winner === Number(r.team_no) ? "W" : "L";
-    else if (winnerByMatch.has(Number(r.match_id))) result = "D";
-    results.push({ matchId: Number(r.match_id), result });
+
+    const rounds = roundsByMatch.get(Number(r.match_id)) ?? [];
+    const myTeam = Number(r.team_no);
+    results.push(matchResultFor(rounds, myTeam));
+
+    const rec = recordForTeam(rounds, myTeam);
+    record.wins += rec.wins;
+    record.draws += rec.draws;
+    record.losses += rec.losses;
   }
 
   // Rating over time from leaderboard snapshots for this player.
@@ -104,7 +94,6 @@ export async function getPlayerSeason(playerId: number): Promise<PlayerSeason> {
   // Highlights.
   const highlights: string[] = [];
   const form: MatchResult[] = results
-    .map((r) => r.result)
     .filter((r): r is MatchResult => r != null)
     .slice(-5);
 
@@ -140,6 +129,13 @@ export async function getPlayerSeason(playerId: number): Promise<PlayerSeason> {
     highlights.push(`Winning ${recentWins} of your last ${form.length} \ud83d\udd25`);
   }
 
+  if (recordPlayed(record) >= 6) {
+    const pct = Math.round((record.wins / recordPlayed(record)) * 100);
+    highlights.push(
+      `You win ${pct}% of your mini-matches (${record.wins}W-${record.draws}D-${record.losses}L)`,
+    );
+  }
+
   if (highlights.length === 0 && matchRows.length > 0) {
     highlights.push(`${matchRows.length} matches, ${goals} goals, ${assists} assists so far`);
   }
@@ -158,6 +154,7 @@ export async function getPlayerSeason(playerId: number): Promise<PlayerSeason> {
     ratingSeries,
     goalsSeries,
     form,
+    record,
     highlights,
     hasEnoughData: matchRows.length >= 3,
   };
