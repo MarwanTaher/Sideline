@@ -7,12 +7,14 @@ import { auth } from "@/auth";
 import { MIN_TEAMS, MAX_TEAMS } from "@/lib/team-constants";
 import {
   createMatch,
+  getMatchSeasonId,
   updateMatchSettings,
   setMatchdayStatus,
   setMatchStatus,
   deleteMatch,
 } from "@/lib/match-admin";
 import { searchPlaces, type PlaceResult } from "@/lib/geo";
+import { getActiveSubscriptionSeason } from "@/lib/season-subscriptions";
 import { revalidateScores } from "@/lib/scores-cache";
 
 export interface MatchActionState {
@@ -73,6 +75,16 @@ export async function searchPlacesAction(query: string): Promise<PlaceResult[]> 
   return searchPlaces(query);
 }
 
+/**
+ * Season membership is an explicit choice. With no subscription season running
+ * the radio is absent, so an unset value means an ordinary match.
+ */
+async function resolveSeasonId(formData: FormData): Promise<number | null> {
+  if (formData.get("seasonMatch") !== "yes") return null;
+  const season = await getActiveSubscriptionSeason();
+  return season ? season.id : null;
+}
+
 export async function createMatchAction(
   _prev: MatchActionState,
   formData: FormData,
@@ -85,8 +97,16 @@ export async function createMatchAction(
     const numTeams = numTeamsSchema.parse(formData.get("numTeams"));
     const statsScoringEnabled = formData.get("statsScoringEnabled") === "on";
     const location = parseLocation(formData);
+    const seasonId = await resolveSeasonId(formData);
 
-    newId = await createMatch({ playedOn, matchTime, numTeams, statsScoringEnabled, ...location });
+    newId = await createMatch({
+      playedOn,
+      matchTime,
+      numTeams,
+      statsScoringEnabled,
+      seasonId,
+      ...location,
+    });
     revalidatePath("/matches");
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
@@ -107,8 +127,20 @@ export async function updateMatchSettingsAction(
     const numTeams = numTeamsSchema.parse(formData.get("numTeams"));
     const statsScoringEnabled = formData.get("statsScoringEnabled") === "on";
     const location = parseLocation(formData);
+      // Absent field means "leave as it is" — an unrelated edit must not
+      // quietly turn a season match into an ordinary one.
+      const seasonId = formData.has("seasonMatch")
+        ? await resolveSeasonId(formData)
+        : await getMatchSeasonId(matchId);
 
-    await updateMatchSettings(matchId, { playedOn, matchTime, numTeams, statsScoringEnabled, ...location });
+      await updateMatchSettings(matchId, {
+        playedOn,
+        matchTime,
+        numTeams,
+        statsScoringEnabled,
+        seasonId,
+        ...location,
+      });
     revalidateScores();
     revalidatePath(`/matches/${matchId}`);
     revalidatePath("/matches");

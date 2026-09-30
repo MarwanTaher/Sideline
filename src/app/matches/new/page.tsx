@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
+import { getActiveSubscriptionSeason } from "@/lib/season-subscriptions";
 import { CreateMatchForm } from "./create-match-form";
 
 export const metadata = {
@@ -18,6 +19,8 @@ export default async function NewMatchPage() {
   const isAdmin = await isAdminView(role === "admin" || role === "super");
   if (!isAdmin) redirect("/matches");
 
+  const season = await getActiveSubscriptionSeason();
+
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10">
       <Link
@@ -33,7 +36,9 @@ export default async function NewMatchPage() {
         draft teams from the match page once responses are in.
       </p>
 
-      <CreateMatchForm />
+      <CreateMatchForm
+        season={season ? { id: season.id, name: season.name } : null}
+      />
     </main>
   );
 }

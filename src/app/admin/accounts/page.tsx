@@ -16,6 +16,7 @@ import {
   getBillingSummary,
   getRoundingLedger,
   getSeasonRates,
+  getPaymentDetails,
 } from "@/lib/season-billing";
 import { listPendingScans } from "@/lib/multisport";
 import { getFundBalance, listAdjustments } from "@/lib/season-fund";
@@ -66,7 +67,7 @@ export default async function AccountsPage({
           periodParam && /^\d{4}-\d{2}$/.test(periodParam)
             ? periodParam
             : (periods[0] ?? new Date().toISOString().slice(0, 7));
-        const [invoices, summary, pendingScans, rounding, fund, adjustments, rates] =
+        const [invoices, summary, pendingScans, rounding, fund, adjustments, rates, paymentDetails] =
           await Promise.all([
             listInvoices(subscriptionSeason.id, period),
             getBillingSummary(subscriptionSeason.id, period),
@@ -75,6 +76,7 @@ export default async function AccountsPage({
             getFundBalance(subscriptionSeason.id),
             listAdjustments(subscriptionSeason.id),
             getSeasonRates(subscriptionSeason.id),
+            getPaymentDetails(subscriptionSeason.id),
           ]);
         return {
           periods,
@@ -86,6 +88,7 @@ export default async function AccountsPage({
           fund,
           adjustments,
           rates,
+          paymentDetails,
         };
       })()
     : null;
@@ -122,6 +125,7 @@ export default async function AccountsPage({
           invoices={billing.invoices}
           summary={billing.summary}
           rates={billing.rates!}
+          paymentDetails={billing.paymentDetails}
           pendingScans={billing.pendingScans}
         />
       ) : null}

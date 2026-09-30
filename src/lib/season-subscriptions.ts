@@ -65,7 +65,27 @@ function toSeason(r: SeasonRow): SubscriptionSeason {
 const SEASON_COLUMNS = `id, name, start_date, end_date, subscription_enabled,
                         subscriber_cap, terms, terms_version, signup_open`;
 
-/** The subscription season a date falls inside, if any. */
+/**
+ * The subscription season a match belongs to.
+ *
+ * Membership is explicit (`matches.season_id`), not inferred from the date: an
+ * admin may run an ordinary one-off game during the contract period, and it
+ * must not drag in auto-IN, session charges or the fund.
+ */
+export async function getSubscriptionSeasonForMatch(
+  matchId: number,
+): Promise<SubscriptionSeason | null> {
+  const rows = (await sqlClient.query(
+    `SELECT ${SEASON_COLUMNS}
+       FROM seasons
+      WHERE id = (SELECT season_id FROM matches WHERE id = $1)
+        AND subscription_enabled = true`,
+    [matchId],
+  )) as SeasonRow[];
+  return rows.length > 0 ? toSeason(rows[0]) : null;
+}
+
+/** The subscription season covering a date, for defaulting the match form. */
 export async function getSubscriptionSeasonForDate(
   playedOn: string,
 ): Promise<SubscriptionSeason | null> {
@@ -269,16 +289,13 @@ export async function withdrawPlayer(
   );
 }
 
-/** Match ids inside a season that have not kicked off yet. */
+/** Match ids explicitly assigned to a season that have not kicked off yet. */
 async function upcomingSeasonMatchIds(seasonId: number): Promise<number[]> {
   const rows = (await sqlClient.query(
-    `SELECT m.id
-       FROM matches m
-       JOIN seasons s ON s.id = $1
-      WHERE m.played_on >= s.start_date
-        AND (s.end_date IS NULL OR m.played_on <= s.end_date)
-        AND (m.kickoff_at IS NULL OR m.kickoff_at > NOW())
-        AND COALESCE(m.matchday_status, 'draft') <> 'closed'`,
+    `SELECT id FROM matches
+      WHERE season_id = $1
+        AND (kickoff_at IS NULL OR kickoff_at > NOW())
+        AND COALESCE(matchday_status, 'draft') <> 'closed'`,
     [seasonId],
   )) as Array<{ id: number }>;
   return rows.map((r) => Number(r.id));
@@ -312,14 +329,7 @@ export async function applySubscriberToUpcomingMatches(
  * Existing answers are never overwritten.
  */
 export async function applySubscribersToMatch(matchId: number): Promise<number> {
-  const metaRows = (await sqlClient.query(
-    `SELECT played_on FROM matches WHERE id = $1`,
-    [matchId],
-  )) as Array<{ played_on: string | null }>;
-  const playedOn = metaRows[0]?.played_on;
-  if (!playedOn) return 0;
-
-  const season = await getSubscriptionSeasonForDate(String(playedOn));
+  const season = await getSubscriptionSeasonForMatch(matchId);
   if (!season) return 0;
 
   const subscribers = await listSubscribers(season.id);
@@ -342,14 +352,7 @@ export async function applySubscribersToMatch(matchId: number): Promise<number> 
 
 /** Player ids committed for the season a match belongs to. */
 export async function getSubscriberIdsForMatch(matchId: number): Promise<Set<number>> {
-  const metaRows = (await sqlClient.query(
-    `SELECT played_on FROM matches WHERE id = $1`,
-    [matchId],
-  )) as Array<{ played_on: string | null }>;
-  const playedOn = metaRows[0]?.played_on;
-  if (!playedOn) return new Set();
-
-  const season = await getSubscriptionSeasonForDate(String(playedOn));
+  const season = await getSubscriptionSeasonForMatch(matchId);
   if (!season) return new Set();
 
   const subs = await listSubscribers(season.id);

@@ -2,7 +2,12 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Invoice, SeasonBillingSummary, SeasonRates } from "@/lib/season-billing";
+import type {
+  Invoice,
+  SeasonBillingSummary,
+  SeasonRates,
+  SeasonPaymentDetails,
+} from "@/lib/season-billing";
 import type { MultisportScan } from "@/lib/multisport";
 import { formatMinor } from "@/lib/format-money";
 import {
@@ -12,6 +17,7 @@ import {
   deleteInvoiceAction,
   reviewScanAction,
   saveRatesAction,
+  savePaymentDetailsAction,
   type BillingActionState,
 } from "./billing-actions";
 import { Button } from "@/components/ui/button";
@@ -31,6 +37,7 @@ export default function BillingAdmin({
   invoices,
   summary,
   rates,
+  paymentDetails,
   pendingScans,
 }: {
   seasonId: number;
@@ -40,6 +47,7 @@ export default function BillingAdmin({
   invoices: Invoice[];
   summary: SeasonBillingSummary;
   rates: SeasonRates;
+  paymentDetails: SeasonPaymentDetails;
   pendingScans: MultisportScan[];
 }) {
   const router = useRouter();
@@ -59,6 +67,7 @@ export default function BillingAdmin({
       </p>
 
       <RatesForm seasonId={seasonId} rates={rates} />
+      <PaymentDetailsForm seasonId={seasonId} details={paymentDetails} />
 
       <form action={genAction} className="mt-4 flex flex-wrap items-end gap-2">
         <input type="hidden" name="seasonId" value={seasonId} />
@@ -240,6 +249,97 @@ function Field({
   );
 }
 
+function PaymentDetailsForm({
+  seasonId,
+  details,
+}: {
+  seasonId: number;
+  details: SeasonPaymentDetails;
+}) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(savePaymentDetailsAction, INITIAL);
+
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+
+  const filled = details.paymentName || details.paymentAccount;
+
+  return (
+    <details className="group mt-2 rounded-xl border border-black/10 bg-neutral-50/60 p-3 dark:border-white/10 dark:bg-neutral-800/40">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+        <span className="text-sm font-medium">Where players send the money</span>
+        <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+          {!filled ? (
+            <span className="rounded bg-amber-100 px-1.5 py-0.5 font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+              not set
+            </span>
+          ) : (
+            <span className="hidden truncate sm:inline">{details.paymentName}</span>
+          )}
+          <span className="rounded-lg border border-black/10 px-2 py-1 font-medium dark:border-white/15">
+            Edit
+          </span>
+        </span>
+      </summary>
+      <form action={formAction} className="mt-3 grid gap-2 sm:grid-cols-2">
+        <input type="hidden" name="seasonId" value={seasonId} />
+        <label className="block">
+          <span className="block text-xs text-neutral-500">Recipient name</span>
+          <input
+            name="paymentName"
+            defaultValue={details.paymentName}
+            className={`${inputCls} w-full`}
+          />
+        </label>
+        <label className="block">
+          <span className="block text-xs text-neutral-500">Account / phone number</span>
+          <input
+            name="paymentAccount"
+            defaultValue={details.paymentAccount}
+            className={`${inputCls} w-full`}
+          />
+        </label>
+        <label className="block">
+          <span className="block text-xs text-neutral-500">Method (BLIK, transfer…)</span>
+          <input
+            name="paymentMethod"
+            defaultValue={details.paymentMethod}
+            className={`${inputCls} w-full`}
+          />
+        </label>
+        <label className="block">
+          <span className="block text-xs text-neutral-500">Pay-by-link URL (optional)</span>
+          <input
+            name="payLink"
+            defaultValue={details.payLink}
+            className={`${inputCls} w-full`}
+          />
+        </label>
+        <label className="block sm:col-span-2">
+          <span className="block text-xs text-neutral-500">Extra note for players</span>
+          <textarea
+            name="paymentNote"
+            rows={2}
+            defaultValue={details.paymentNote}
+            className={`${inputCls} w-full`}
+          />
+        </label>
+        <p className="text-xs text-neutral-500 sm:col-span-2">
+          Players see these on their Payments tab, with a copy button and the
+          reference to put on the transfer.
+        </p>
+        <div className="sm:col-span-2">
+          <Button type="submit" variant="secondary" pending={pending} pendingLabel="Saving…">
+            Save transfer details
+          </Button>
+          <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+        </div>
+      </form>
+    </details>
+  );
+}
+
 function InvoiceRow({ invoice }: { invoice: Invoice }) {
   const router = useRouter();
   const [paidState, paidAction, paidPending] = useActionState(setInvoicePaidAction, INITIAL);
@@ -260,6 +360,10 @@ function InvoiceRow({ invoice }: { invoice: Invoice }) {
             {invoice.paidAt ? (
               <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                 paid
+              </span>
+            ) : invoice.declaredPaidAt ? (
+              <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+                says sent · confirm
               </span>
             ) : (
               <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">

@@ -44,6 +44,8 @@ export interface CreateMatchInput {
   matchTime: string; // "hh:mm am/pm"
   numTeams: number; // 2 | 3
   statsScoringEnabled: boolean;
+  /** Season this match belongs to; null means an ordinary one-off match. */
+  seasonId?: number | null;
   locationName?: string | null;
   locationLat?: number | null;
   locationLng?: number | null;
@@ -55,6 +57,7 @@ export interface UpdateMatchInput {
   matchTime: string;
   numTeams: number;
   statsScoringEnabled: boolean;
+  seasonId?: number | null;
   locationName?: string | null;
   locationLat?: number | null;
   locationLng?: number | null;
@@ -159,8 +162,8 @@ export async function createMatch(input: CreateMatchInput): Promise<number> {
   const raw = await sqlClient.query(
     `INSERT INTO matches
        (played_on, match_time, kickoff_at, num_teams, team_size, total_payment, stats_scoring_enabled, status,
-        location_name, location_lat, location_lng, venue)
-     VALUES ($1, $2, ${KICKOFF_FROM_LOCAL}, $3, 0, 0, $4, 'open', $5, $6, $7, $8)
+        location_name, location_lat, location_lng, venue, season_id)
+     VALUES ($1, $2, ${KICKOFF_FROM_LOCAL}, $3, 0, 0, $4, 'open', $5, $6, $7, $8, $9)
      RETURNING id`,
     [
       input.playedOn,
@@ -171,6 +174,7 @@ export async function createMatch(input: CreateMatchInput): Promise<number> {
       input.locationLat ?? null,
       input.locationLng ?? null,
       input.venue ?? null,
+      input.seasonId ?? null,
     ],
   );
   const rows = raw as { id: number }[];
@@ -200,6 +204,15 @@ export async function createMatch(input: CreateMatchInput): Promise<number> {
   return matchId;
 }
 
+export async function getMatchSeasonId(matchId: number): Promise<number | null> {
+  const rows = (await sqlClient.query(
+    `SELECT season_id FROM matches WHERE id = $1`,
+    [matchId],
+  )) as Array<{ season_id: number | null }>;
+  const value = rows[0]?.season_id;
+  return value == null ? null : Number(value);
+}
+
 export async function updateMatchSettings(
   matchId: number,
   input: UpdateMatchInput,
@@ -214,7 +227,8 @@ export async function updateMatchSettings(
             location_name = $6,
             location_lat = $7,
             location_lng = $8,
-            venue = $9
+            venue = $9,
+            season_id = $10
       WHERE id = $5`,
     [
       input.playedOn,
@@ -226,6 +240,7 @@ export async function updateMatchSettings(
       input.locationLat ?? null,
       input.locationLng ?? null,
       input.venue ?? null,
+      input.seasonId ?? null,
     ],
   );
 }

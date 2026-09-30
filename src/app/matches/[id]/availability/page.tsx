@@ -145,6 +145,7 @@ export default async function AvailabilityPage({
 
   const subscriberIds = await getSubscriberIdsForMatch(matchId);
   const iAmSubscriber = myPlayerId != null && subscriberIds.has(Number(myPlayerId));
+  const seasonMatch = subscriberIds.size > 0;
 
   const [waitlistEnabled, waitlistPlayers, waitlistVisible, voteGateEnabled] = isAdmin
     ? await Promise.all([
@@ -190,6 +191,11 @@ export default async function AvailabilityPage({
         </div>
         <p className="mt-1 text-sm text-neutral-500">
           {matchLabelWithTime(match.playedOn, match.matchTime)}
+          {seasonMatch ? (
+            <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+              season match
+            </span>
+          ) : null}
         </p>
         {match.maxPlayers ? (
           <div className="mt-4">
