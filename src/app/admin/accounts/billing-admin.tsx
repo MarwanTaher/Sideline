@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Invoice, SeasonBillingSummary } from "@/lib/season-billing";
+import type { Invoice, SeasonBillingSummary, RoundingLine } from "@/lib/season-billing";
 import type { MultisportScan } from "@/lib/multisport";
 import { formatMinor } from "@/lib/format-money";
 import {
@@ -29,6 +29,7 @@ export default function BillingAdmin({
   periods,
   invoices,
   summary,
+  rounding,
   pendingScans,
 }: {
   seasonId: number;
@@ -37,6 +38,7 @@ export default function BillingAdmin({
   periods: string[];
   invoices: Invoice[];
   summary: SeasonBillingSummary;
+  rounding: { lines: RoundingLine[]; totalMinor: number; collectedMinor: number };
   pendingScans: MultisportScan[];
 }) {
   const router = useRouter();
@@ -92,11 +94,12 @@ export default function BillingAdmin({
       ) : null}
 
       {summary.invoices > 0 ? (
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
           <Stat label="Invoices" value={String(summary.invoices)} />
           <Stat label="Paid" value={`${summary.paid}/${summary.invoices}`} />
           <Stat label="Due" value={formatMinor(summary.dueMinor)} />
           <Stat label="Collected" value={formatMinor(summary.collectedMinor)} />
+          <Stat label="Rounding" value={`+${formatMinor(summary.roundingMinor)}`} />
         </div>
       ) : null}
 
@@ -111,6 +114,46 @@ export default function BillingAdmin({
           ))}
         </ul>
       )}
+
+      <div className="mt-5 border-t border-black/5 pt-4 dark:border-white/5">
+        <h3 className="text-sm font-medium">Rounding surplus</h3>
+        <p className="mt-1 text-xs text-neutral-500">
+          Players are charged whole PLN, so each bill is rounded up from the
+          exact split. This is what the group has accumulated from that — it is
+          real money, not a display artefact.
+        </p>
+
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <Stat label="Surplus raised" value={`+${formatMinor(rounding.totalMinor)}`} />
+          <Stat
+            label="Of which collected"
+            value={`+${formatMinor(rounding.collectedMinor)}`}
+          />
+        </div>
+
+        {rounding.lines.length === 0 ? (
+          <p className="mt-2 text-sm text-neutral-500">Nothing billed yet.</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-black/5 text-sm dark:divide-white/10">
+            {rounding.lines.map((line) => (
+              <li key={line.period} className="flex items-center justify-between gap-3 py-2">
+                <span>
+                  {line.period}
+                  <span className="ml-2 text-xs text-neutral-500">
+                    {line.invoices} invoice{line.invoices === 1 ? "" : "s"}
+                  </span>
+                </span>
+                <span className="tabular-nums">
+                  +{formatMinor(line.roundingMinor)}
+                  <span className="ml-2 text-xs text-neutral-500">
+                    ({formatMinor(line.collectedMinor)} in)
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="mt-5 border-t border-black/5 pt-4 dark:border-white/5">
         <h3 className="text-sm font-medium">
@@ -174,6 +217,9 @@ function InvoiceRow({ invoice }: { invoice: Invoice }) {
           <p className="text-xs text-neutral-500">
             {invoice.playingDays} Sundays ÷ {invoice.splitBetween} ={" "}
             {formatMinor(invoice.grossMinor)}
+            {invoice.roundingMinor > 0
+              ? ` → ${formatMinor(invoice.chargedMinor)} (+${formatMinor(invoice.roundingMinor)})`
+              : ""}
             {invoice.creditMinor > 0
               ? ` · MultiSport −${formatMinor(invoice.creditMinor)}`
               : ""}

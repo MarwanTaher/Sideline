@@ -67,7 +67,9 @@ export function MyInvoices({
                 )}
               </p>
               <p className="text-xs text-neutral-500">
-                {inv.playingDays} Sundays ÷ {inv.splitBetween}
+                {inv.playingDays} Sundays ÷ {inv.splitBetween} ={" "}
+                {formatMinor(inv.grossMinor)}
+                {inv.roundingMinor > 0 ? ", rounded up" : ""}
                 {inv.creditMinor > 0 ? ` · MultiSport −${formatMinor(inv.creditMinor)}` : ""}
               </p>
             </div>

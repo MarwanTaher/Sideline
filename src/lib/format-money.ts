@@ -17,3 +17,17 @@ export function invoiceAmountMinor(
   if (splitBetween <= 0) return 0;
   return Math.round((playingDays * dayRateMinor) / splitBetween);
 }
+
+/**
+ * Collected amounts are whole PLN (rules §3). Always rounding *up* keeps the
+ * group's takings at or above the pitch cost — rounding to nearest could leave
+ * the total short.
+ */
+export function roundUpToPlnMinor(minor: number): number {
+  return Math.ceil(minor / 100) * 100;
+}
+
+/** The surplus created by charging a whole PLN instead of the exact split. */
+export function roundingDeltaMinor(exactMinor: number): number {
+  return roundUpToPlnMinor(exactMinor) - exactMinor;
+}

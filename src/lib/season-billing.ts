@@ -1,8 +1,8 @@
 import "server-only";
 import { sqlClient } from "./db";
-import { invoiceAmountMinor } from "./format-money";
+import { invoiceAmountMinor, roundUpToPlnMinor } from "./format-money";
 
-export { formatMinor, invoiceAmountMinor } from "./format-money";
+export { formatMinor, invoiceAmountMinor, roundUpToPlnMinor } from "./format-money";
 
 /**
  * Season billing — the monthly subscription from the winter contract.
@@ -27,6 +27,10 @@ export type Invoice = {
   dayRateMinor: number;
   splitBetween: number;
   grossMinor: number;
+  /** Gross rounded up to a whole PLN — what is actually collected. */
+  chargedMinor: number;
+  /** Surplus created by that rounding. */
+  roundingMinor: number;
   creditMinor: number;
   totalMinor: number;
   dueDate: string;
@@ -53,6 +57,7 @@ type InvoiceRow = {
 function toInvoice(r: InvoiceRow): Invoice {
   const gross = Number(r.gross_minor);
   const credit = Number(r.credit_minor);
+  const charged = roundUpToPlnMinor(gross);
   return {
     id: Number(r.id),
     seasonId: Number(r.season_id),
@@ -63,9 +68,11 @@ function toInvoice(r: InvoiceRow): Invoice {
     dayRateMinor: Number(r.day_rate_minor),
     splitBetween: Number(r.split_between),
     grossMinor: gross,
+    chargedMinor: charged,
+    roundingMinor: charged - gross,
     creditMinor: credit,
     // A credit larger than the bill must never produce a negative charge.
-    totalMinor: Math.max(0, gross - credit),
+    totalMinor: Math.max(0, charged - credit),
     dueDate: String(r.due_date),
     paidAt:
       r.paid_at == null
@@ -283,7 +290,16 @@ export type SeasonBillingSummary = {
   paid: number;
   dueMinor: number;
   collectedMinor: number;
+  /** Surplus from rounding up to whole PLN, for this period. */
+  roundingMinor: number;
+  /** Surplus already collected, i.e. on paid invoices only. */
+  roundingCollectedMinor: number;
 };
+
+// Charged = gross rounded up to a whole PLN; payable = charged less credits.
+const CHARGED = `(CEIL(gross_minor::numeric / 100) * 100)`;
+const PAYABLE = `GREATEST(${CHARGED} - credit_minor, 0)`;
+const ROUNDING = `(${CHARGED} - gross_minor)`;
 
 export async function getBillingSummary(
   seasonId: number,
@@ -292,12 +308,20 @@ export async function getBillingSummary(
   const rows = (await sqlClient.query(
     `SELECT COUNT(*)::int AS invoices,
             COUNT(paid_at)::int AS paid,
-            COALESCE(SUM(GREATEST(gross_minor - credit_minor, 0)), 0)::int AS due,
-            COALESCE(SUM(CASE WHEN paid_at IS NOT NULL
-                              THEN GREATEST(gross_minor - credit_minor, 0) ELSE 0 END), 0)::int AS collected
+            COALESCE(SUM(${PAYABLE}), 0)::int AS due,
+            COALESCE(SUM(CASE WHEN paid_at IS NOT NULL THEN ${PAYABLE} ELSE 0 END), 0)::int AS collected,
+            COALESCE(SUM(${ROUNDING}), 0)::int AS rounding,
+            COALESCE(SUM(CASE WHEN paid_at IS NOT NULL THEN ${ROUNDING} ELSE 0 END), 0)::int AS rounding_collected
        FROM season_invoices WHERE season_id = $1 AND period = $2`,
     [seasonId, period],
-  )) as Array<{ invoices: number; paid: number; due: number; collected: number }>;
+  )) as Array<{
+    invoices: number;
+    paid: number;
+    due: number;
+    collected: number;
+    rounding: number;
+    rounding_collected: number;
+  }>;
   const r = rows[0];
   return {
     period,
@@ -305,5 +329,49 @@ export async function getBillingSummary(
     paid: Number(r?.paid ?? 0),
     dueMinor: Number(r?.due ?? 0),
     collectedMinor: Number(r?.collected ?? 0),
+    roundingMinor: Number(r?.rounding ?? 0),
+    roundingCollectedMinor: Number(r?.rounding_collected ?? 0),
+  };
+}
+
+export type RoundingLine = {
+  period: string;
+  invoices: number;
+  roundingMinor: number;
+  collectedMinor: number;
+};
+
+/**
+ * Rounding surplus per month across the whole season. Small per player, but it
+ * accumulates into real money the group owns and should be able to see.
+ */
+export async function getRoundingLedger(seasonId: number): Promise<{
+  lines: RoundingLine[];
+  totalMinor: number;
+  collectedMinor: number;
+}> {
+  const rows = (await sqlClient.query(
+    `SELECT period,
+            COUNT(*)::int AS invoices,
+            COALESCE(SUM(${ROUNDING}), 0)::int AS rounding,
+            COALESCE(SUM(CASE WHEN paid_at IS NOT NULL THEN ${ROUNDING} ELSE 0 END), 0)::int AS collected
+       FROM season_invoices
+      WHERE season_id = $1
+      GROUP BY period
+      ORDER BY period DESC`,
+    [seasonId],
+  )) as Array<{ period: string; invoices: number; rounding: number; collected: number }>;
+
+  const lines = rows.map((r) => ({
+    period: String(r.period),
+    invoices: Number(r.invoices),
+    roundingMinor: Number(r.rounding),
+    collectedMinor: Number(r.collected),
+  }));
+
+  return {
+    lines,
+    totalMinor: lines.reduce((sum, l) => sum + l.roundingMinor, 0),
+    collectedMinor: lines.reduce((sum, l) => sum + l.collectedMinor, 0),
   };
 }

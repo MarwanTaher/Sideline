@@ -14,6 +14,7 @@ import {
   listInvoices,
   listInvoicePeriods,
   getBillingSummary,
+  getRoundingLedger,
 } from "@/lib/season-billing";
 import { listPendingScans } from "@/lib/multisport";
 import PlayerAdmins from "./player-admins";
@@ -62,12 +63,13 @@ export default async function AccountsPage({
           periodParam && /^\d{4}-\d{2}$/.test(periodParam)
             ? periodParam
             : (periods[0] ?? new Date().toISOString().slice(0, 7));
-        const [invoices, summary, pendingScans] = await Promise.all([
+        const [invoices, summary, pendingScans, rounding] = await Promise.all([
           listInvoices(subscriptionSeason.id, period),
           getBillingSummary(subscriptionSeason.id, period),
           listPendingScans(),
+          getRoundingLedger(subscriptionSeason.id),
         ]);
-        return { periods, period, invoices, summary, pendingScans };
+        return { periods, period, invoices, summary, pendingScans, rounding };
       })()
     : null;
 
@@ -102,6 +104,7 @@ export default async function AccountsPage({
           periods={billing.periods}
           invoices={billing.invoices}
           summary={billing.summary}
+          rounding={billing.rounding}
           pendingScans={billing.pendingScans}
         />
       ) : null}
