@@ -6,6 +6,11 @@ import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
 import { matchLabel } from "@/lib/format";
 import KickoffCountdown from "@/components/kickoff-countdown";
+import {
+  getActiveSubscriptionSeason,
+  getSubscription,
+  countActiveSubscribers,
+} from "@/lib/season-subscriptions";
 import { getPlayerRank } from "@/lib/leaderboard";
 import { getPendingVoteObligation } from "@/lib/voting";
 import { getLastMatchdayOutcome } from "@/lib/matchday";
@@ -52,6 +57,22 @@ export default async function Home() {
   const voteObligation = playerId != null ? await getPendingVoteObligation(playerId) : null;
   const lastMatchday = playerId != null ? await getLastMatchdayOutcome(playerId) : null;
 
+  // Nudge towards a season place only while one is actually available.
+  const seasonSubscription = await getActiveSubscriptionSeason();
+  const mySubscription =
+    seasonSubscription && playerId != null
+      ? await getSubscription(seasonSubscription.id, playerId)
+      : null;
+  const seasonSpotsLeft = seasonSubscription
+    ? seasonSubscription.subscriberCap - (await countActiveSubscribers(seasonSubscription.id))
+    : 0;
+  const showSeasonPrompt =
+    seasonSubscription != null &&
+    seasonSubscription.signupOpen &&
+    mySubscription?.status !== "active" &&
+    seasonSpotsLeft > 0 &&
+    playerId != null;
+
   let adminInfo: { pendingReviews: number; resetRequests: number } | null = null;
   if (isAdmin) {
     const [rc, pdata] = await Promise.all([
@@ -93,6 +114,29 @@ export default async function Home() {
 
       <NotificationPrompt />
       <InstallPrompt />
+
+      {showSeasonPrompt ? (
+        <Link href="/season" className="mt-4 block">
+          <Card accent="#0ea5e9" className="flex items-center justify-between gap-3 bg-sky-50/60 dark:bg-sky-950/20">
+            <div className="flex items-center gap-3">
+              <SectionIcon name="matches" className="h-8 w-8" />
+              <div>
+                <p className="text-sm font-semibold">
+                  {seasonSubscription!.name} — {seasonSpotsLeft} place
+                  {seasonSpotsLeft === 1 ? "" : "s"} left
+                </p>
+                <p className="text-sm text-neutral-500">
+                  Commit for the season and you&apos;re IN for every match
+                  automatically.
+                </p>
+              </div>
+            </div>
+            <span aria-hidden className="text-lg text-sky-600 dark:text-sky-400">
+              &rarr;
+            </span>
+          </Card>
+        </Link>
+      ) : null}
 
       {voteObligation ? (
         <Link href={`/matches/${voteObligation.matchId}/vote`} className="mt-4 block">

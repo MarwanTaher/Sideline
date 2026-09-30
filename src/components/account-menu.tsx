@@ -28,6 +28,7 @@ export default function AccountMenu({
   canToggle,
   mode,
   adminItems,
+  hasSeason = false,
   signOutAction,
 }: {
   name: string;
@@ -37,15 +38,13 @@ export default function AccountMenu({
   canToggle: boolean;
   mode: "player" | "admin";
   adminItems: AccountMenuItem[];
+  /** A subscription season is running, so show the season place entry. */
+  hasSeason?: boolean;
   signOutAction: () => void | Promise<void>;
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
 
   useEffect(() => {
     if (!open) return;
@@ -140,6 +139,7 @@ export default function AccountMenu({
                     key={it.href}
                     href={it.href}
                     role="menuitem"
+                    onClick={() => setOpen(false)}
                     aria-current={isActive(pathname, it.href) ? "page" : undefined}
                     className={`${tileCls} ${
                       isActive(pathname, it.href)
@@ -155,9 +155,24 @@ export default function AccountMenu({
           ) : null}
 
           <div className="grid grid-cols-2 gap-1.5">
-            <Link href="/profile" role="menuitem" className={`${tileCls} text-center`}>
+            <Link
+              href="/profile"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className={`${tileCls} text-center`}
+            >
               Profile
             </Link>
+            {hasSeason ? (
+              <Link
+                href="/season"
+                role="menuitem"
+                onClick={() => setOpen(false)}
+                className={`${tileCls} text-center`}
+              >
+                Season
+              </Link>
+            ) : null}
             <form action={signOutAction}>
               <button type="submit" className={`w-full ${tileCls}`}>
                 Sign out

@@ -20,6 +20,8 @@ export interface AvailabilityControlsProps {
   locked?: boolean;
   /** Ms until changes close; negative once locked, null when not applicable. */
   msToLock?: number | null;
+  /** Core season subscriber — committed and billed whether they play or not. */
+  isSubscriber?: boolean;
 }
 
 export function AvailabilityControls({
@@ -28,6 +30,7 @@ export function AvailabilityControls({
   open,
   locked = false,
   msToLock = null,
+  isSubscriber = false,
 }: AvailabilityControlsProps) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(setAvailabilityAction, INITIAL);
@@ -38,7 +41,7 @@ export function AvailabilityControls({
 
   const banner =
     currentStatus === "in"
-      ? { dot: "bg-emerald-500", label: "You're IN", sub: "See you on the pitch.", cls: "bg-emerald-50 dark:bg-emerald-950/30" }
+      ? { dot: "bg-emerald-500", label: "You're IN", sub: isSubscriber ? "Your season place is reserved." : "See you on the pitch.", cls: "bg-emerald-50 dark:bg-emerald-950/30" }
       : currentStatus === "out"
         ? { dot: "bg-red-500", label: "You're OUT", sub: "You've marked yourself unavailable.", cls: "bg-red-50 dark:bg-red-950/30" }
         : { dot: "bg-amber-500", label: "No response yet", sub: "Let everyone know if you can play.", cls: "bg-amber-50 dark:bg-amber-950/30" };
@@ -105,6 +108,14 @@ export function AvailabilityControls({
         <p className="mt-3 rounded-xl bg-amber-50/70 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
           Changes close in {formatDuration(msToLock)} — after that only an admin
           can change your availability.
+        </p>
+      ) : null}
+
+      {isSubscriber && open && currentStatus !== "out" ? (
+        <p className="mt-3 rounded-xl bg-neutral-50 px-3 py-2 text-xs text-neutral-600 dark:bg-neutral-800/60 dark:text-neutral-300">
+          You hold a season place, so you&apos;re IN by default. Marking yourself
+          OUT frees your spot for the reserve list — it does not cancel what you
+          owe for that day.
         </p>
       ) : null}
 

@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
-import { fmtDate, fmtMatchTime } from "@/lib/matches";
 import {
   getAvailabilityMatch,
   getAvailabilityAllPlayers,
@@ -15,6 +14,7 @@ import {
 import { isWaitlistAutoPromoteEnabled, isWaitlistVisibleToPlayers, isVoteGateEnabled, isAvailabilityLockEnabled } from "@/lib/feature-settings";
 import { isWithinAvailabilityLock, msUntilLock } from "@/lib/match-schedule";
 import { matchLabel, matchLabelWithTime } from "@/lib/format";
+import { getSubscriberIdsForMatch } from "@/lib/season-subscriptions";
 import { AvailabilityControls } from "./availability-controls";
 import {
   AvailabilityOpenToggle,
@@ -143,6 +143,9 @@ export default async function AvailabilityPage({
   const pendingGuests = guests.filter((g) => g.status === "pending");
   const myGuests = myPlayerId == null ? [] : guests.filter((g) => g.hostPlayerId === myPlayerId);
 
+  const subscriberIds = await getSubscriberIdsForMatch(matchId);
+  const iAmSubscriber = myPlayerId != null && subscriberIds.has(Number(myPlayerId));
+
   const [waitlistEnabled, waitlistPlayers, waitlistVisible, voteGateEnabled] = isAdmin
     ? await Promise.all([
         isWaitlistAutoPromoteEnabled(),
@@ -212,6 +215,7 @@ export default async function AvailabilityPage({
             open={open}
             locked={availabilityLocked}
             msToLock={msToLock}
+            isSubscriber={iAmSubscriber}
           />
         </section>
       ) : (

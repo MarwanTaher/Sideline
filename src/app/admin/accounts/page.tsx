@@ -5,8 +5,25 @@ import { isAdminView } from "@/lib/view-mode";
 import { getTabLocksByAdmin, getPlayerAdminStatuses } from "@/lib/admins";
 import type { AdminTabKey } from "@/lib/admin-tabs";
 import { listSeasons } from "@/lib/seasons";
+import {
+  getActiveSubscriptionSeason,
+  listSubscribers,
+} from "@/lib/season-subscriptions";
+import { getActivePlayers } from "@/lib/awards";
+import {
+  listInvoices,
+  listInvoicePeriods,
+  getBillingSummary,
+  getRoundingLedger,
+  getSeasonRates,
+} from "@/lib/season-billing";
+import { listPendingScans } from "@/lib/multisport";
+import { getFundBalance, listAdjustments } from "@/lib/season-fund";
 import PlayerAdmins from "./player-admins";
 import SeasonsAdmin from "./seasons-admin";
+import SubscriptionAdmin from "./subscription-admin";
+import BillingAdmin from "./billing-admin";
+import FundAdmin from "./fund-admin";
 
 export const metadata = {
   title: "Admin control · Sideline",
@@ -14,7 +31,11 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function AccountsPage() {
+export default async function AccountsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
   if (!(await isAdminView(session.user.role === "super"))) redirect("/leaderboard");
@@ -24,6 +45,50 @@ export default async function AccountsPage() {
     getTabLocksByAdmin(),
     listSeasons(),
   ]);
+
+  const subscriptionSeason = await getActiveSubscriptionSeason();
+  const subscribers = subscriptionSeason
+    ? await listSubscribers(subscriptionSeason.id)
+    : [];
+  const subscribed = new Set(subscribers.map((s) => s.playerId));
+  const candidates = subscriptionSeason
+    ? (await getActivePlayers())
+        .filter((p) => !subscribed.has(p.id))
+        .map((p) => ({ id: p.id, name: p.name }))
+    : [];
+
+  // Default to the current month, so the panel opens on what's being collected.
+  const { period: periodParam } = await searchParams;
+  const billing = subscriptionSeason
+    ? await (async () => {
+        const periods = await listInvoicePeriods(subscriptionSeason.id);
+        const period =
+          periodParam && /^\d{4}-\d{2}$/.test(periodParam)
+            ? periodParam
+            : (periods[0] ?? new Date().toISOString().slice(0, 7));
+        const [invoices, summary, pendingScans, rounding, fund, adjustments, rates] =
+          await Promise.all([
+            listInvoices(subscriptionSeason.id, period),
+            getBillingSummary(subscriptionSeason.id, period),
+            listPendingScans(),
+            getRoundingLedger(subscriptionSeason.id),
+            getFundBalance(subscriptionSeason.id),
+            listAdjustments(subscriptionSeason.id),
+            getSeasonRates(subscriptionSeason.id),
+          ]);
+        return {
+          periods,
+          period,
+          invoices,
+          summary,
+          pendingScans,
+          rounding,
+          fund,
+          adjustments,
+          rates,
+        };
+      })()
+    : null;
 
   const lockedByAdmin: Record<number, AdminTabKey[]> = {};
   for (const [adminId, keys] of tabLocks) lockedByAdmin[adminId] = keys;
@@ -39,6 +104,36 @@ export default async function AccountsPage() {
       <PlayerAdmins players={playerAdmins} lockedByAdmin={lockedByAdmin} />
 
       <SeasonsAdmin seasons={seasons} />
+
+      {subscriptionSeason ? (
+        <SubscriptionAdmin
+          season={subscriptionSeason}
+          subscribers={subscribers}
+          candidates={candidates}
+        />
+      ) : null}
+
+      {subscriptionSeason && billing ? (
+        <BillingAdmin
+          seasonId={subscriptionSeason.id}
+          seasonName={subscriptionSeason.name}
+          period={billing.period}
+          periods={billing.periods}
+          invoices={billing.invoices}
+          summary={billing.summary}
+          rates={billing.rates!}
+          pendingScans={billing.pendingScans}
+        />
+      ) : null}
+
+      {subscriptionSeason && billing ? (
+        <FundAdmin
+          seasonId={subscriptionSeason.id}
+          balance={billing.fund}
+          adjustments={billing.adjustments}
+          roundingLines={billing.rounding.lines}
+        />
+      ) : null}
 
       <section className="mt-8 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
         <h2 className="text-sm font-semibold">Diagnostics</h2>

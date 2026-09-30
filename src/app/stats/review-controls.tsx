@@ -10,7 +10,6 @@ import {
   saveTrustedSettingsAction,
   type StatsReviewState,
 } from "./actions";
-import { fmtDate } from "@/lib/format";
 import { matchLabel } from "@/lib/format";
 import type { PendingSubmission } from "@/lib/stats";
 import { Button } from "@/components/ui/button";
