@@ -34,6 +34,15 @@ function BarsIcon({ className }: IconProps) {
     </svg>
   );
 }
+function SeasonIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3.5" y="5" width="17" height="15" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3.5 9h17M8 3.5v3M16 3.5v3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="12" cy="14.5" r="2.2" stroke="currentColor" strokeWidth="1.7" />
+    </svg>
+  );
+}
 type Tab = {
   href: string;
   label: string;
@@ -49,7 +58,7 @@ const TABS: Tab[] = [
   { href: "/leaderboard", label: "Ranks", extra: ["/awards"], Icon: BarsIcon },
 ];
 
-export default function BottomNav() {
+export default function BottomNav({ showSeason = false }: { showSeason?: boolean }) {
   const pathname = usePathname();
 
   // Inside a single match, or on the season page, those screens provide their
@@ -65,12 +74,16 @@ export default function BottomNav() {
         : "text-neutral-500 dark:text-neutral-400"
     }`;
 
+  const tabs: Tab[] = showSeason
+    ? [...TABS, { href: "/season", label: "Season", Icon: SeasonIcon }]
+    : TABS;
+
   return (
     <nav
       aria-label="Primary"
       className="fixed inset-x-0 bottom-0 z-30 flex border-t border-black/10 bg-white/90 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden dark:border-white/10 dark:bg-neutral-950/90"
     >
-      {TABS.map(({ href, label, extra, Icon }) => {
+      {tabs.map(({ href, label, extra, Icon }) => {
         const active = isActive(pathname, href, extra);
         return (
           <Link key={href} href={href} aria-current={active ? "page" : undefined} className={itemCls(active)}>

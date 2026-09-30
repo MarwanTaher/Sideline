@@ -66,39 +66,61 @@ export default async function SeasonPage({
   }
 
   const playerId = session.user.playerId;
-  const [subscribers, mine] = await Promise.all([
-    listSubscribers(season.id),
-    playerId == null
-      ? Promise.resolve(null)
-      : getSubscription(season.id, Number(playerId)),
-  ]);
-  const isSubscriber = mine?.status === "active";
-  const spotsLeft = Math.max(0, season.subscriberCap - subscribers.length);
-
-  // Billing is only meaningful for someone holding a place. Fetched together:
-  // sequential awaits here were the main cost of loading this page.
   const pid = playerId == null ? null : Number(playerId);
+  const activeTab =
+    tab === "payments" || tab === "multisport" || tab === "fund" ? tab : "overview";
+
+  const mine = pid == null ? null : await getSubscription(season.id, pid);
+  const isSubscriber = mine?.status === "active";
   const forMe = isSubscriber && pid != null;
-  const [invoices, scans, uncredited, fund, paymentDetails, playedRows] = await Promise.all([
-    forMe ? listPlayerInvoices(season.id, pid) : Promise.resolve([]),
-    forMe ? listPlayerScans(pid) : Promise.resolve([]),
-    forMe ? uncreditedTotalMinor(pid) : Promise.resolve(0),
-    getFundBalance(season.id),
-    getPaymentDetails(season.id),
-    forMe
-      ? (sqlClient.query(
-          `SELECT m.id, m.played_on
-             FROM matches m
-             JOIN match_availability ma
-               ON ma.match_id = m.id AND ma.player_id = $1 AND ma.status = 'in'
-            WHERE m.season_id = $2
-              AND (m.kickoff_at IS NULL OR m.kickoff_at <= NOW())
-            ORDER BY m.played_on DESC
-            LIMIT 12`,
-          [pid, season.id],
-        ) as unknown as Promise<Array<{ id: number; played_on: string }>>)
-      : Promise.resolve([]),
-  ]);
+
+  // Each tab fetches only what it renders. Loading every tab's data on every
+  // tab made switching feel like a page load.
+  const [subscribers, invoices, paymentDetails, uncredited, scans, playedRows, fund] =
+    await Promise.all([
+      activeTab === "overview" ? listSubscribers(season.id) : Promise.resolve([]),
+      activeTab === "payments" && forMe
+        ? listPlayerInvoices(season.id, pid)
+        : Promise.resolve([]),
+      activeTab === "payments"
+        ? getPaymentDetails(season.id)
+        : Promise.resolve({
+            paymentName: "",
+            paymentAccount: "",
+            paymentMethod: "",
+            paymentNote: "",
+            payLink: "",
+          }),
+      activeTab === "payments" && forMe
+        ? uncreditedTotalMinor(pid)
+        : Promise.resolve(0),
+      activeTab === "multisport" && forMe ? listPlayerScans(pid) : Promise.resolve([]),
+      activeTab === "multisport" && forMe
+        ? (sqlClient.query(
+            `SELECT m.id, m.played_on
+               FROM matches m
+               JOIN match_availability ma
+                 ON ma.match_id = m.id AND ma.player_id = $1 AND ma.status = 'in'
+              WHERE m.season_id = $2
+                AND (m.kickoff_at IS NULL OR m.kickoff_at <= NOW())
+              ORDER BY m.played_on DESC
+              LIMIT 12`,
+            [pid, season.id],
+          ) as unknown as Promise<Array<{ id: number; played_on: string }>>)
+        : Promise.resolve([]),
+      activeTab === "fund"
+        ? getFundBalance(season.id)
+        : Promise.resolve({
+            roundingMinor: 0,
+            guestFeesMinor: 0,
+            guestFeesOutstandingMinor: 0,
+            extensionCostMinor: 0,
+            adjustmentsMinor: 0,
+            balanceMinor: 0,
+          }),
+    ]);
+
+  const spotsLeft = Math.max(0, season.subscriberCap - subscribers.length);
 
   const playedMatches = playedRows.map((m) => ({
     id: Number(m.id),
