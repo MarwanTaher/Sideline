@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
-import { fmtDate, fmtMatchTime } from "@/lib/matches";
 import { matchLabelWithTime } from "@/lib/format";
 import { getAvailabilityMatch } from "@/lib/availability";
 import {

@@ -8,6 +8,7 @@ import { getLockedTabsForPlayer } from "@/lib/admin-access";
 import { getNavSignals } from "@/lib/nav-signals";
 import { getPlayerContact } from "@/lib/player-profile";
 import { ADMIN_MENU_TABS } from "@/lib/admin-tabs";
+import { getActiveSubscriptionSeason } from "@/lib/season-subscriptions";
 import { LogoMark } from "@/components/logo-mark";
 import { setViewModeAction } from "@/app/actions/view-mode";
 
@@ -46,6 +47,8 @@ export default async function SiteHeader() {
     await signOut({ redirectTo: "/login" });
   };
 
+  const subscriptionSeason = user ? await getActiveSubscriptionSeason() : null;
+
   const account = user ? (
     <AccountMenu
       name={user.name ?? "You"}
@@ -55,6 +58,7 @@ export default async function SiteHeader() {
       canToggle={canToggle}
       mode={mode}
       adminItems={adminItems}
+      hasSeason={subscriptionSeason != null}
       signOutAction={signOutAction}
     />
   ) : (

@@ -5,8 +5,14 @@ import { isAdminView } from "@/lib/view-mode";
 import { getTabLocksByAdmin, getPlayerAdminStatuses } from "@/lib/admins";
 import type { AdminTabKey } from "@/lib/admin-tabs";
 import { listSeasons } from "@/lib/seasons";
+import {
+  getActiveSubscriptionSeason,
+  listSubscribers,
+} from "@/lib/season-subscriptions";
+import { getActivePlayers } from "@/lib/awards";
 import PlayerAdmins from "./player-admins";
 import SeasonsAdmin from "./seasons-admin";
+import SubscriptionAdmin from "./subscription-admin";
 
 export const metadata = {
   title: "Admin control · Sideline",
@@ -25,6 +31,17 @@ export default async function AccountsPage() {
     listSeasons(),
   ]);
 
+  const subscriptionSeason = await getActiveSubscriptionSeason();
+  const subscribers = subscriptionSeason
+    ? await listSubscribers(subscriptionSeason.id)
+    : [];
+  const subscribed = new Set(subscribers.map((s) => s.playerId));
+  const candidates = subscriptionSeason
+    ? (await getActivePlayers())
+        .filter((p) => !subscribed.has(p.id))
+        .map((p) => ({ id: p.id, name: p.name }))
+    : [];
+
   const lockedByAdmin: Record<number, AdminTabKey[]> = {};
   for (const [adminId, keys] of tabLocks) lockedByAdmin[adminId] = keys;
 
@@ -39,6 +56,14 @@ export default async function AccountsPage() {
       <PlayerAdmins players={playerAdmins} lockedByAdmin={lockedByAdmin} />
 
       <SeasonsAdmin seasons={seasons} />
+
+      {subscriptionSeason ? (
+        <SubscriptionAdmin
+          season={subscriptionSeason}
+          subscribers={subscribers}
+          candidates={candidates}
+        />
+      ) : null}
 
       <section className="mt-8 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
         <h2 className="text-sm font-semibold">Diagnostics</h2>

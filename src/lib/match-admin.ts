@@ -1,5 +1,6 @@
 import { sqlClient } from "@/lib/db";
 import { notify } from "@/lib/push";
+import { applySubscribersToMatch } from "@/lib/season-subscriptions";
 import { deleteGuestsForMatch } from "@/lib/guests";
 import { syncAchievements } from "@/lib/achievements";
 import {
@@ -174,6 +175,14 @@ export async function createMatch(input: CreateMatchInput): Promise<number> {
   );
   const rows = raw as { id: number }[];
   const matchId = Number(rows[0].id);
+
+  // Core subscribers are committed for every match of the contract period, so
+  // they start IN rather than pending.
+  try {
+    await applySubscribersToMatch(matchId);
+  } catch {
+    // A subscription problem must never block match creation.
+  }
 
   // Ask everyone to mark their availability for the new match. Never let a
   // push failure block match creation.

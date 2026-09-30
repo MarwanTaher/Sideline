@@ -5,12 +5,6 @@ import { useCallback, useState, useTransition } from "react";
 import type { AwardMatch } from "@/lib/awards";
 import { matchLabel } from "@/lib/format";
 
-/** YYYY-MM-DD → DD-MM-YYYY (mirrors app.py _fmt_date). */
-function fmtDate(d: string): string {
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
-  return m ? `${m[3]}-${m[2]}-${m[1]}` : d;
-}
-
 export default function AwardsControls({
   scope,
   matchId,
