@@ -8,6 +8,8 @@ import {
   setInvoicePaid,
   setInvoicePlayingDays,
   updateSeasonRates,
+  updatePaymentDetails,
+  declareInvoicePaid,
 } from "@/lib/season-billing";
 import { reviewScan, reportScan, withdrawScan } from "@/lib/multisport";
 import { getSubscriptionSeason } from "@/lib/season-subscriptions";
@@ -83,6 +85,60 @@ export async function saveRatesAction(
   return {
     ok: true,
     message: "Rates saved. Invoices already raised keep the rate they were billed at.",
+  };
+}
+
+export async function savePaymentDetailsAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, message: denied };
+
+  const seasonId = Number(formData.get("seasonId"));
+  if (!Number.isInteger(seasonId)) return { ok: false, message: "Invalid season." };
+
+  const str = (key: string) => String(formData.get(key) ?? "").slice(0, 300);
+
+  await updatePaymentDetails(seasonId, {
+    paymentName: str("paymentName"),
+    paymentAccount: str("paymentAccount"),
+    paymentMethod: str("paymentMethod"),
+    paymentNote: str("paymentNote"),
+    payLink: str("payLink"),
+  });
+
+  revalidateBilling();
+  return { ok: true, message: "Transfer details saved." };
+}
+
+/** Player-facing: claim a bill has been paid, pending admin confirmation. */
+export async function declarePaidAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const session = await auth();
+  const playerId = session?.user?.playerId;
+  if (playerId == null) return { ok: false, message: "Only player accounts can do this." };
+
+  const invoiceId = Number(formData.get("invoiceId"));
+  if (!Number.isInteger(invoiceId)) return { ok: false, message: "Invalid bill." };
+
+  const declared = formData.get("declared") !== "false";
+  await declareInvoicePaid(
+    invoiceId,
+    Number(playerId),
+    declared,
+    String(formData.get("note") ?? "").slice(0, 200),
+  );
+
+  revalidatePath("/season");
+  revalidatePath("/admin/accounts");
+  return {
+    ok: true,
+    message: declared
+      ? "Marked as sent — an admin will confirm when it arrives."
+      : "Withdrawn.",
   };
 }
 

@@ -34,7 +34,12 @@ export type Invoice = {
   creditMinor: number;
   totalMinor: number;
   dueDate: string;
+  /** Deadline as a real instant (end of the due day, club time). */
+  dueAtMs: number | null;
   paidAt: string | null;
+  /** The player says they've paid; not the same as confirmed. */
+  declaredPaidAt: string | null;
+  declaredNote: string;
   note: string;
 };
 
@@ -50,9 +55,17 @@ type InvoiceRow = {
   gross_minor: number;
   credit_minor: number;
   due_date: string;
+  due_at: string | Date | null;
   paid_at: string | Date | null;
+  declared_paid_at: string | Date | null;
+  declared_note: string;
   note: string;
 };
+
+function toIso(v: string | Date | null): string | null {
+  if (v == null) return null;
+  return v instanceof Date ? v.toISOString() : String(v);
+}
 
 function toInvoice(r: InvoiceRow): Invoice {
   const gross = Number(r.gross_minor);
@@ -74,12 +87,15 @@ function toInvoice(r: InvoiceRow): Invoice {
     // A credit larger than the bill must never produce a negative charge.
     totalMinor: Math.max(0, charged - credit),
     dueDate: String(r.due_date),
-    paidAt:
-      r.paid_at == null
-        ? null
-        : r.paid_at instanceof Date
-          ? r.paid_at.toISOString()
-          : String(r.paid_at),
+    dueAtMs: (() => {
+      const iso = toIso(r.due_at);
+      if (!iso) return null;
+      const ms = Date.parse(iso);
+      return Number.isFinite(ms) ? ms : null;
+    })(),
+    paidAt: toIso(r.paid_at),
+    declaredPaidAt: toIso(r.declared_paid_at),
+    declaredNote: String(r.declared_note ?? ""),
     note: String(r.note ?? ""),
   };
 }
@@ -172,12 +188,15 @@ export async function updateSeasonRates(
   );
 }
 
+// The deadline is the end of the due day in the club's zone, not UTC midnight.
+const DUE_AT = `((si.due_date || ' 23:59:59')::timestamp AT TIME ZONE 'Europe/Warsaw') AS due_at`;
+
 export async function listInvoices(
   seasonId: number,
   period?: string,
 ): Promise<Invoice[]> {
   const rows = (await sqlClient.query(
-    `SELECT si.*, p.name
+    `SELECT si.*, ${DUE_AT}, p.name
        FROM season_invoices si
        JOIN players p ON p.id = si.player_id
       WHERE si.season_id = $1 AND ($2::text IS NULL OR si.period = $2)
@@ -192,7 +211,7 @@ export async function listPlayerInvoices(
   playerId: number,
 ): Promise<Invoice[]> {
   const rows = (await sqlClient.query(
-    `SELECT si.*, p.name
+    `SELECT si.*, ${DUE_AT}, p.name
        FROM season_invoices si
        JOIN players p ON p.id = si.player_id
       WHERE si.season_id = $1 AND si.player_id = $2
@@ -200,6 +219,68 @@ export async function listPlayerInvoices(
     [seasonId, playerId],
   )) as InvoiceRow[];
   return rows.map(toInvoice);
+}
+
+export type SeasonPaymentDetails = {
+  paymentName: string;
+  paymentAccount: string;
+  paymentMethod: string;
+  paymentNote: string;
+  payLink: string;
+};
+
+export async function getPaymentDetails(
+  seasonId: number,
+): Promise<SeasonPaymentDetails> {
+  const rows = (await sqlClient.query(
+    `SELECT payment_name, payment_account, payment_method, payment_note, pay_link
+       FROM seasons WHERE id = $1`,
+    [seasonId],
+  )) as Array<Record<string, string>>;
+  const r = rows[0] ?? {};
+  return {
+    paymentName: String(r.payment_name ?? ""),
+    paymentAccount: String(r.payment_account ?? ""),
+    paymentMethod: String(r.payment_method ?? ""),
+    paymentNote: String(r.payment_note ?? ""),
+    payLink: String(r.pay_link ?? ""),
+  };
+}
+
+export async function updatePaymentDetails(
+  seasonId: number,
+  details: SeasonPaymentDetails,
+): Promise<void> {
+  await sqlClient.query(
+    `UPDATE seasons
+        SET payment_name = $1, payment_account = $2, payment_method = $3,
+            payment_note = $4, pay_link = $5
+      WHERE id = $6`,
+    [
+      details.paymentName.trim(),
+      details.paymentAccount.trim(),
+      details.paymentMethod.trim(),
+      details.paymentNote.trim(),
+      details.payLink.trim(),
+      seasonId,
+    ],
+  );
+}
+
+/** A player claims they have transferred the money. */
+export async function declareInvoicePaid(
+  invoiceId: number,
+  playerId: number,
+  declared: boolean,
+  note: string,
+): Promise<void> {
+  await sqlClient.query(
+    `UPDATE season_invoices
+        SET declared_paid_at = ${declared ? "CURRENT_TIMESTAMP" : "NULL"},
+            declared_note = $1
+      WHERE id = $2 AND player_id = $3 AND paid_at IS NULL`,
+    [declared ? note.trim() : "", invoiceId, playerId],
+  );
 }
 
 /** Periods that already have invoices, newest first. */

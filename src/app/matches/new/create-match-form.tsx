@@ -16,11 +16,46 @@ function todayIso(): string {
   return `${y}-${m}-${d}`;
 }
 
-export function CreateMatchForm() {
+export function CreateMatchForm({
+  season,
+}: {
+  season: { id: number; name: string } | null;
+}) {
   const [state, formAction, pending] = useActionState(createMatchAction, INITIAL);
 
   return (
     <form action={formAction} className="mt-6 space-y-5">
+      {season ? (
+        <fieldset className="rounded-xl border border-black/10 p-3 dark:border-white/10">
+          <legend className="px-1 text-sm font-medium">Match type</legend>
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name="seasonMatch"
+              value="yes"
+              defaultChecked
+              className="mt-1 h-4 w-4"
+            />
+            <span>
+              Season match — {season.name}
+              <span className="block text-xs text-neutral-500">
+                Core subscribers are marked IN automatically, and non-core
+                players are charged the session rate.
+              </span>
+            </span>
+          </label>
+          <label className="mt-2 flex items-start gap-2 text-sm">
+            <input type="radio" name="seasonMatch" value="no" className="mt-1 h-4 w-4" />
+            <span>
+              Normal match
+              <span className="block text-xs text-neutral-500">
+                Availability and payments work the usual way, with no
+                subscription rules.
+              </span>
+            </span>
+          </label>
+        </fieldset>
+      ) : null}
       <div className="grid gap-4 sm:grid-cols-3">
         <label className="block text-sm">
           <span className="font-medium">Match day</span>

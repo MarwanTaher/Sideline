@@ -1,6 +1,6 @@
 import "server-only";
 import { sqlClient } from "./db";
-import { getSubscriptionSeasonForDate, listSubscribers } from "./season-subscriptions";
+import { getSubscriptionSeasonForMatch, listSubscribers } from "./season-subscriptions";
 
 /**
  * Session charges for non-core players, and the group fund they feed.
@@ -98,15 +98,15 @@ export type MatchChargeContext = {
 export async function getMatchChargeContext(
   matchId: number,
 ): Promise<MatchChargeContext | null> {
-  const metaRows = (await sqlClient.query(
-    `SELECT played_on, COALESCE(extended, false) AS extended FROM matches WHERE id = $1`,
-    [matchId],
-  )) as Array<{ played_on: string | null; extended: boolean }>;
-  const meta = metaRows[0];
-  if (!meta?.played_on) return null;
-
-  const season = await getSubscriptionSeasonForDate(String(meta.played_on));
+  const season = await getSubscriptionSeasonForMatch(matchId);
   if (!season) return null;
+
+  const metaRows = (await sqlClient.query(
+    `SELECT COALESCE(extended, false) AS extended FROM matches WHERE id = $1`,
+    [matchId],
+  )) as Array<{ extended: boolean }>;
+  const meta = metaRows[0];
+  if (!meta) return null;
 
   const settings = (await sqlClient.query(
     `SELECT guest_rate_minor, extension_cost_minor, extension_min_extra
@@ -186,11 +186,7 @@ export async function generateGuestCharges(matchId: number): Promise<number> {
   const ctx = await getMatchChargeContext(matchId);
   if (!ctx) return 0;
 
-  const metaRows = (await sqlClient.query(
-    `SELECT played_on FROM matches WHERE id = $1`,
-    [matchId],
-  )) as Array<{ played_on: string }>;
-  const season = await getSubscriptionSeasonForDate(String(metaRows[0].played_on));
+  const season = await getSubscriptionSeasonForMatch(matchId);
   if (!season) return 0;
 
   const nonCore = await listNonCorePlayers(matchId, season.id);
@@ -297,10 +293,7 @@ export async function getFundBalance(seasonId: number): Promise<FundBalance> {
             COALESCE(SUM(CASE WHEN gc.paid_at IS NULL THEN gc.amount_minor ELSE 0 END), 0)::int AS outstanding
        FROM guest_charges gc
        JOIN matches m ON m.id = gc.match_id
-       JOIN seasons s ON s.id = $1
-      WHERE gc.kind = 'extra'
-        AND m.played_on >= s.start_date
-        AND (s.end_date IS NULL OR m.played_on <= s.end_date)`,
+      WHERE gc.kind = 'extra' AND m.season_id = $1`,
     [seasonId],
   )) as Array<{ paid: number; outstanding: number }>;
 
@@ -308,9 +301,7 @@ export async function getFundBalance(seasonId: number): Promise<FundBalance> {
     `SELECT COALESCE(COUNT(*) * MAX(s.extension_cost_minor), 0)::int AS total
        FROM matches m
        JOIN seasons s ON s.id = $1
-      WHERE m.extended = true
-        AND m.played_on >= s.start_date
-        AND (s.end_date IS NULL OR m.played_on <= s.end_date)`,
+      WHERE m.extended = true AND m.season_id = $1`,
     [seasonId],
   )) as Array<{ total: number }>;
 

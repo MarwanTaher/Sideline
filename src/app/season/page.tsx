@@ -8,13 +8,15 @@ import {
 } from "@/lib/season-subscriptions";
 import { Avatar } from "@/components/ui/avatar";
 import { SectionIcon } from "@/components/section-icon";
-import { listPlayerInvoices } from "@/lib/season-billing";
+import { listPlayerInvoices, getPaymentDetails } from "@/lib/season-billing";
 import { listPlayerScans, uncreditedTotalMinor } from "@/lib/multisport";
 import { getFundBalance } from "@/lib/season-fund";
 import { formatMinor } from "@/lib/format-money";
+import { SubNav } from "@/components/ui/sub-nav";
 import { sqlClient } from "@/lib/db";
 import { AcceptTerms, WithdrawButton } from "./subscription-controls";
-import { MyInvoices, MultisportReporter } from "./billing-panels";
+import { MultisportReporter } from "./billing-panels";
+import PaymentsTab from "./payments-tab";
 
 export const metadata = {
   title: "Season subscription · Sideline",
@@ -22,9 +24,15 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function SeasonPage() {
+export default async function SeasonPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
+
+  const { tab } = await searchParams;
 
   const season = await getActiveSubscriptionSeason();
   if (!season) {
@@ -50,6 +58,7 @@ export default async function SeasonPage() {
   const scans = isSubscriber && pid != null ? await listPlayerScans(pid) : [];
   const uncredited = isSubscriber && pid != null ? await uncreditedTotalMinor(pid) : 0;
   const fund = await getFundBalance(season.id);
+  const paymentDetails = await getPaymentDetails(season.id);
   const playedMatches =
     isSubscriber && pid != null
       ? ((await sqlClient.query(
@@ -80,97 +89,124 @@ export default async function SeasonPage() {
         {season.startDate} → {season.endDate ?? "ongoing"}
       </p>
 
-      <div className="mt-6 grid gap-3 sm:grid-cols-3">
-        <Stat label="Core places" value={`${subscribers.length} / ${season.subscriberCap}`} />
-        <Stat label="Still free" value={spotsLeft === 0 ? "Full" : String(spotsLeft)} />
-        <Stat label="Your place" value={isSubscriber ? "Confirmed" : "Not taken"} />
-      </div>
+      <SubNav
+        className="mt-4"
+        ariaLabel="Season sections"
+        items={[
+          { href: "/season", label: "Overview" },
+          { href: "/season?tab=payments", label: "Payments" },
+          { href: "/season?tab=multisport", label: "MultiSport" },
+          { href: "/season?tab=fund", label: "Group fund" },
+        ]}
+      />
 
-      {isSubscriber ? (
-        <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
-          You hold a core place. You&apos;ll be marked <strong>IN</strong> for every
-          match of the season automatically — you only need to act if you
-          <em> can&apos;t</em> make one.
-        </p>
-      ) : null}
-
-      {season.terms ? (
-        <section className="mt-6 rounded-2xl border border-black/10 p-5 dark:border-white/10">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
-            Rules and organisation
-          </h2>
-          <div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">
-            {season.terms}
-          </div>
-        </section>
-      ) : null}
-
-      <section className="mt-6 rounded-2xl border border-black/10 p-5 dark:border-white/10">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
-          {isSubscriber ? "Your subscription" : "Take a place"}
-        </h2>
-        <div className="mt-3">
-          {playerId == null ? (
-            <p className="text-sm text-neutral-500">
-              Only player accounts can hold a season place.
-            </p>
-          ) : isSubscriber ? (
-            <div className="space-y-3">
-              <p className="text-sm text-neutral-500">
-                Accepted on {new Date(mine!.acceptedAt).toLocaleDateString()} (terms
-                v{mine!.acceptedTermsVersion}).
-              </p>
-              <WithdrawButton seasonId={season.id} />
-            </div>
-          ) : (
-            <AcceptTerms
-              seasonId={season.id}
-              spotsLeft={spotsLeft}
-              signupOpen={season.signupOpen}
+      {tab === "payments" ? (
+        isSubscriber && pid != null ? (
+          <div className="mt-5">
+            <PaymentsTab
+              invoices={invoices}
+              details={paymentDetails}
+              playerName={session.user.name ?? "Player"}
+              uncreditedMinor={uncredited}
             />
-          )}
-        </div>
-      </section>
-
-      {isSubscriber ? (
-        <>
-          <section className="mt-6 rounded-2xl border border-black/10 p-5 dark:border-white/10">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
-              Your subscription bills
-            </h2>
-            <div className="mt-3">
-              <MyInvoices invoices={invoices} uncreditedMinor={uncredited} />
-            </div>
-          </section>
-
-          <section className="mt-6 rounded-2xl border border-black/10 p-5 dark:border-white/10">
-            <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
-              MultiSport
-            </h2>
-            <div className="mt-3">
+          </div>
+        ) : (
+          <p className="mt-5 rounded-xl bg-neutral-50 px-4 py-6 text-sm text-neutral-500 dark:bg-neutral-900">
+            Subscription bills apply to the core group only.
+          </p>
+        )
+      ) : tab === "multisport" ? (
+        <section className="mt-5 rounded-2xl border border-black/10 p-5 dark:border-white/10">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
+            MultiSport
+          </h2>
+          <div className="mt-3">
+            {isSubscriber ? (
               <MultisportReporter
                 seasonId={season.id}
                 matches={playedMatches}
                 scans={scans}
               />
+            ) : (
+              <p className="text-sm text-neutral-500">
+                MultiSport credits apply to the core group only.
+              </p>
+            )}
+          </div>
+        </section>
+      ) : tab === "fund" ? (
+        <section className="mt-5 rounded-2xl border border-black/10 p-5 dark:border-white/10">
+          <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
+            Group fund
+          </h2>
+          <p className="mt-2 text-3xl font-bold tabular-nums">
+            {formatMinor(fund.balanceMinor)}
+          </p>
+          <p className="mt-1 text-sm text-neutral-500">
+            Built from extra players&apos; session fees and the rounding on monthly
+            bills, less what the 2-hour extensions cost. It covers an unfilled core
+            place or a session the group still has to pay for.
+          </p>
+          <ul className="mt-4 divide-y divide-black/5 text-sm dark:divide-white/10">
+            <FundLine label="Extra players' fees" value={fund.guestFeesMinor} />
+            <FundLine label="Rounding on paid bills" value={fund.roundingMinor} />
+            <FundLine label="2-hour extensions" value={-fund.extensionCostMinor} />
+            <FundLine label="Adjustments" value={fund.adjustmentsMinor} />
+          </ul>
+        </section>
+      ) : (
+        <>
+          <div className="mt-5 grid gap-3 sm:grid-cols-3">
+            <Stat label="Core places" value={`${subscribers.length} / ${season.subscriberCap}`} />
+            <Stat label="Still free" value={spotsLeft === 0 ? "Full" : String(spotsLeft)} />
+            <Stat label="Your place" value={isSubscriber ? "Confirmed" : "Not taken"} />
+          </div>
+
+          {isSubscriber ? (
+            <p className="mt-4 rounded-xl bg-emerald-50 px-4 py-3 text-sm text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-200">
+              You hold a core place. You&apos;ll be marked <strong>IN</strong> for every
+              match of the season automatically — you only need to act if you
+              <em> can&apos;t</em> make one.
+            </p>
+          ) : null}
+
+          {season.terms ? (
+            <section className="mt-6 rounded-2xl border border-black/10 p-5 dark:border-white/10">
+              <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
+                Rules and organisation
+              </h2>
+              <div className="mt-3 whitespace-pre-wrap text-sm leading-relaxed">
+                {season.terms}
+              </div>
+            </section>
+          ) : null}
+
+          <section className="mt-6 rounded-2xl border border-black/10 p-5 dark:border-white/10">
+            <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
+              {isSubscriber ? "Your subscription" : "Take a place"}
+            </h2>
+            <div className="mt-3">
+              {playerId == null ? (
+                <p className="text-sm text-neutral-500">
+                  Only player accounts can hold a season place.
+                </p>
+              ) : isSubscriber ? (
+                <div className="space-y-3">
+                  <p className="text-sm text-neutral-500">
+                    Accepted on {new Date(mine!.acceptedAt).toLocaleDateString()} (terms
+                    v{mine!.acceptedTermsVersion}).
+                  </p>
+                  <WithdrawButton seasonId={season.id} />
+                </div>
+              ) : (
+                <AcceptTerms
+                  seasonId={season.id}
+                  spotsLeft={spotsLeft}
+                  signupOpen={season.signupOpen}
+                />
+              )}
             </div>
           </section>
-        </>
-      ) : null}
-
-      <section className="mt-6 rounded-2xl border border-black/10 p-5 dark:border-white/10">
-        <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
-          Group fund
-        </h2>
-        <p className="mt-2 text-2xl font-bold tabular-nums">
-          {formatMinor(fund.balanceMinor)}
-        </p>
-        <p className="mt-1 text-xs text-neutral-500">
-          Built from extra players&apos; session fees and the rounding on monthly
-          bills, less what the 2-hour extensions cost. It covers an unfilled core
-          place or a session the group still has to pay for.
-        </p>
-      </section>
 
       <section className="mt-6 rounded-2xl border border-black/10 p-5 dark:border-white/10">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
@@ -200,7 +236,25 @@ export default async function SeasonPage() {
           </ol>
         )}
       </section>
+        </>
+      )}
     </main>
+  );
+}
+
+function FundLine({ label, value }: { label: string; value: number }) {
+  return (
+    <li className="flex items-center justify-between gap-3 py-2">
+      <span className="text-neutral-600 dark:text-neutral-300">{label}</span>
+      <span
+        className={`tabular-nums ${
+          value < 0 ? "text-red-600 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"
+        }`}
+      >
+        {value < 0 ? "−" : "+"}
+        {formatMinor(Math.abs(value))}
+      </span>
+    </li>
   );
 }
 
