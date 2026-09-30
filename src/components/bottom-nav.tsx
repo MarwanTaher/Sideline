@@ -61,9 +61,14 @@ const TABS: Tab[] = [
 export default function BottomNav({ showSeason = false }: { showSeason?: boolean }) {
   const pathname = usePathname();
 
-  // Inside a single match, or on the season page, those screens provide their
-  // own bottom bar — suppress the global one so the two never stack.
-  if (/^\/matches\/\d+(?:\/|$)/.test(pathname) || pathname === "/season") {
+  // Inside a single match, on the season page, or in admin control, those
+  // screens provide their own bottom bar — suppress the global one so the two
+  // never stack.
+  if (
+    /^\/matches\/\d+(?:\/|$)/.test(pathname) ||
+    pathname === "/season" ||
+    pathname === "/admin/accounts"
+  ) {
     return null;
   }
 
