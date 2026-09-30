@@ -52,9 +52,9 @@ const TABS: Tab[] = [
 export default function BottomNav() {
   const pathname = usePathname();
 
-  // Inside a single match, the match's own bottom bar (MatchTabsMobile) takes
-  // over, so suppress the global bar to avoid stacking two bottom navs.
-  if (/^\/matches\/\d+(?:\/|$)/.test(pathname)) {
+  // Inside a single match, or on the season page, those screens provide their
+  // own bottom bar — suppress the global one so the two never stack.
+  if (/^\/matches\/\d+(?:\/|$)/.test(pathname) || pathname === "/season") {
     return null;
   }
 

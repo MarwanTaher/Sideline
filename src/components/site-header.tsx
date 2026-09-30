@@ -21,15 +21,22 @@ export default async function SiteHeader() {
   const canToggle = Boolean(isAdmin && user?.playerId != null);
   const mode = canToggle ? await getViewMode() : "admin";
   const adminView = Boolean(isAdmin && mode === "admin");
-  const lockedTabs =
+
+  // The header renders on every page, so these must not be sequential — the
+  // Neon HTTP driver makes each await a separate round trip.
+  const [lockedTabs, navSignals, contact, subscriptionSeason] = await Promise.all([
     adminView && !isSuper && user?.playerId != null
-      ? await getLockedTabsForPlayer(user.playerId)
-      : [];
+      ? getLockedTabsForPlayer(user.playerId)
+      : Promise.resolve([]),
+    user ? getNavSignals() : Promise.resolve(null),
+    user?.playerId != null ? getPlayerContact(user.playerId) : Promise.resolve(null),
+    user ? getActiveSubscriptionSeason() : Promise.resolve(null),
+  ]);
 
-  const navSignals = user ? await getNavSignals() : null;
-
-  const contact = user?.playerId != null ? await getPlayerContact(user.playerId) : null;
   const photoUrl = contact?.photoUrl ?? null;
+  // A season still being set up is visible to admins only.
+  const showSeason =
+    subscriptionSeason != null && (subscriptionSeason.visibleToPlayers || isAdmin);
 
   const locked = new Set(lockedTabs);
   const adminItems: AccountMenuItem[] = adminView
@@ -46,11 +53,6 @@ export default async function SiteHeader() {
     "use server";
     await signOut({ redirectTo: "/login" });
   };
-
-  const subscriptionSeason = user ? await getActiveSubscriptionSeason() : null;
-  // A season still being set up is visible to admins only.
-  const showSeason =
-    subscriptionSeason != null && (subscriptionSeason.visibleToPlayers || isAdmin);
 
   const account = user ? (
     <AccountMenu

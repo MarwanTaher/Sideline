@@ -65,12 +65,7 @@ export default function PaymentsTab({
             ) : null}
             <ul className="mt-3 space-y-2.5">
               {invoices.map((inv) => (
-                <InvoiceCard
-                  key={inv.id}
-                  invoice={inv}
-                  playerName={playerName}
-                  details={details}
-                />
+                <InvoiceCard key={inv.id} invoice={inv} playerName={playerName} />
               ))}
             </ul>
           </>
@@ -85,11 +80,9 @@ export default function PaymentsTab({
 function InvoiceCard({
   invoice,
   playerName,
-  details,
 }: {
   invoice: Invoice;
   playerName: string;
-  details: SeasonPaymentDetails;
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(declarePaidAction, INITIAL);

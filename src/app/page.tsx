@@ -54,25 +54,30 @@ export default async function Home() {
     rankInfo = await getPlayerRank(playerId);
   }
 
-  const voteObligation = playerId != null ? await getPendingVoteObligation(playerId) : null;
-  const lastMatchday = playerId != null ? await getLastMatchdayOutcome(playerId) : null;
+  const [voteObligation, lastMatchday, seasonSubscription] = await Promise.all([
+    playerId != null ? getPendingVoteObligation(playerId) : Promise.resolve(null),
+    playerId != null ? getLastMatchdayOutcome(playerId) : Promise.resolve(null),
+    getActiveSubscriptionSeason(),
+  ]);
 
-  // Nudge towards a season place only while one is actually available.
-  const seasonSubscription = await getActiveSubscriptionSeason();
-  const mySubscription =
-    seasonSubscription && playerId != null
-      ? await getSubscription(seasonSubscription.id, playerId)
-      : null;
-  const seasonSpotsLeft = seasonSubscription
-    ? seasonSubscription.subscriberCap - (await countActiveSubscribers(seasonSubscription.id))
-    : 0;
-  const showSeasonPrompt =
+  // Nudge towards a season place only while one is actually available. Skip the
+  // lookups entirely when the season is hidden or closed.
+  const seasonWorthChecking =
     seasonSubscription != null &&
     seasonSubscription.visibleToPlayers &&
     seasonSubscription.signupOpen &&
-    mySubscription?.status !== "active" &&
-    seasonSpotsLeft > 0 &&
     playerId != null;
+  const [mySubscription, takenSeats] = seasonWorthChecking
+    ? await Promise.all([
+        getSubscription(seasonSubscription.id, playerId),
+        countActiveSubscribers(seasonSubscription.id),
+      ])
+    : [null, 0];
+  const seasonSpotsLeft = seasonSubscription
+    ? seasonSubscription.subscriberCap - takenSeats
+    : 0;
+  const showSeasonPrompt =
+    seasonWorthChecking && mySubscription?.status !== "active" && seasonSpotsLeft > 0;
 
   let adminInfo: { pendingReviews: number; resetRequests: number } | null = null;
   if (isAdmin) {
