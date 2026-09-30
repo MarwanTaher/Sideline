@@ -161,9 +161,18 @@ function RatesForm({ seasonId, rates }: { seasonId: number; rates: SeasonRates }
   const pln = (minor: number) => (minor / 100).toFixed(2);
 
   return (
-    <details className="mt-3 rounded-xl border border-black/10 p-3 dark:border-white/10">
-      <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-neutral-400">
-        Rates
+    <details className="group mt-3 rounded-xl border border-black/10 bg-neutral-50/60 p-3 dark:border-white/10 dark:bg-neutral-800/40">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
+        <span className="text-sm font-medium">Rates &amp; pricing</span>
+        <span className="flex items-center gap-1.5 text-xs text-neutral-500">
+          <span className="hidden sm:inline tabular-nums">
+            Pitch {pln(rates.dayRateMinor)} · Extra player {pln(rates.guestRateMinor)} ·
+            Extension {pln(rates.extensionCostMinor)}
+          </span>
+          <span className="rounded-lg border border-black/10 px-2 py-1 font-medium transition group-open:bg-neutral-200/60 dark:border-white/15 dark:group-open:bg-neutral-700/60">
+            Edit
+          </span>
+        </span>
       </summary>
       <form action={formAction} className="mt-3 grid gap-2 sm:grid-cols-3">
         <input type="hidden" name="seasonId" value={seasonId} />
@@ -191,6 +200,10 @@ function RatesForm({ seasonId, rates }: { seasonId: number; rates: SeasonRates }
           defaultValue={String(rates.extensionMinExtra)}
           type="number"
         />
+        <p className="text-xs text-neutral-500 sm:col-span-3">
+          Applies to invoices and charges raised from now on. Anything already
+          raised keeps the rate it was billed at.
+        </p>
         <div className="sm:col-span-3">
           <Button type="submit" variant="secondary" pending={pending} pendingLabel="Saving…">
             Save rates
