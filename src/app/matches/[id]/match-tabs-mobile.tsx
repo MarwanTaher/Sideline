@@ -214,7 +214,7 @@ export function MatchTabsMobile({
       >
         <Link
           href="/matches"
-          className="flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
+          className="flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-medium text-neutral-500 transition dark:text-neutral-400"
         >
           <BackIcon className="h-6 w-6" />
           Back
