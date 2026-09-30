@@ -68,6 +68,7 @@ export default async function Home() {
     : 0;
   const showSeasonPrompt =
     seasonSubscription != null &&
+    seasonSubscription.visibleToPlayers &&
     seasonSubscription.signupOpen &&
     mySubscription?.status !== "active" &&
     seasonSpotsLeft > 0 &&

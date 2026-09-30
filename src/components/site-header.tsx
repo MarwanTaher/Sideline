@@ -48,6 +48,9 @@ export default async function SiteHeader() {
   };
 
   const subscriptionSeason = user ? await getActiveSubscriptionSeason() : null;
+  // A season still being set up is visible to admins only.
+  const showSeason =
+    subscriptionSeason != null && (subscriptionSeason.visibleToPlayers || isAdmin);
 
   const account = user ? (
     <AccountMenu
@@ -58,7 +61,7 @@ export default async function SiteHeader() {
       canToggle={canToggle}
       mode={mode}
       adminItems={adminItems}
-      hasSeason={subscriptionSeason != null}
+      hasSeason={showSeason}
       signOutAction={signOutAction}
     />
   ) : (

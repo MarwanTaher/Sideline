@@ -51,6 +51,32 @@ export default function SubscriptionAdmin({
 
       <form action={formAction} className="mt-3 space-y-3">
         <input type="hidden" name="seasonId" value={season.id} />
+
+        <div
+          className={`rounded-xl border p-3 ${
+            season.visibleToPlayers
+              ? "border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-950/20"
+              : "border-amber-500/40 bg-amber-50/50 dark:bg-amber-950/20"
+          }`}
+        >
+          <label className="flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="visibleToPlayers"
+              defaultChecked={season.visibleToPlayers}
+              className="mt-0.5 h-4 w-4 rounded border-black/20 dark:border-white/20"
+            />
+            <span>
+              <strong>Visible to players</strong>
+              <span className="block text-xs text-neutral-600 dark:text-neutral-300">
+                {season.visibleToPlayers
+                  ? "Players can see the season page, the rules and the sign-up."
+                  : "Draft — only admins can see it. Nothing appears in the menu, on the dashboard, or at /season for players."}
+              </span>
+            </span>
+          </label>
+        </div>
+
         <div className="grid gap-2 sm:grid-cols-2">
           <label className="flex items-center gap-2 text-sm">
             <input

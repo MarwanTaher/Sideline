@@ -31,6 +31,7 @@ const settingsSchema = z.object({
   subscriberCap: z.coerce.number().int().min(1).max(40),
   terms: z.string().max(20000),
   signupOpen: z.coerce.boolean(),
+  visibleToPlayers: z.coerce.boolean(),
   bumpTermsVersion: z.coerce.boolean(),
 });
 
@@ -47,6 +48,7 @@ export async function saveSubscriptionSettingsAction(
     subscriberCap: formData.get("subscriberCap"),
     terms: formData.get("terms") ?? "",
     signupOpen: formData.get("signupOpen") === "on",
+    visibleToPlayers: formData.get("visibleToPlayers") === "on",
     bumpTermsVersion: formData.get("bumpTermsVersion") === "on",
   });
   if (!parsed.success) {
@@ -60,7 +62,9 @@ export async function saveSubscriptionSettingsAction(
     ok: true,
     message: rest.bumpTermsVersion
       ? "Saved. Terms version bumped — subscribers will see the new rules."
-      : "Subscription settings saved.",
+      : rest.visibleToPlayers
+        ? "Saved. The season is visible to players."
+        : "Saved. The season stays hidden from players.",
   };
 }
 
