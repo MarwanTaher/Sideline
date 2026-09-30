@@ -280,46 +280,43 @@ export type FundBalance = {
  * disagree with what was actually charged and collected.
  */
 export async function getFundBalance(seasonId: number): Promise<FundBalance> {
-  const rounding = (await sqlClient.query(
-    `SELECT COALESCE(SUM(CASE WHEN paid_at IS NOT NULL
-              THEN (CEIL(gross_minor::numeric / 100) * 100) - gross_minor ELSE 0 END), 0)::int AS total
-       FROM season_invoices WHERE season_id = $1`,
+  // One round trip rather than four: the Neon HTTP driver has no connection to
+  // reuse, so each separate query costs a full request.
+  const rows = (await sqlClient.query(
+    `SELECT
+       (SELECT COALESCE(SUM(CASE WHEN paid_at IS NOT NULL
+                 THEN (CEIL(gross_minor::numeric / 100) * 100) - gross_minor ELSE 0 END), 0)
+          FROM season_invoices WHERE season_id = $1)::int AS rounding,
+       (SELECT COALESCE(SUM(CASE WHEN gc.paid_at IS NOT NULL THEN gc.amount_minor ELSE 0 END), 0)
+          FROM guest_charges gc JOIN matches m ON m.id = gc.match_id
+         WHERE gc.kind = 'extra' AND m.season_id = $1)::int AS fees_paid,
+       (SELECT COALESCE(SUM(CASE WHEN gc.paid_at IS NULL THEN gc.amount_minor ELSE 0 END), 0)
+          FROM guest_charges gc JOIN matches m ON m.id = gc.match_id
+         WHERE gc.kind = 'extra' AND m.season_id = $1)::int AS fees_outstanding,
+       (SELECT COALESCE(COUNT(*) * MAX(s.extension_cost_minor), 0)
+          FROM matches m JOIN seasons s ON s.id = $1
+         WHERE m.extended = true AND m.season_id = $1)::int AS extensions,
+       (SELECT COALESCE(SUM(amount_minor), 0)
+          FROM fund_adjustments WHERE season_id = $1)::int AS adjustments`,
     [seasonId],
-  )) as Array<{ total: number }>;
+  )) as Array<{
+    rounding: number;
+    fees_paid: number;
+    fees_outstanding: number;
+    extensions: number;
+    adjustments: number;
+  }>;
 
-  // Only 'extra' charges are group money; replacements are settled privately.
-  const fees = (await sqlClient.query(
-    `SELECT COALESCE(SUM(CASE WHEN gc.paid_at IS NOT NULL THEN gc.amount_minor ELSE 0 END), 0)::int AS paid,
-            COALESCE(SUM(CASE WHEN gc.paid_at IS NULL THEN gc.amount_minor ELSE 0 END), 0)::int AS outstanding
-       FROM guest_charges gc
-       JOIN matches m ON m.id = gc.match_id
-      WHERE gc.kind = 'extra' AND m.season_id = $1`,
-    [seasonId],
-  )) as Array<{ paid: number; outstanding: number }>;
-
-  const extensions = (await sqlClient.query(
-    `SELECT COALESCE(COUNT(*) * MAX(s.extension_cost_minor), 0)::int AS total
-       FROM matches m
-       JOIN seasons s ON s.id = $1
-      WHERE m.extended = true AND m.season_id = $1`,
-    [seasonId],
-  )) as Array<{ total: number }>;
-
-  const adjustments = (await sqlClient.query(
-    `SELECT COALESCE(SUM(amount_minor), 0)::int AS total
-       FROM fund_adjustments WHERE season_id = $1`,
-    [seasonId],
-  )) as Array<{ total: number }>;
-
-  const roundingMinor = Number(rounding[0]?.total ?? 0);
-  const guestFeesMinor = Number(fees[0]?.paid ?? 0);
-  const extensionCostMinor = Number(extensions[0]?.total ?? 0);
-  const adjustmentsMinor = Number(adjustments[0]?.total ?? 0);
+  const r = rows[0];
+  const roundingMinor = Number(r?.rounding ?? 0);
+  const guestFeesMinor = Number(r?.fees_paid ?? 0);
+  const extensionCostMinor = Number(r?.extensions ?? 0);
+  const adjustmentsMinor = Number(r?.adjustments ?? 0);
 
   return {
     roundingMinor,
     guestFeesMinor,
-    guestFeesOutstandingMinor: Number(fees[0]?.outstanding ?? 0),
+    guestFeesOutstandingMinor: Number(r?.fees_outstanding ?? 0),
     extensionCostMinor,
     adjustmentsMinor,
     balanceMinor:

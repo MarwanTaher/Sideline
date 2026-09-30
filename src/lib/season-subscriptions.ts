@@ -207,8 +207,32 @@ export async function getSubscription(
   seasonId: number,
   playerId: number,
 ): Promise<SeasonSubscription | null> {
-  const all = await listSubscribers(seasonId, { includeWithdrawn: true });
-  return all.find((s) => s.playerId === playerId) ?? null;
+  const rows = (await sqlClient.query(
+    `SELECT ss.player_id, ss.status, ss.accepted_at, ss.accepted_terms_version,
+            p.name, p.photo_url
+       FROM season_subscriptions ss
+       JOIN players p ON p.id = ss.player_id
+      WHERE ss.season_id = $1 AND ss.player_id = $2`,
+    [seasonId, playerId],
+  )) as Array<{
+    player_id: number;
+    status: string;
+    accepted_at: string | Date;
+    accepted_terms_version: number;
+    name: string;
+    photo_url: string | null;
+  }>;
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    playerId: Number(r.player_id),
+    name: String(r.name),
+    photoUrl: r.photo_url ?? null,
+    status: r.status === "withdrawn" ? "withdrawn" : "active",
+    acceptedAt:
+      r.accepted_at instanceof Date ? r.accepted_at.toISOString() : String(r.accepted_at),
+    acceptedTermsVersion: Number(r.accepted_terms_version),
+  };
 }
 
 export type SubscribeResult =

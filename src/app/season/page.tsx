@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { Suspense } from "react";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import {
@@ -18,6 +19,7 @@ import { sqlClient } from "@/lib/db";
 import { AcceptTerms, WithdrawButton } from "./subscription-controls";
 import { MultisportReporter } from "./billing-panels";
 import PaymentsTab from "./payments-tab";
+import SeasonTabsMobile from "./season-tabs-mobile";
 
 export const metadata = {
   title: "Season subscription · Sideline",
@@ -64,37 +66,44 @@ export default async function SeasonPage({
   }
 
   const playerId = session.user.playerId;
-  const subscribers = await listSubscribers(season.id);
-  const mine = playerId == null ? null : await getSubscription(season.id, Number(playerId));
+  const [subscribers, mine] = await Promise.all([
+    listSubscribers(season.id),
+    playerId == null
+      ? Promise.resolve(null)
+      : getSubscription(season.id, Number(playerId)),
+  ]);
   const isSubscriber = mine?.status === "active";
   const spotsLeft = Math.max(0, season.subscriberCap - subscribers.length);
 
-  // Billing is only meaningful for someone holding a place.
+  // Billing is only meaningful for someone holding a place. Fetched together:
+  // sequential awaits here were the main cost of loading this page.
   const pid = playerId == null ? null : Number(playerId);
-  const invoices = isSubscriber && pid != null ? await listPlayerInvoices(season.id, pid) : [];
-  const scans = isSubscriber && pid != null ? await listPlayerScans(pid) : [];
-  const uncredited = isSubscriber && pid != null ? await uncreditedTotalMinor(pid) : 0;
-  const fund = await getFundBalance(season.id);
-  const paymentDetails = await getPaymentDetails(season.id);
-  const playedMatches =
-    isSubscriber && pid != null
-      ? ((await sqlClient.query(
+  const forMe = isSubscriber && pid != null;
+  const [invoices, scans, uncredited, fund, paymentDetails, playedRows] = await Promise.all([
+    forMe ? listPlayerInvoices(season.id, pid) : Promise.resolve([]),
+    forMe ? listPlayerScans(pid) : Promise.resolve([]),
+    forMe ? uncreditedTotalMinor(pid) : Promise.resolve(0),
+    getFundBalance(season.id),
+    getPaymentDetails(season.id),
+    forMe
+      ? (sqlClient.query(
           `SELECT m.id, m.played_on
              FROM matches m
              JOIN match_availability ma
                ON ma.match_id = m.id AND ma.player_id = $1 AND ma.status = 'in'
-             JOIN seasons s ON s.id = $2
-            WHERE m.played_on >= s.start_date
-              AND (s.end_date IS NULL OR m.played_on <= s.end_date)
+            WHERE m.season_id = $2
               AND (m.kickoff_at IS NULL OR m.kickoff_at <= NOW())
             ORDER BY m.played_on DESC
             LIMIT 12`,
           [pid, season.id],
-        )) as Array<{ id: number; played_on: string }>).map((m) => ({
-          id: Number(m.id),
-          playedOn: String(m.played_on),
-        }))
-      : [];
+        ) as unknown as Promise<Array<{ id: number; played_on: string }>>)
+      : Promise.resolve([]),
+  ]);
+
+  const playedMatches = playedRows.map((m) => ({
+    id: Number(m.id),
+    playedOn: String(m.played_on),
+  }));
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
@@ -114,7 +123,7 @@ export default async function SeasonPage({
       ) : null}
 
       <SubNav
-        className="mt-4"
+        className="mt-4 hidden md:block"
         ariaLabel="Season sections"
         items={[
           { href: "/season", label: "Overview" },
@@ -123,6 +132,9 @@ export default async function SeasonPage({
           { href: "/season?tab=fund", label: "Group fund" },
         ]}
       />
+      <Suspense fallback={null}>
+        <SeasonTabsMobile />
+      </Suspense>
 
       {tab === "payments" ? (
         isSubscriber && pid != null ? (
