@@ -17,10 +17,12 @@ import {
   getRoundingLedger,
 } from "@/lib/season-billing";
 import { listPendingScans } from "@/lib/multisport";
+import { getFundBalance, listAdjustments } from "@/lib/season-fund";
 import PlayerAdmins from "./player-admins";
 import SeasonsAdmin from "./seasons-admin";
 import SubscriptionAdmin from "./subscription-admin";
 import BillingAdmin from "./billing-admin";
+import FundAdmin from "./fund-admin";
 
 export const metadata = {
   title: "Admin control · Sideline",
@@ -63,13 +65,25 @@ export default async function AccountsPage({
           periodParam && /^\d{4}-\d{2}$/.test(periodParam)
             ? periodParam
             : (periods[0] ?? new Date().toISOString().slice(0, 7));
-        const [invoices, summary, pendingScans, rounding] = await Promise.all([
-          listInvoices(subscriptionSeason.id, period),
-          getBillingSummary(subscriptionSeason.id, period),
-          listPendingScans(),
-          getRoundingLedger(subscriptionSeason.id),
-        ]);
-        return { periods, period, invoices, summary, pendingScans, rounding };
+        const [invoices, summary, pendingScans, rounding, fund, adjustments] =
+          await Promise.all([
+            listInvoices(subscriptionSeason.id, period),
+            getBillingSummary(subscriptionSeason.id, period),
+            listPendingScans(),
+            getRoundingLedger(subscriptionSeason.id),
+            getFundBalance(subscriptionSeason.id),
+            listAdjustments(subscriptionSeason.id),
+          ]);
+        return {
+          periods,
+          period,
+          invoices,
+          summary,
+          pendingScans,
+          rounding,
+          fund,
+          adjustments,
+        };
       })()
     : null;
 
@@ -104,8 +118,16 @@ export default async function AccountsPage({
           periods={billing.periods}
           invoices={billing.invoices}
           summary={billing.summary}
-          rounding={billing.rounding}
           pendingScans={billing.pendingScans}
+        />
+      ) : null}
+
+      {subscriptionSeason && billing ? (
+        <FundAdmin
+          seasonId={subscriptionSeason.id}
+          balance={billing.fund}
+          adjustments={billing.adjustments}
+          roundingLines={billing.rounding.lines}
         />
       ) : null}
 

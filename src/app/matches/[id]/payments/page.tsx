@@ -16,6 +16,15 @@ import { listGuests } from "@/lib/guests";
 import { PaymentsAdmin } from "./payments-admin";
 import { PaymentsPlayerMatch } from "./payments-player";
 import { MatchNav } from "../match-nav";
+import {
+  getMatchChargeContext,
+  listGuestCharges,
+} from "@/lib/season-fund";
+import {
+  getSubscriptionSeasonForDate,
+  listSubscribers,
+} from "@/lib/season-subscriptions";
+import SessionCharges from "./session-charges";
 
 export const metadata = {
   title: "Payments · Sideline",
@@ -58,11 +67,41 @@ export default async function MatchPaymentsPage({
       </p>
 
       {isAdmin ? (
-        <AdminSection matchId={matchId} />
+        <>
+          <SessionChargesSection matchId={matchId} playedOn={match.playedOn} />
+          <AdminSection matchId={matchId} />
+        </>
       ) : (
         <PlayerSection matchId={matchId} playerId={session.user.playerId} />
       )}
     </main>
+  );
+}
+
+/** Only meaningful inside a subscription season; silent everywhere else. */
+async function SessionChargesSection({
+  matchId,
+  playedOn,
+}: {
+  matchId: number;
+  playedOn: string;
+}) {
+  const season = await getSubscriptionSeasonForDate(playedOn);
+  if (!season) return null;
+
+  const [context, charges, subscribers] = await Promise.all([
+    getMatchChargeContext(matchId),
+    listGuestCharges(matchId),
+    listSubscribers(season.id),
+  ]);
+  if (!context) return null;
+
+  return (
+    <SessionCharges
+      context={context}
+      charges={charges}
+      subscribers={subscribers.map((s) => ({ playerId: s.playerId, name: s.name }))}
+    />
   );
 }
 
