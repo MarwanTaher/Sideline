@@ -106,7 +106,7 @@ export default async function SiteHeader() {
           </div>
         </div>
       </header>
-      {user ? <BottomNav /> : null}
+      {user ? <BottomNav showSeason={showSeason} /> : null}
     </>
   );
 }

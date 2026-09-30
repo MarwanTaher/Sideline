@@ -38,6 +38,14 @@ function FundIcon({ className }: IconProps) {
     </svg>
   );
 }
+function HomeIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4 11.5 12 4l8 7.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M6 10.5V19a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-8.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
 
 const TABS = [
   { key: "", label: "Overview", href: "/season", Icon: OverviewIcon },
@@ -59,12 +67,20 @@ export default function SeasonTabsMobile() {
       aria-label="Season sections"
       className="fixed inset-x-0 bottom-0 z-30 flex border-t border-black/10 bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden dark:border-white/10 dark:bg-neutral-950/95"
     >
+      <Link
+        href="/"
+        className="flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400"
+      >
+        <HomeIcon className="h-6 w-6" />
+        Home
+      </Link>
       {TABS.map(({ key, label, href, Icon }) => {
         const isActive = active === key;
         return (
           <Link
             key={label}
             href={href}
+            prefetch
             aria-current={isActive ? "page" : undefined}
             className={`flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-medium transition ${
               isActive
