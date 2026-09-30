@@ -34,6 +34,8 @@ export type SubscriptionSeason = {
   terms: string;
   termsVersion: number;
   signupOpen: boolean;
+  /** Players only see the season once an admin releases it. */
+  visibleToPlayers: boolean;
 };
 
 type SeasonRow = {
@@ -46,6 +48,7 @@ type SeasonRow = {
   terms: string;
   terms_version: number;
   signup_open: boolean;
+  visible_to_players: boolean;
 };
 
 function toSeason(r: SeasonRow): SubscriptionSeason {
@@ -59,11 +62,13 @@ function toSeason(r: SeasonRow): SubscriptionSeason {
     terms: String(r.terms ?? ""),
     termsVersion: Number(r.terms_version),
     signupOpen: Boolean(r.signup_open),
+    visibleToPlayers: Boolean(r.visible_to_players),
   };
 }
 
 const SEASON_COLUMNS = `id, name, start_date, end_date, subscription_enabled,
-                        subscriber_cap, terms, terms_version, signup_open`;
+                        subscriber_cap, terms, terms_version, signup_open,
+                        visible_to_players`;
 
 /**
  * The subscription season a match belongs to.
@@ -130,6 +135,7 @@ export async function updateSeasonSubscriptionSettings(
     subscriberCap: number;
     terms: string;
     signupOpen: boolean;
+    visibleToPlayers: boolean;
     bumpTermsVersion: boolean;
   },
 ): Promise<void> {
@@ -139,6 +145,7 @@ export async function updateSeasonSubscriptionSettings(
             subscriber_cap = $2,
             terms = $3,
             signup_open = $4,
+            visible_to_players = $7,
             terms_version = terms_version + $5
       WHERE id = $6`,
     [
@@ -148,6 +155,7 @@ export async function updateSeasonSubscriptionSettings(
       input.signupOpen,
       input.bumpTermsVersion ? 1 : 0,
       seasonId,
+      input.visibleToPlayers,
     ],
   );
 }

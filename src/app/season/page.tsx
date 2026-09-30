@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { auth } from "@/auth";
+import { isAdminView } from "@/lib/view-mode";
 import {
   getActiveSubscriptionSeason,
   listSubscribers,
@@ -36,6 +37,22 @@ export default async function SeasonPage({
 
   const season = await getActiveSubscriptionSeason();
   if (!season) {
+    return (
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
+        <h1 className="text-2xl font-semibold tracking-tight">Season subscription</h1>
+        <p className="mt-3 rounded-xl bg-neutral-50 px-4 py-6 text-sm text-neutral-500 dark:bg-neutral-900">
+          There is no season subscription running at the moment.
+        </p>
+      </main>
+    );
+  }
+
+  // An unreleased season is admin-only, so it can be set up and tested without
+  // players seeing a half-finished page or committing to draft terms.
+  const isAdmin = await isAdminView(
+    session.user.role === "admin" || session.user.role === "super",
+  );
+  if (!season.visibleToPlayers && !isAdmin) {
     return (
       <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
         <h1 className="text-2xl font-semibold tracking-tight">Season subscription</h1>
@@ -88,6 +105,13 @@ export default async function SeasonPage({
       <p className="mt-1 text-sm text-neutral-500">
         {season.startDate} → {season.endDate ?? "ongoing"}
       </p>
+
+      {!season.visibleToPlayers ? (
+        <p className="mt-3 rounded-xl border border-amber-500/40 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          <strong>Draft — hidden from players.</strong> Only admins can see this
+          season. Release it from Admin control when it&apos;s ready.
+        </p>
+      ) : null}
 
       <SubNav
         className="mt-4"
