@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Invoice, SeasonBillingSummary } from "@/lib/season-billing";
+import type { Invoice, SeasonBillingSummary, SeasonRates } from "@/lib/season-billing";
 import type { MultisportScan } from "@/lib/multisport";
 import { formatMinor } from "@/lib/format-money";
 import {
@@ -11,6 +11,7 @@ import {
   setPlayingDaysAction,
   deleteInvoiceAction,
   reviewScanAction,
+  saveRatesAction,
   type BillingActionState,
 } from "./billing-actions";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ export default function BillingAdmin({
   periods,
   invoices,
   summary,
+  rates,
   pendingScans,
 }: {
   seasonId: number;
@@ -37,6 +39,7 @@ export default function BillingAdmin({
   periods: string[];
   invoices: Invoice[];
   summary: SeasonBillingSummary;
+  rates: SeasonRates;
   pendingScans: MultisportScan[];
 }) {
   const router = useRouter();
@@ -55,7 +58,9 @@ export default function BillingAdmin({
         whether they play or not.
       </p>
 
-      <form action={genAction} className="mt-3 flex flex-wrap items-end gap-2">
+      <RatesForm seasonId={seasonId} rates={rates} />
+
+      <form action={genAction} className="mt-4 flex flex-wrap items-end gap-2">
         <input type="hidden" name="seasonId" value={seasonId} />
         <label>
           <span className="block text-xs text-neutral-500">Month</span>
@@ -142,6 +147,83 @@ function Stat({ label, value }: { label: string; value: string }) {
       <p className="text-sm font-bold tabular-nums">{value}</p>
       <p className="text-[11px] uppercase tracking-wide text-neutral-400">{label}</p>
     </div>
+  );
+}
+
+function RatesForm({ seasonId, rates }: { seasonId: number; rates: SeasonRates }) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(saveRatesAction, INITIAL);
+
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+
+  const pln = (minor: number) => (minor / 100).toFixed(2);
+
+  return (
+    <details className="mt-3 rounded-xl border border-black/10 p-3 dark:border-white/10">
+      <summary className="cursor-pointer text-xs font-medium uppercase tracking-wide text-neutral-400">
+        Rates
+      </summary>
+      <form action={formAction} className="mt-3 grid gap-2 sm:grid-cols-3">
+        <input type="hidden" name="seasonId" value={seasonId} />
+        <Field name="dayRate" label="Pitch per day (PLN)" defaultValue={pln(rates.dayRateMinor)} />
+        <Field name="guestRate" label="Extra player (PLN)" defaultValue={pln(rates.guestRateMinor)} />
+        <Field
+          name="extensionCost"
+          label="2-hour extension (PLN)"
+          defaultValue={pln(rates.extensionCostMinor)}
+        />
+        <Field
+          name="multisportCredit"
+          label="MultiSport credit (PLN)"
+          defaultValue={pln(rates.multisportCreditMinor)}
+        />
+        <Field
+          name="paymentDueDay"
+          label="Due day of month"
+          defaultValue={String(rates.paymentDueDay)}
+          type="number"
+        />
+        <Field
+          name="extensionMinExtra"
+          label="Extras needed to extend"
+          defaultValue={String(rates.extensionMinExtra)}
+          type="number"
+        />
+        <div className="sm:col-span-3">
+          <Button type="submit" variant="secondary" pending={pending} pendingLabel="Saving…">
+            Save rates
+          </Button>
+          <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+        </div>
+      </form>
+    </details>
+  );
+}
+
+function Field({
+  name,
+  label,
+  defaultValue,
+  type = "text",
+}: {
+  name: string;
+  label: string;
+  defaultValue: string;
+  type?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-xs text-neutral-500">{label}</span>
+      <input
+        name={name}
+        type={type}
+        inputMode="decimal"
+        defaultValue={defaultValue}
+        className={`${inputCls} w-full`}
+      />
+    </label>
   );
 }
 

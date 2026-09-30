@@ -7,6 +7,7 @@ import {
   generateInvoices,
   setInvoicePaid,
   setInvoicePlayingDays,
+  updateSeasonRates,
 } from "@/lib/season-billing";
 import { reviewScan, reportScan, withdrawScan } from "@/lib/multisport";
 import { getSubscriptionSeason } from "@/lib/season-subscriptions";
@@ -28,6 +29,61 @@ async function actorName(): Promise<string> {
 function revalidateBilling(): void {
   revalidatePath("/admin/accounts");
   revalidatePath("/season");
+}
+
+export async function saveRatesAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, message: denied };
+
+  const seasonId = Number(formData.get("seasonId"));
+  if (!Number.isInteger(seasonId)) return { ok: false, message: "Invalid season." };
+
+  // Admins type PLN; everything is stored in grosz.
+  const toMinor = (key: string): number => {
+    const raw = String(formData.get(key) ?? "").replace(",", ".");
+    const value = Number(raw);
+    return Number.isFinite(value) && value >= 0 ? Math.round(value * 100) : -1;
+  };
+
+  const dayRateMinor = toMinor("dayRate");
+  const multisportCreditMinor = toMinor("multisportCredit");
+  const guestRateMinor = toMinor("guestRate");
+  const extensionCostMinor = toMinor("extensionCost");
+  const paymentDueDay = Number(formData.get("paymentDueDay"));
+  const extensionMinExtra = Number(formData.get("extensionMinExtra"));
+
+  if (
+    dayRateMinor < 0 ||
+    multisportCreditMinor < 0 ||
+    guestRateMinor < 0 ||
+    extensionCostMinor < 0
+  ) {
+    return { ok: false, message: "Amounts must be zero or more." };
+  }
+  if (!Number.isInteger(paymentDueDay) || paymentDueDay < 1 || paymentDueDay > 28) {
+    return { ok: false, message: "Due day must be between 1 and 28." };
+  }
+  if (!Number.isInteger(extensionMinExtra) || extensionMinExtra < 1) {
+    return { ok: false, message: "Minimum extra players must be at least 1." };
+  }
+
+  await updateSeasonRates(seasonId, {
+    dayRateMinor,
+    multisportCreditMinor,
+    paymentDueDay,
+    guestRateMinor,
+    extensionCostMinor,
+    extensionMinExtra,
+  });
+
+  revalidateBilling();
+  return {
+    ok: true,
+    message: "Rates saved. Invoices already raised keep the rate they were billed at.",
+  };
 }
 
 export async function generateInvoicesAction(

@@ -115,6 +115,63 @@ export function dueDateFor(period: string, dueDay: number): string {
   return `${period}-${String(Math.max(1, Math.min(28, dueDay))).padStart(2, "0")}`;
 }
 
+export type SeasonRates = {
+  dayRateMinor: number;
+  multisportCreditMinor: number;
+  paymentDueDay: number;
+  guestRateMinor: number;
+  extensionCostMinor: number;
+  extensionMinExtra: number;
+};
+
+export async function getSeasonRates(seasonId: number): Promise<SeasonRates | null> {
+  const rows = (await sqlClient.query(
+    `SELECT day_rate_minor, multisport_credit_minor, payment_due_day,
+            guest_rate_minor, extension_cost_minor, extension_min_extra
+       FROM seasons WHERE id = $1`,
+    [seasonId],
+  )) as Array<Record<string, number>>;
+  if (rows.length === 0) return null;
+  const r = rows[0];
+  return {
+    dayRateMinor: Number(r.day_rate_minor),
+    multisportCreditMinor: Number(r.multisport_credit_minor),
+    paymentDueDay: Number(r.payment_due_day),
+    guestRateMinor: Number(r.guest_rate_minor),
+    extensionCostMinor: Number(r.extension_cost_minor),
+    extensionMinExtra: Number(r.extension_min_extra),
+  };
+}
+
+/**
+ * Rates apply to invoices raised from now on. Existing invoices snapshot what
+ * they were charged at, so changing these never rewrites a bill.
+ */
+export async function updateSeasonRates(
+  seasonId: number,
+  rates: SeasonRates,
+): Promise<void> {
+  await sqlClient.query(
+    `UPDATE seasons
+        SET day_rate_minor = $1,
+            multisport_credit_minor = $2,
+            payment_due_day = $3,
+            guest_rate_minor = $4,
+            extension_cost_minor = $5,
+            extension_min_extra = $6
+      WHERE id = $7`,
+    [
+      rates.dayRateMinor,
+      rates.multisportCreditMinor,
+      rates.paymentDueDay,
+      rates.guestRateMinor,
+      rates.extensionCostMinor,
+      rates.extensionMinExtra,
+      seasonId,
+    ],
+  );
+}
+
 export async function listInvoices(
   seasonId: number,
   period?: string,

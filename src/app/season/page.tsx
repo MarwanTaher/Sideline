@@ -10,6 +10,8 @@ import { Avatar } from "@/components/ui/avatar";
 import { SectionIcon } from "@/components/section-icon";
 import { listPlayerInvoices } from "@/lib/season-billing";
 import { listPlayerScans, uncreditedTotalMinor } from "@/lib/multisport";
+import { getFundBalance } from "@/lib/season-fund";
+import { formatMinor } from "@/lib/format-money";
 import { sqlClient } from "@/lib/db";
 import { AcceptTerms, WithdrawButton } from "./subscription-controls";
 import { MyInvoices, MultisportReporter } from "./billing-panels";
@@ -47,6 +49,7 @@ export default async function SeasonPage() {
   const invoices = isSubscriber && pid != null ? await listPlayerInvoices(season.id, pid) : [];
   const scans = isSubscriber && pid != null ? await listPlayerScans(pid) : [];
   const uncredited = isSubscriber && pid != null ? await uncreditedTotalMinor(pid) : 0;
+  const fund = await getFundBalance(season.id);
   const playedMatches =
     isSubscriber && pid != null
       ? ((await sqlClient.query(
@@ -154,6 +157,20 @@ export default async function SeasonPage() {
           </section>
         </>
       ) : null}
+
+      <section className="mt-6 rounded-2xl border border-black/10 p-5 dark:border-white/10">
+        <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
+          Group fund
+        </h2>
+        <p className="mt-2 text-2xl font-bold tabular-nums">
+          {formatMinor(fund.balanceMinor)}
+        </p>
+        <p className="mt-1 text-xs text-neutral-500">
+          Built from extra players&apos; session fees and the rounding on monthly
+          bills, less what the 2-hour extensions cost. It covers an unfilled core
+          place or a session the group still has to pay for.
+        </p>
+      </section>
 
       <section className="mt-6 rounded-2xl border border-black/10 p-5 dark:border-white/10">
         <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
