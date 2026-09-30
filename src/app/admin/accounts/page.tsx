@@ -10,9 +10,16 @@ import {
   listSubscribers,
 } from "@/lib/season-subscriptions";
 import { getActivePlayers } from "@/lib/awards";
+import {
+  listInvoices,
+  listInvoicePeriods,
+  getBillingSummary,
+} from "@/lib/season-billing";
+import { listPendingScans } from "@/lib/multisport";
 import PlayerAdmins from "./player-admins";
 import SeasonsAdmin from "./seasons-admin";
 import SubscriptionAdmin from "./subscription-admin";
+import BillingAdmin from "./billing-admin";
 
 export const metadata = {
   title: "Admin control · Sideline",
@@ -20,7 +27,11 @@ export const metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default async function AccountsPage() {
+export default async function AccountsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
   if (!(await isAdminView(session.user.role === "super"))) redirect("/leaderboard");
@@ -42,6 +53,24 @@ export default async function AccountsPage() {
         .map((p) => ({ id: p.id, name: p.name }))
     : [];
 
+  // Default to the current month, so the panel opens on what's being collected.
+  const { period: periodParam } = await searchParams;
+  const billing = subscriptionSeason
+    ? await (async () => {
+        const periods = await listInvoicePeriods(subscriptionSeason.id);
+        const period =
+          periodParam && /^\d{4}-\d{2}$/.test(periodParam)
+            ? periodParam
+            : (periods[0] ?? new Date().toISOString().slice(0, 7));
+        const [invoices, summary, pendingScans] = await Promise.all([
+          listInvoices(subscriptionSeason.id, period),
+          getBillingSummary(subscriptionSeason.id, period),
+          listPendingScans(),
+        ]);
+        return { periods, period, invoices, summary, pendingScans };
+      })()
+    : null;
+
   const lockedByAdmin: Record<number, AdminTabKey[]> = {};
   for (const [adminId, keys] of tabLocks) lockedByAdmin[adminId] = keys;
 
@@ -62,6 +91,18 @@ export default async function AccountsPage() {
           season={subscriptionSeason}
           subscribers={subscribers}
           candidates={candidates}
+        />
+      ) : null}
+
+      {subscriptionSeason && billing ? (
+        <BillingAdmin
+          seasonId={subscriptionSeason.id}
+          seasonName={subscriptionSeason.name}
+          period={billing.period}
+          periods={billing.periods}
+          invoices={billing.invoices}
+          summary={billing.summary}
+          pendingScans={billing.pendingScans}
         />
       ) : null}
 
