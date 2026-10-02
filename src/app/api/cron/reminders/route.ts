@@ -3,6 +3,7 @@ import { sqlClient } from "@/lib/db";
 import { notify } from "@/lib/push";
 import { isAvailabilityLockEnabled, getSetting, setSetting } from "@/lib/feature-settings";
 import { matchLabel } from "@/lib/format";
+import { kickoffAtSql } from "@/lib/kickoff-sql";
 import { AVAILABILITY_LOCK_MS, formatDuration, kickoffMs } from "@/lib/match-schedule";
 
 /**
@@ -44,13 +45,14 @@ export async function GET(request: Request) {
   const sent: string[] = [];
 
   const matches = (await sqlClient.query(
-    `SELECT id, played_on, kickoff_at, COALESCE(availability_open, 1) AS availability_open
+    `SELECT id, played_on, ${kickoffAtSql()} AS kickoff_at,
+            COALESCE(availability_open, 1) AS availability_open
        FROM matches
-      WHERE kickoff_at IS NOT NULL
-        AND kickoff_at > NOW()
-        AND kickoff_at < NOW() + INTERVAL '7 days'
+      WHERE played_on IS NOT NULL
+        AND ${kickoffAtSql()} > NOW()
+        AND ${kickoffAtSql()} < NOW() + INTERVAL '7 days'
         AND COALESCE(matchday_status, 'draft') <> 'closed'
-      ORDER BY kickoff_at ASC`,
+      ORDER BY 3 ASC`,
   )) as UpcomingMatch[];
 
   const lockEnabled = await isAvailabilityLockEnabled();

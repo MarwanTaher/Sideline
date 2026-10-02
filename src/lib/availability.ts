@@ -1,4 +1,5 @@
 import { sqlClient } from "@/lib/db";
+import { kickoffAtSql } from "@/lib/kickoff-sql";
 
 export type AvailabilityStatus = "in" | "out" | "pending";
 export type MatchdayStatus = "draft" | "active" | "closed";
@@ -52,7 +53,7 @@ export async function getAvailabilityMatch(
   matchId: number,
 ): Promise<AvailabilityMatch | null> {
   const raw = await sqlClient.query(
-    `SELECT id, played_on, match_time, kickoff_at, matchday_status,
+    `SELECT id, played_on, match_time, ${kickoffAtSql()} AS kickoff_at, matchday_status,
             COALESCE(max_players, ${DEFAULT_MAX_PLAYERS}) AS max_players,
             COALESCE(availability_open, 1) AS availability_open
        FROM matches WHERE id = $1`,

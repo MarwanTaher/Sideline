@@ -1,4 +1,5 @@
 import { sqlClient } from "./db";
+import { kickoffAtSql } from "./kickoff-sql";
 
 /** Matchday lifecycle state stored on `matches.matchday_status`. */
 export type MatchdayStatus = "draft" | "active" | "closed";
@@ -92,7 +93,7 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
     SELECT m.id,
            m.played_on,
            COALESCE(m.match_time, '') AS match_time,
-           m.kickoff_at,
+           ${kickoffAtSql("m")} AS kickoff_at,
            COALESCE(m.matchday_status, 'draft') AS matchday_status,
            COALESCE(m.status, 'open') AS status,
            COALESCE(m.stats_scoring_enabled, 1) AS stats_scoring_enabled,
