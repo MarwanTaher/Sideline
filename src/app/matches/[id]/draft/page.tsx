@@ -7,6 +7,8 @@ import { PitchBoard } from "./pitch-board";
 import { MatchNav } from "../match-nav";
 import { PublishTeams } from "./publish-teams";
 import { getTeamsPublishedAt } from "@/lib/moments";
+import { getFieldFeatures } from "@/lib/field-view-settings";
+import { FieldSettings } from "./field-settings";
 
 export const metadata = {
   title: "Draft · Sideline",
@@ -37,7 +39,11 @@ export default async function DraftPage({
     redirect(`/matches/${matchId}`);
   }
 
-  const [state, publishedAt] = await Promise.all([getDraftState(matchId), getTeamsPublishedAt(matchId)]);
+  const [state, publishedAt, fieldFeatures] = await Promise.all([
+    getDraftState(matchId),
+    getTeamsPublishedAt(matchId),
+    getFieldFeatures(),
+  ]);
   if (!state) notFound();
 
   return (
@@ -59,6 +65,14 @@ export default async function DraftPage({
       </p>
 
       <PublishTeams matchId={state.matchId} publishedAt={publishedAt} />
+
+      <FieldSettings
+        matchId={state.matchId}
+        numTeams={state.numTeams}
+        teamNames={state.teamNames}
+        teamColors={state.teamColors}
+        features={fieldFeatures}
+      />
 
       <PitchBoard
         matchId={state.matchId}

@@ -579,6 +579,22 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
   supports swipe down to close. Expired stories are purged by the daily `reminders` cron. The CSP
   gained `media-src` for Blob audio, so custom tap sounds (T-1) can play.
 
+### FV-2 Field view v2 — P2 · M — **status: built on dev**
+
+Match page → Teams → Field, all 8 parts, each with a global admin switch (Lineup Builder →
+"🎨 Field view — kits & features"; stored in `app_settings.field_view_features`, default on):
+
+| Part | What it does |
+|---|---|
+| Kits | Admin-picked colour per team per match (`matches.team_colors`, migration 0027); defaults green/blue/orange/purple/red. |
+| Swipe | One pitch per screen on phones with kit-coloured team tabs and dots; opens on the viewer's team. |
+| Highlight me | Soft pulsing glow on your own circle, no text (static under reduced motion). |
+| Formation | Players placed on real lines (two staggered rows when crowded), "2-2-1" label, no empty slots. |
+| Balance | Admin-only strength bars from player scores with a Balanced / Close / Uneven verdict. |
+| Live | ⚽ / 🅰 counts from the live goal log (falls back to approved stats) and 👑 once closed. |
+| Player card | Tap → bottom sheet: position, this match's goals/assists/MOTM, last-5 form, profile link. |
+| Share | `GET /api/matches/[id]/lineup-image` PNG (members + admins), shared via the share sheet or downloaded. |
+
 ## 9. Things reviewed and deliberately not recommended
 
 | Idea | Why not |

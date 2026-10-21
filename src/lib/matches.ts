@@ -1,4 +1,5 @@
 import { sqlClient } from "./db";
+import { parseTeamColors } from "./field-view";
 import { kickoffAtSql } from "./kickoff-sql";
 
 /** Matchday lifecycle state stored on `matches.matchday_status`. */
@@ -34,6 +35,8 @@ export interface MatchTeamPlayer {
 export interface MatchTeam {
   teamNo: number;
   name?: string;
+  /** Kit key from `field-view` KITS; undefined = default by team order. */
+  color?: string;
   players: MatchTeamPlayer[];
 }
 
@@ -191,7 +194,8 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
            location_lat,
            location_lng,
            venue,
-           team_names
+           team_names,
+           team_colors
     FROM matches
     WHERE id = $1
     `,
@@ -210,11 +214,13 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
     location_lng: number | null;
     venue: string | null;
     team_names: string | null;
+    team_colors: string | null;
   }>;
 
   if (metaRows.length === 0) return null;
   const meta = metaRows[0];
   const teamNames = parseTeamNames(meta.team_names);
+  const teamColors = parseTeamColors(meta.team_colors);
 
   const rosterRows = (await sqlClient.query(
     `
@@ -264,7 +270,7 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
 
   const teams: MatchTeam[] = [...teamMap.keys()]
     .sort((a, b) => a - b)
-    .map((teamNo) => ({ teamNo, name: teamNames[teamNo], players: teamMap.get(teamNo)! }));
+    .map((teamNo) => ({ teamNo, name: teamNames[teamNo], color: teamColors[teamNo], players: teamMap.get(teamNo)! }));
 
   const statRows = (await sqlClient.query(
     `

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { MatchTeam } from "@/lib/matches";
-import { StaticLineup } from "./static-lineup";
+import { FieldView, type FieldBalance, type FieldLive } from "./field-view";
+import type { FieldFeatures } from "@/lib/field-view";
 import { teamGridColumns } from "@/lib/team-constants";
 
 /* Overview teams block with a segmented toggle between a compact roster list
@@ -13,7 +14,21 @@ type Mode = "list" | "field";
 
 const STORAGE_KEY = "sideline:teams-view";
 
-export function TeamsView({ teams }: { teams: MatchTeam[] }) {
+export function TeamsView({
+  teams,
+  matchId,
+  myPlayerId,
+  features,
+  live,
+  balance,
+}: {
+  teams: MatchTeam[];
+  matchId: number;
+  myPlayerId: number | null;
+  features: FieldFeatures;
+  live: FieldLive | null;
+  balance: FieldBalance | null;
+}) {
   const [mode, setMode] = useState<Mode>("field");
 
   // Restore the last-used view, then persist changes across matches.
@@ -38,7 +53,14 @@ export function TeamsView({ teams }: { teams: MatchTeam[] }) {
         </TabButton>
       </div>
 
-      {mode === "list" ? <TeamList teams={teams} /> : <StaticLineup teams={teams} />}
+      {mode === "list" ? <TeamList teams={teams} /> : <FieldView
+          teams={teams}
+          matchId={matchId}
+          myPlayerId={myPlayerId}
+          features={features}
+          live={live}
+          balance={balance}
+        />}
     </div>
   );
 }

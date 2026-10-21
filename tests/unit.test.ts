@@ -14,6 +14,15 @@ import {
   type Moment,
 } from "../src/lib/moment-copy";
 import { createTapCounter } from "../src/lib/silly-sounds";
+import {
+  layoutFormation,
+  formationLabel,
+  balanceSummary,
+  parseFieldFeatures,
+  parseTeamColors,
+  kitFor,
+  KITS,
+} from "../src/lib/field-view";
 
 const HOUR = 60 * 60 * 1000;
 const NOW = Date.parse("2026-10-21T12:00:00Z");
@@ -167,5 +176,40 @@ test("a 1s pause calms it down", () => {
 test("slow taps never fire", () => {
   const tap = createTapCounter();
   assert.ok([0, 800, 1600, 2400, 3200, 4000].map(tap).every((f) => !f));
+});
+console.log("field-view");
+test("formation puts lines top-down and spreads players evenly", () => {
+  const spots = layoutFormation(["GK", "DEF", "DEF", "FWD", "xx"], (p) => p);
+  const gk = spots.find((s) => s.line === "GK")!;
+  const fwd = spots.find((s) => s.line === "FWD")!;
+  assert.ok(fwd.y < gk.y);
+  assert.deepEqual(spots.filter((s) => s.line === "DEF").map((s) => Math.round(s.x)), [33, 67]);
+  assert.equal(spots.filter((s) => s.line === "MID").length, 1, "unknown position -> MID");
+});
+test("crowded line splits into two staggered rows", () => {
+  const ys = new Set(layoutFormation(Array(6).fill("MID"), (p) => p).map((s) => s.y));
+  assert.equal(ys.size, 2);
+});
+test("formation label is DEF-MID-FWD without GK and trailing zeros", () => {
+  assert.equal(formationLabel(["GK", "DEF", "DEF", "MID", "FWD", "FWD"]), "2-1-2");
+  assert.equal(formationLabel(["DEF", "MID"]), "1-1");
+  assert.equal(formationLabel(["GK"]), "—");
+});
+test("balance verdicts", () => {
+  assert.equal(balanceSummary([{ teamNo: 1, scores: [60, 60] }, { teamNo: 2, scores: [61, 61] }]).verdict, "fair");
+  assert.equal(balanceSummary([{ teamNo: 1, scores: [100] }, { teamNo: 2, scores: [108] }]).verdict, "close");
+  const u = balanceSummary([{ teamNo: 1, scores: [50] }, { teamNo: 2, scores: [70] }, { teamNo: 3, scores: [] }]);
+  assert.equal(u.verdict, "uneven");
+  assert.equal(u.spreadPct, 40);
+  assert.equal(u.teams.length, 2);
+});
+test("feature switches default on; colours parse defensively", () => {
+  const f = parseFieldFeatures('{"share":false,"x":false}');
+  assert.equal(f.share, false);
+  assert.equal(f.kits, true);
+  assert.equal(parseFieldFeatures("junk").glow, true);
+  assert.deepEqual(parseTeamColors('{"1":"red","2":"nope","x":"blue"}'), { 1: "red" });
+  assert.equal(kitFor(2), KITS.blue);
+  assert.equal(kitFor(1, "red"), KITS.red);
 });
 console.log(`\n${passed} passed`);

@@ -213,3 +213,13 @@ button:focus-visible,
   .tap-smoke--loop, .tap-shake { animation: none; }
   .tap-smoke { animation-duration: 0.6s; }
 }
+
+/* Field view: soft pulsing glow around the viewer's own circle. */
+@keyframes field-me-glow {
+  0%, 100% { box-shadow: 0 0 0 2px var(--glow), 0 0 10px 2px var(--glow); }
+  50% { box-shadow: 0 0 0 3px var(--glow), 0 0 20px 6px var(--glow); }
+}
+.field-me-glow { animation: field-me-glow 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .field-me-glow { animation: none; box-shadow: 0 0 0 3px var(--glow), 0 0 14px 4px var(--glow); }
+}

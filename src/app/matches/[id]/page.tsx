@@ -15,6 +15,9 @@ import { WeatherIcon } from "@/components/ui/weather-icon";
 import { MatchSettings } from "./match-settings";
 import { MatchNav } from "./match-nav";
 import { TeamsView } from "./teams-view";
+import { getFieldFeatures, getMatchLive } from "@/lib/field-view-settings";
+import { balanceSummary } from "@/lib/field-view";
+import { getDraftState } from "@/lib/draft";
 import { MatchSocial } from "./match-social";
 import { SectionIcon } from "@/components/section-icon";
 import { PhaseStrip } from "@/components/phase-strip";
@@ -66,7 +69,8 @@ export default async function MatchDetailPage({
   const canInteract = isMember;
   const hasRoster = match.teams.some((t) => t.players.length > 0);
 
-  const [reactions, digest, baseUrl, weather, availMeta, lockEnabled, myStatus] = await Promise.all([
+  const fieldFeatures = await getFieldFeatures();
+  const [reactions, digest, baseUrl, weather, availMeta, lockEnabled, myStatus, fieldLive, draftForBalance] = await Promise.all([
     getReactionSummary(matchId, viewerPlayerId ?? null),
     getMatchDigest(matchId),
     getBaseUrl(),
@@ -76,7 +80,17 @@ export default async function MatchDetailPage({
     viewerPlayerId != null
       ? getPlayerAvailabilityStatus(matchId, viewerPlayerId)
       : Promise.resolve(undefined),
+    hasRoster && fieldFeatures.live ? getMatchLive(matchId, match.matchdayStatus === "closed") : Promise.resolve(null),
+    hasRoster && isAdmin && fieldFeatures.balance ? getDraftState(matchId) : Promise.resolve(null),
   ]);
+  const fieldBalance = draftForBalance
+    ? balanceSummary(
+        match.teams.map((t) => ({
+          teamNo: t.teamNo,
+          scores: draftForBalance.players.filter((p) => p.teamNo === t.teamNo).map((p) => p.score),
+        })),
+      )
+    : null;
   const phase = getMatchPhase({
     matchdayStatus: match.matchdayStatus,
     availabilityOpen: availMeta?.availabilityOpen ?? true,
@@ -216,7 +230,14 @@ export default async function MatchDetailPage({
         {match.teams.length === 0 ? (
           <p className="mt-2 text-sm text-neutral-500">No teams drafted yet.</p>
         ) : (
-          <TeamsView teams={match.teams} />
+          <TeamsView
+            teams={match.teams}
+            matchId={matchId}
+            myPlayerId={viewerPlayerId ?? null}
+            features={fieldFeatures}
+            live={fieldLive}
+            balance={fieldBalance}
+          />
         )}
       </section>
       ) : null}
