@@ -15,10 +15,11 @@ import {
   type DragStartEvent,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { POSITIONS, type Position } from "@/lib/positions";
+import type { Position } from "@/lib/positions";
 import type { DraftPlayer } from "@/lib/draft";
 import { Avatar } from "@/components/ui/avatar";
 import { MAX_TEAMS, TEAM_COUNT_OPTIONS, teamGridColumns } from "@/lib/team-constants";
+import { balanceSummary } from "@/lib/field-view";
 import {
   autoBalanceAction,
   saveDraftAction,
@@ -172,6 +173,23 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
     return { byTeam, bench };
   }, [players, assign, teamNos]);
 
+  const teamScores = useMemo(
+    () =>
+      teamNos.map((teamNo) => ({
+        teamNo,
+        scores: ROW_ORDER.flatMap((position) =>
+          byTeam.get(teamNo)?.[position].map((player) => player.score) ?? [],
+        ),
+      })),
+    [teamNos, byTeam],
+  );
+  const balance = balanceSummary(teamScores);
+  const scoreGap =
+    balance.teams.length > 1
+      ? Math.max(...balance.teams.map((team) => team.avg)) -
+        Math.min(...balance.teams.map((team) => team.avg))
+      : 0;
+
   function move(playerId: number, teamNo: number | null, position?: Position) {
     setAssign((prev) => {
       const cur = prev[playerId] ?? { teamNo: null, position: "MID" as Position };
@@ -231,6 +249,16 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
+        <BalanceMeter
+          teams={teamScores.map((team) => ({
+            teamNo: team.teamNo,
+            name: teamNames[team.teamNo] ?? `Team ${team.teamNo}`,
+            scores: team.scores,
+          }))}
+          spreadPct={balance.spreadPct}
+          scoreGap={scoreGap}
+          verdict={balance.verdict}
+        />
         <div className="flex flex-col gap-6 lg:flex-row">
           {/* -------- Settings rail -------- */}
           <aside className="w-full shrink-0 lg:w-72">
@@ -405,6 +433,74 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
   );
 }
 
+function BalanceMeter({
+  teams,
+  spreadPct,
+  scoreGap,
+  verdict,
+}: {
+  teams: { teamNo: number; name: string; scores: number[] }[];
+  spreadPct: number;
+  scoreGap: number;
+  verdict: "fair" | "close" | "uneven";
+}) {
+  const label = verdict === "fair" ? "Balanced" : verdict === "close" ? "Close" : "Uneven";
+  const tone =
+    verdict === "fair"
+      ? "border-emerald-500/25 text-emerald-300"
+      : verdict === "close"
+        ? "border-amber-500/25 text-amber-300"
+        : "border-rose-500/25 text-rose-300";
+  const averages = teams.map((team) => ({
+    ...team,
+    average:
+      team.scores.length > 0
+        ? team.scores.reduce((sum, score) => sum + score, 0) / team.scores.length
+        : null,
+  }));
+
+  return (
+    <section
+      aria-label="Live team balance"
+      aria-live="polite"
+      className="mb-5 rounded-2xl border border-white/10 bg-[#111315] p-4"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="text-sm font-semibold text-neutral-100">Live team balance</h2>
+          <p className="mt-0.5 text-xs text-neutral-500">
+            Updates as you move players · based on current player ratings
+          </p>
+        </div>
+        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${tone}`}>
+          {averages.filter((team) => team.average != null).length < 2
+            ? "Add players to compare"
+            : `${label} · ${scoreGap.toFixed(1)} pt gap`}
+        </span>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {averages.map((team) => (
+          <span
+            key={team.teamNo}
+            className="rounded-lg bg-white/5 px-2.5 py-1.5 text-xs text-neutral-300"
+          >
+            {team.name}:{" "}
+            <strong className="font-semibold text-neutral-100">
+              {team.average == null ? "—" : team.average.toFixed(1)}
+            </strong>
+            <span className="ml-1 text-neutral-500">
+              ({team.scores.length} {team.scores.length === 1 ? "player" : "players"})
+            </span>
+          </span>
+        ))}
+      </div>
+      {averages.filter((team) => team.average != null).length >= 2 ? (
+        <p className="sr-only">Rating spread {spreadPct} percent. {label}.</p>
+      ) : null}
+    </section>
+  );
+}
+
 /* ------------------------------ Team list ------------------------------- */
 
 interface TeamListProps {
@@ -492,8 +588,11 @@ function TeamListCard({
                   <span className="font-normal text-neutral-500"> · {p.hostName}</span>
                 ) : null}
               </span>
-              <span className="w-8 text-right tabular-nums text-xs text-neutral-400">
-                {p.score.toFixed(1)}
+              <span className="flex shrink-0 flex-col items-end gap-1">
+                <span className="tabular-nums text-xs text-neutral-400">
+                  {p.score.toFixed(1)}
+                </span>
+                <RecentForm form={p.recentForm ?? []} />
               </span>
             </li>
           ))}
@@ -721,17 +820,46 @@ function PlayerNode({
         </div>
       </div>
       {showScores ? (
-        <span
+        <div className="flex items-center gap-1">
+          <span
             className="rounded px-1.5 text-[9px] font-bold leading-tight text-white"
-          style={{ backgroundColor: BRAND }}
-        >
-          {player.score.toFixed(0)}
-        </span>
+            style={{ backgroundColor: BRAND }}
+          >
+            {player.score.toFixed(0)}
+          </span>
+          <RecentForm form={player.recentForm ?? []} />
+        </div>
       ) : null}
       <span className="max-w-[64px] truncate text-center text-[10px] font-semibold text-neutral-100">
         {player.name.split(" ")[0]}
       </span>
     </div>
+  );
+}
+
+function RecentForm({ form }: { form: Array<"W" | "D" | "L"> }) {
+  if (form.length === 0) return null;
+  const colors = {
+    W: "bg-emerald-500/20 text-emerald-300",
+    D: "bg-amber-500/20 text-amber-300",
+    L: "bg-rose-500/20 text-rose-300",
+  };
+
+  return (
+    <span
+      className="inline-flex items-center gap-0.5"
+      aria-label={`Recent form, newest first: ${form.join(", ")}`}
+      title={`Form: ${form.join(" ")}`}
+    >
+      {form.slice(0, 3).map((result, index) => (
+        <span
+          key={`${result}-${index}`}
+          className={`flex h-3.5 w-3.5 items-center justify-center rounded text-[8px] font-bold ${colors[result]}`}
+        >
+          {result}
+        </span>
+      ))}
+    </span>
   );
 }
 

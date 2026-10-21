@@ -24,7 +24,7 @@ tests exist; time/money rules not yet covered).
 |---|---|---|---|
 | **0** ✅ | Release safety | C-2 preview DB · C-8 secrets + `.env.example` · C-1 `kickoff_at NOT NULL` · P-3 function region · ship `dev` → `main` | ½–1 d |
 | **1** ✅ | Speed | P-1 cached scores · U-3 optimistic In/Out · P-4 skeletons · P-2 batched reads · P-5 cached read-mostly pages | 1–2 d |
-| **2** | Fair teams | F-1 position-aware auto-balance · U-4 builder clarity (coverage chips, form, live balance meter) | 2 d |
+| **2** ✅ | Fair teams | F-1 skipped (positions rotate) · U-4 balance meter + recent form (no fixed-position coverage warnings) | 2 d |
 | **3** | Money & season go-live | F-3 go-live checklist · C-6 atomic writes · C-4 time/money tests · F-5 payment reminders · U-7 QR + bulk confirm + who owes · C-7 season edge cases | 2–3 d |
 | **4** | Matchday polish | F-6 lock-time push · F-2 results push · O-4 blocked states · O-5 one header · U-6 empty states / welcome · U-5 accessibility · Messages tab for all admins | 2 d |
 | **5** | Maintainability | C-3 schema types · C-5 error log · P-7 score snapshots · F-8 export & backup | 2 d |
@@ -134,6 +134,13 @@ and stats change only after a match closes or stats are approved: cache them wit
 (`scores`, `match:<id>`) and invalidate from the same actions that already call
 `revalidateScores()`.
 
+**Profile/kudos follow-up:** the profile's outer bundle was cached, but a cold load still called
+award history serially for the overall scope and up to eight matches. It now uses the tagged awards
+cache and resolves those match awards in parallel; profile badge counts and award settings share
+the same cache tag. Kudos used to read every giver and wait for moment/push work before returning.
+The summary now reads the count, viewer state and latest 16 givers in one query; the toggle is one
+database statement, and notification/moment work runs after the response.
+
 ### P-6 Cache external API calls — P2 · S
 Weather (Open-Meteo) and geocoding (Nominatim) should use `fetch(…, { next: { revalidate: 3600 } })`
 or a small DB cache. This speeds up match pages and respects Nominatim's usage policy.
@@ -163,9 +170,11 @@ Use React `useOptimistic` on In/Out so the button flips immediately; roll back w
 the server rejects (lock, cap → waitlist). This is the most-tapped control in the app.
 
 ### U-4 Draft board clarity — P2 · S
-- Per-team **position coverage** chips (e.g. "no GK" warning in amber).
-- A balance meter showing the gap between strongest and weakest team, updating while dragging.
-- Show *form* (last 3 matches) next to the score.
+- **Skipped:** per-team position coverage chips. Players rotate positions, so preferred-position
+  coverage warnings would imply a fixed role that the group does not use.
+- A live balance meter shows each team's average rating and the strongest-to-weakest gap; it
+  updates as players are dragged.
+- Show each player's W/D/L form from their last 3 closed matchdays next to their rating.
 
 ### U-5 Accessibility pass — P2 · S
 Navigation already sets `aria-current`. Remaining items: status relies on colour alone
@@ -196,16 +205,9 @@ support (useful at evening matches under floodlights).
 ## 4. New features
 
 ### F-1 Position-aware, fairer auto-balance — P1 · M (addresses the original problem directly)
-**Evidence.** `autoBalanceDraft` ranks by score and snake-drafts; positions are recorded but not
-used, so all goalkeepers or all defenders can land on one team.
-**Proposal.**
-1. Seed with the snake draft (as now).
-2. Run a local-search improver: repeatedly try swapping two players between teams and keep the
-   swap if it lowers a cost = `w1·(max−min team total) + w2·position-gap penalty
-   + w3·repeat-teammates penalty`.
-3. Ensure one GK per team when available.
-4. Optional: weight recent form (last 3–5 matches) higher than older history.
-It is deterministic per seed, runs in milliseconds for 18 players, and keeps "re-roll".
+**Skipped by product decision.** Positions rotate, so automatic balancing continues to use player
+ratings only. Position placement remains a manual lineup choice; no preferred-position penalty,
+fixed goalkeeper requirement, or position-coverage warning is applied.
 
 ### F-2 Post-match "results are in" digest — P2 · S
 `match-digest.ts` exists. Push it when matchday closes and voting ends: score lines, MOTM,
