@@ -3,7 +3,14 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Confetti } from "@/components/confetti";
-import { momentView, type Moment, type MomentTone } from "@/lib/moment-copy";
+import {
+  momentView,
+  type Moment,
+  type MomentCopyOverrides,
+  type MomentTone,
+  type MomentView,
+} from "@/lib/moment-copy";
+import type { ReactNode } from "react";
 import { markMomentsSeenAction } from "@/app/moments-actions";
 
 const TONE_STYLE: Record<MomentTone, { card: string; badge: string }> = {
@@ -30,13 +37,21 @@ const TONE_STYLE: Record<MomentTone, { card: string; badge: string }> = {
  * they open the app: confetti + haptics for celebrations, a softer card for
  * bummers. Everything shown is marked seen when the stack is dismissed.
  */
-export function MomentsOverlay({ moments }: { moments: Moment[] }) {
+export function MomentsOverlay({
+  moments,
+  overrides,
+  name,
+}: {
+  moments: Moment[];
+  overrides?: MomentCopyOverrides;
+  name?: string;
+}) {
   const [index, setIndex] = useState(0);
   const [closed, setClosed] = useState(false);
   const marked = useRef(false);
 
   const current = moments[index];
-  const view = current ? momentView(current) : null;
+  const view = current ? momentView(current, { overrides, name }) : null;
   const celebrate = view?.tone === "epic" || view?.tone === "good";
 
   useEffect(() => {
@@ -55,35 +70,24 @@ export function MomentsOverlay({ moments }: { moments: Moment[] }) {
     }
   };
   const next = () => (index + 1 < moments.length ? setIndex(index + 1) : finish());
-  const style = TONE_STYLE[view.tone];
-
   return (
     <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-labelledby="moment-title">
       <button type="button" aria-label="Dismiss" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={finish} />
       {celebrate ? <Confetti fire={index + 1} pieces={view.tone === "epic" ? 180 : 90} /> : null}
-      <div
+      <MomentCard
         key={current.id}
-        className={`relative m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-black/10 p-6 text-center shadow-2xl animate-[moment-pop_.45s_cubic-bezier(.2,1.4,.4,1)] motion-reduce:animate-none dark:border-white/10 ${style.card}`}
+        view={view}
+        titleId="moment-title"
+        top={
+          moments.length > 1 ? (
+            <div className="mb-4 flex justify-center gap-1.5">
+              {moments.map((m, i) => (
+                <span key={m.id} className={`h-1.5 rounded-full transition-all ${i === index ? "w-6 bg-emerald-500" : "w-1.5 bg-neutral-300 dark:bg-neutral-700"}`} />
+              ))}
+            </div>
+          ) : null
+        }
       >
-        {moments.length > 1 ? (
-          <div className="mb-4 flex justify-center gap-1.5">
-            {moments.map((m, i) => (
-              <span key={m.id} className={`h-1.5 rounded-full transition-all ${i === index ? "w-6 bg-emerald-500" : "w-1.5 bg-neutral-300 dark:bg-neutral-700"}`} />
-            ))}
-          </div>
-        ) : null}
-        <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full text-4xl ring-4 ${style.badge}`}>
-          <span className={view.tone === "epic" ? "animate-bounce motion-reduce:animate-none" : ""}>{view.emoji}</span>
-        </div>
-        <h2 id="moment-title" className="mt-4 text-2xl font-extrabold tracking-tight">
-          {view.title}
-        </h2>
-        <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{view.body}</p>
-        {view.footnote ? (
-          <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs font-medium text-emerald-700 dark:bg-neutral-900/60 dark:text-emerald-300">
-            {view.footnote}
-          </p>
-        ) : null}
         <div className="mt-6 flex flex-col gap-2">
           <button
             type="button"
@@ -102,7 +106,44 @@ export function MomentsOverlay({ moments }: { moments: Moment[] }) {
             </Link>
           ) : null}
         </div>
+      </MomentCard>
+    </div>
+  );
+}
+
+/** The pop-up card itself; also used by the admin Messages preview. */
+export function MomentCard({
+  view,
+  top,
+  children,
+  animate = true,
+  titleId,
+}: {
+  view: MomentView;
+  titleId?: string;
+  top?: ReactNode;
+  children?: ReactNode;
+  animate?: boolean;
+}) {
+  const style = TONE_STYLE[view.tone];
+  return (
+    <div
+      className={`relative m-3 w-full max-w-sm overflow-hidden rounded-3xl border border-black/10 p-6 text-center shadow-2xl ${animate ? "animate-[moment-pop_.45s_cubic-bezier(.2,1.4,.4,1)] motion-reduce:animate-none" : ""} dark:border-white/10 ${style.card}`}
+    >
+      {top}
+      <div className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full text-4xl ring-4 ${style.badge}`}>
+        <span className={animate && view.tone === "epic" ? "animate-bounce motion-reduce:animate-none" : ""}>{view.emoji}</span>
       </div>
+      <h2 id={titleId} className="mt-4 text-2xl font-extrabold tracking-tight">
+        {view.title}
+      </h2>
+      <p className="mt-2 text-sm text-neutral-600 dark:text-neutral-300">{view.body}</p>
+      {view.footnote ? (
+        <p className="mt-3 rounded-xl bg-white/70 px-3 py-2 text-xs font-medium text-emerald-700 dark:bg-neutral-900/60 dark:text-emerald-300">
+          {view.footnote}
+        </p>
+      ) : null}
+      {children}
     </div>
   );
 }

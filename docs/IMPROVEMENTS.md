@@ -528,6 +528,8 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
 - **Admin UI:** Admin control › new **Messages** tab (admins and super). Grouped *Celebrations* /
   *Bummers*; per kind: the default text, the custom variants, a live preview pop-up, **Reset**.
 - **Tests:** placeholder fill, fallback to defaults, stable pick.
+- **Status:** built on `dev`. The Messages tab sits in Admin control, which is super-admin only, so
+  only super admins can edit messages for now.
 
 ### T-1 Tap-spam sound easter egg — P3 · S
 
@@ -541,6 +543,9 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
 - **Opt-out:** "Silly sounds" switch in Profile (per device, `localStorage`), default on.
 - **Caveat:** an iPhone on silent mutes web audio; that is expected.
 - Exception to §9 "sounds on by default": this only fires on deliberate spam, never on normal use.
+- **Status:** built on `dev`. The settings load from `GET /api/tap-spam` on the first tap (not on
+  page load, and not via a server action, which would queue ahead of the IN/OUT save). Disabled
+  buttons use `pointer-events: none` so taps on them still reach the counter.
 
 ### S-1 24-hour photo stories — P2 · M
 

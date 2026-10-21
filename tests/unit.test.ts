@@ -3,7 +3,17 @@
  */
 import assert from "node:assert/strict";
 import { getMatchPhase, phaseAction, type MatchPhaseInput } from "../src/lib/match-phase";
-import { sortMoments, momentView, isBummer, MOMENT_PRIORITY, type Moment } from "../src/lib/moment-copy";
+import {
+  sortMoments,
+  momentView,
+  isBummer,
+  MOMENT_PRIORITY,
+  MOMENT_KIND_INFO,
+  fillPlaceholders,
+  sanitizeMomentCopy,
+  type Moment,
+} from "../src/lib/moment-copy";
+import { createTapCounter } from "../src/lib/silly-sounds";
 
 const HOUR = 60 * 60 * 1000;
 const NOW = Date.parse("2026-10-21T12:00:00Z");
@@ -101,5 +111,57 @@ test("every kind renders", () => {
     const v = momentView(mk(1, k));
     assert.ok(v.title && v.emoji, k);
   }
+});
+console.log("editable messages");
+test("placeholders fill; unknown ones stay as typed", () => {
+  assert.equal(fillPlaceholders("{name} got {votes} {oops}", { name: "Ali", votes: "3" }), "Ali got 3 {oops}");
+});
+test("override replaces text, keeps tone, CTA and silver lining", () => {
+  const m = mk(2, "bummer_winless", { silverLining: "2 assists" });
+  const v = momentView(m, { overrides: { bummer_winless: [{ title: "Rough one, {name}", body: "Next time." }] }, name: "Ali Khan" });
+  assert.equal(v.title, "Rough one, Ali");
+  assert.equal(v.body, "Next time.");
+  assert.equal(v.tone, "bummer");
+  assert.equal(v.footnote, "2 assists");
+  assert.ok(v.emoji.length > 0);
+  const motm = momentView(mk(3, "motm", { votes: 5 }), { overrides: { motm: [{ emoji: "🐐", title: "GOAT", body: "{votes} votes" }] } });
+  assert.equal(motm.emoji, "🐐");
+  assert.equal(motm.body, "5 votes");
+  assert.equal(motm.cta?.href, "/matches/7/recap");
+});
+test("no override falls back to the built-in copy", () => {
+  assert.deepEqual(momentView(mk(4, "kudos"), { overrides: { motm: [{ title: "x", body: "y" }] } }), momentView(mk(4, "kudos")));
+});
+test("override variant pick is stable per id", () => {
+  const o = { overrides: { badge: [1, 2, 3].map((n) => ({ title: `T${n}`, body: "" })) } };
+  assert.equal(momentView(mk(8, "badge"), o).title, momentView(mk(8, "badge"), o).title);
+  assert.equal(momentView(mk(8, "badge"), o).body, momentView(mk(8, "badge")).body);
+});
+test("sanitize drops junk, unknown kinds and clamps lengths", () => {
+  const clean = sanitizeMomentCopy({
+    motm: [{ title: "  Hi  ", body: "x".repeat(500) }, { title: "", body: "" }, "bad", ...Array(9).fill({ title: "a", body: "b" })],
+    nope: [{ title: "x", body: "y" }],
+    kudos: [],
+  });
+  assert.deepEqual(Object.keys(clean), ["motm"]);
+  assert.equal(clean.motm!.length, 5);
+  assert.equal(clean.motm![0].title, "Hi");
+  assert.equal(clean.motm![0].body.length, 240);
+  assert.deepEqual(sanitizeMomentCopy("garbage"), {});
+});
+test("every kind has editor info", () => {
+  for (const k of Object.keys(MOMENT_PRIORITY) as Moment["kind"][]) assert.ok(MOMENT_KIND_INFO[k], k);
+});
+console.log("tap-spam");
+test("4th tap within 2s fires, then 3s cooldown", () => {
+  const tap = createTapCounter();
+  assert.deepEqual([0, 300, 600, 900].map(tap), [false, false, false, true]);
+  assert.equal(tap(1200), false); // cooling down
+  assert.deepEqual([4000, 4100, 4200].map(tap), [false, false, false]);
+  assert.equal(tap(4300), true);
+});
+test("slow taps never fire", () => {
+  const tap = createTapCounter();
+  assert.ok([0, 700, 1400, 2100, 2800, 3500].map(tap).every((f) => !f));
 });
 console.log(`\n${passed} passed`);

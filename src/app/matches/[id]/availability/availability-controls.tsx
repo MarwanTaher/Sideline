@@ -7,6 +7,7 @@ import type { AvailabilityStatus } from "@/lib/availability";
 import { formatDuration } from "@/lib/match-schedule";
 import { FeedbackMessage } from "@/components/ui/banner";
 import { CheckIcon, XIcon } from "@/components/ui/icons";
+import { useTapSpam } from "@/components/use-tap-spam";
 
 const INITIAL: AvailabilityActionState = { ok: false, message: "" };
 
@@ -41,6 +42,7 @@ export function AvailabilityControls({
 }: AvailabilityControlsProps) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(setAvailabilityAction, INITIAL);
+  const onTap = useTapSpam();
 
   useEffect(() => {
     if (state.ok) router.refresh();
@@ -70,7 +72,7 @@ export function AvailabilityControls({
           type="submit"
           disabled={disabled || selected}
           aria-pressed={selected}
-          className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-base font-bold transition active:scale-[0.97] ${
+          className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-base font-bold transition active:scale-[0.97] disabled:pointer-events-none ${
             selected
               ? isIn
                 ? "bg-emerald-600 text-white shadow-sm"
@@ -101,6 +103,8 @@ export function AvailabilityControls({
             : "border-black/[0.06] dark:border-white/10"
         }`}
         onClickCapture={buzz}
+        // Disabled buttons let the tap through (pointer-events-none) so spam still counts.
+        onPointerDown={onTap}
       >
         {btn("in")}
         {btn("out")}

@@ -88,7 +88,134 @@ function pick<T>(variants: T[], seed: number): T {
   return variants[Math.abs(seed) % variants.length];
 }
 
-export function momentView(m: Moment): MomentView {
+// ── Admin-editable copy (M-1) ──────────────────────────────────────────────
+
+export type CopyVariant = { emoji?: string; title: string; body: string };
+export type MomentCopyOverrides = Partial<Record<MomentKind, CopyVariant[]>>;
+
+export const COPY_LIMITS = { variants: 5, emoji: 8, title: 60, body: 240 } as const;
+
+type KindInfo = {
+  label: string;
+  group: "celebration" | "bummer";
+  placeholders: string[];
+  /** Example payload for the admin preview. */
+  sample: Record<string, unknown>;
+};
+
+export const MOMENT_KIND_INFO: Record<MomentKind, KindInfo> = {
+  motm: { label: "Man of the Match", group: "celebration", placeholders: ["name", "votes"], sample: { votes: 4 } },
+  number_one: { label: "#1 on the leaderboard", group: "celebration", placeholders: ["name"], sample: {} },
+  hat_trick: { label: "Hat-trick", group: "celebration", placeholders: ["name", "goals"], sample: { goals: 3 } },
+  team_reveal: {
+    label: "Team reveal",
+    group: "celebration",
+    placeholders: ["name", "team", "teammates"],
+    sample: { teamName: "Habicki", teammates: ["Adam", "Bartek", "Kuba"] },
+  },
+  top5: { label: "Into the top 5", group: "celebration", placeholders: ["name", "rank"], sample: { newRank: 4 } },
+  milestone_games: { label: "Games milestone", group: "celebration", placeholders: ["name", "n"], sample: { count: 50 } },
+  milestone_goals: { label: "Goals milestone", group: "celebration", placeholders: ["name", "n"], sample: { count: 25 } },
+  badge: { label: "Badge unlocked", group: "celebration", placeholders: ["name", "badges"], sample: { badges: ["Iron man"] } },
+  top_scorer: { label: "Top scorer of the night", group: "celebration", placeholders: ["name", "goals"], sample: { goals: 2 } },
+  win_streak: { label: "Win streak", group: "celebration", placeholders: ["name", "streak"], sample: { count: 3 } },
+  clean_sheet: { label: "Clean sheet", group: "celebration", placeholders: ["name", "n"], sample: { rounds: 2 } },
+  unbeaten: { label: "Unbeaten night", group: "celebration", placeholders: ["name", "w", "d"], sample: { w: 3, d: 1 } },
+  rank_up: { label: "Rank up", group: "celebration", placeholders: ["name", "n", "rank"], sample: { places: 2, newRank: 7 } },
+  waitlist_promoted: { label: "Off the waitlist", group: "celebration", placeholders: ["name"], sample: {} },
+  kudos: { label: "Kudos received", group: "celebration", placeholders: ["name", "from"], sample: { from: ["Adam", "Kuba"] } },
+  bummer_winless: { label: "Winless night", group: "bummer", placeholders: ["name"], sample: {} },
+  bummer_rating_drop: { label: "Rating drop", group: "bummer", placeholders: ["name", "rating"], sample: { newFinal: 6.4 } },
+  bummer_scoreless: { label: "Goal drought", group: "bummer", placeholders: ["name"], sample: {} },
+  bummer_own_goal: { label: "Own goal", group: "bummer", placeholders: ["name"], sample: {} },
+};
+
+export const MOMENT_KINDS = Object.keys(MOMENT_KIND_INFO) as MomentKind[];
+
+const joinNames = (v: unknown): string => {
+  const list = Array.isArray(v) ? (v as unknown[]).filter((x): x is string => typeof x === "string") : [];
+  return list.length <= 1 ? (list[0] ?? "") : `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+};
+
+/** Values for `{placeholder}`s, derived from the moment payload. */
+export function momentVars(m: Moment, name?: string): Record<string, string> {
+  const p = m.payload;
+  const first = (name ?? "").trim().split(/\s+/)[0] || "you";
+  const n = num(p.count, NaN);
+  return {
+    name: first,
+    votes: String(num(p.votes, 1)),
+    goals: String(num(p.goals, 1)),
+    team: str(p.teamName, "your team"),
+    teammates: Array.isArray(p.teammates) ? (p.teammates as string[]).slice(0, 6).join(", ") : "",
+    streak: String(num(p.count, 3)),
+    rank: String(num(p.newRank)),
+    n: String(
+      Number.isFinite(n) ? n : m.kind === "rank_up" ? num(p.places, 1) : m.kind === "clean_sheet" ? num(p.rounds, 1) : 0,
+    ),
+    w: String(num(p.w)),
+    d: String(num(p.d)),
+    rating: num(p.newFinal).toFixed(1),
+    badges: Array.isArray(p.badges) ? (p.badges as string[]).join(" · ") : "",
+    from: joinNames(p.from) || "A teammate",
+  };
+}
+
+/** Replace known `{placeholder}`s; unknown ones are left as typed. */
+export function fillPlaceholders(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{(\w+)\}/g, (all, key: string) =>
+    Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : all,
+  );
+}
+
+/** Trim, clamp and drop anything malformed from stored / submitted copy. */
+export function sanitizeVariants(raw: unknown): CopyVariant[] {
+  if (!Array.isArray(raw)) return [];
+  const out: CopyVariant[] = [];
+  for (const v of raw) {
+    if (!v || typeof v !== "object") continue;
+    const r = v as Record<string, unknown>;
+    const title = str(r.title).trim().slice(0, COPY_LIMITS.title);
+    const body = str(r.body).trim().slice(0, COPY_LIMITS.body);
+    if (!title && !body) continue;
+    const emoji = Array.from(str(r.emoji).trim()).slice(0, COPY_LIMITS.emoji).join("");
+    out.push(emoji ? { emoji, title, body } : { title, body });
+    if (out.length >= COPY_LIMITS.variants) break;
+  }
+  return out;
+}
+
+export function sanitizeMomentCopy(raw: unknown): MomentCopyOverrides {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const out: MomentCopyOverrides = {};
+  for (const kind of MOMENT_KINDS) {
+    const list = sanitizeVariants((raw as Record<string, unknown>)[kind]);
+    if (list.length > 0) out[kind] = list;
+  }
+  return out;
+}
+
+export type MomentViewOptions = { overrides?: MomentCopyOverrides; name?: string };
+
+/**
+ * How a moment reads. Admin variants (if any) replace emoji / title / body;
+ * the tone, CTA and bummer silver-lining always come from the built-in copy.
+ */
+export function momentView(m: Moment, opts: MomentViewOptions = {}): MomentView {
+  const base = defaultMomentView(m);
+  const variants = opts.overrides?.[m.kind];
+  if (!variants || variants.length === 0) return base;
+  const v = pick(variants, m.id);
+  const vars = momentVars(m, opts.name);
+  return {
+    ...base,
+    emoji: v.emoji || base.emoji,
+    title: v.title ? fillPlaceholders(v.title, vars) : base.title,
+    body: v.body ? fillPlaceholders(v.body, vars) : base.body,
+  };
+}
+
+export function defaultMomentView(m: Moment): MomentView {
   const p = m.payload;
   const results = m.matchId > 0 ? { href: `/matches/${m.matchId}/recap`, label: "See your recap" } : undefined;
   const board = { href: "/leaderboard", label: "Open leaderboard" };

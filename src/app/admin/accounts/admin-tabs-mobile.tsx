@@ -38,6 +38,14 @@ function MoneyIcon({ className }: IconProps) {
     </svg>
   );
 }
+function ChatIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M4.5 6.5A2.5 2.5 0 0 1 7 4h10a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 17 16h-6.5L6 19.5V16h0A2.5 2.5 0 0 1 4.5 13.5v-7Z" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
+      <path d="M8.5 9h7M8.5 12h4.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  );
+}
 function MoreIcon({ className }: IconProps) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -52,6 +60,7 @@ const TABS = [
   { key: "", label: "Admins", href: "/admin/accounts", Icon: PeopleIcon },
   { key: "seasons", label: "Seasons", href: "/admin/accounts?tab=seasons", Icon: CalendarIcon },
   { key: "billing", label: "Billing", href: "/admin/accounts?tab=billing", Icon: MoneyIcon },
+  { key: "messages", label: "Messages", href: "/admin/accounts?tab=messages", Icon: ChatIcon },
   { key: "other", label: "Other", href: "/admin/accounts?tab=other", Icon: MoreIcon },
 ] as const;
 

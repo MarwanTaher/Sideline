@@ -24,6 +24,7 @@ import { getChemistry } from "@/lib/chemistry";
 import { getKudos } from "@/lib/kudos";
 import { getFunMessages } from "@/lib/moments";
 import { FunMessagesToggle } from "./fun-messages-toggle";
+import { SillySoundsToggle } from "./silly-sounds-toggle";
 
 export const metadata = {
   title: "Profile · Sideline",
@@ -200,6 +201,7 @@ export default async function ProfilePage() {
             <NotificationsToggle />
             <NotificationPreferences playerId={pid} />
             <FunMessagesToggle initial={funMessages} />
+            <SillySoundsToggle />
           </div>
 
           <div className="my-5 h-px bg-black/5 dark:bg-white/10" />
