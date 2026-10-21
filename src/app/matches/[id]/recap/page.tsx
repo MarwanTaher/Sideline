@@ -13,18 +13,20 @@ export const dynamic = "force-dynamic";
 
 function Card({ tone, emoji, kicker, children }: { tone: string; emoji: string; kicker: string; children: ReactNode }) {
   return (
-    <section className={`flex min-h-[22rem] flex-col rounded-3xl p-6 text-white shadow-lg ${tone}`}>
+    <section
+      className={`flex h-full flex-col px-6 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[calc(env(safe-area-inset-top)+4.5rem)] text-white ${tone}`}
+    >
       <p className="text-xs font-semibold uppercase tracking-widest text-white/70">{kicker}</p>
-      <p className="mt-4 text-5xl">{emoji}</p>
-      <div className="mt-4 flex flex-1 flex-col">{children}</div>
+      <p className="mt-10 text-7xl">{emoji}</p>
+      <div className="mt-6 flex flex-1 flex-col [&_h2]:text-4xl [&_h2]:leading-tight">{children}</div>
     </section>
   );
 }
 
 function Stat({ value, label }: { value: ReactNode; label: string }) {
   return (
-    <div className="rounded-2xl bg-white/15 px-3 py-2 text-center backdrop-blur">
-      <p className="text-2xl font-bold tabular-nums">{value}</p>
+    <div className="rounded-2xl bg-white/15 px-3 py-3 text-center backdrop-blur">
+      <p className="text-3xl font-bold tabular-nums">{value}</p>
       <p className="text-[11px] uppercase tracking-wide text-white/70">{label}</p>
     </div>
   );
@@ -74,7 +76,7 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
   if (me) {
     cards.push(
       <Card key="day" tone="bg-gradient-to-br from-emerald-500 to-teal-800" emoji="⚽" kicker={`Your day · ${digest.playedOnLabel}`}>
-        <h2 className="text-2xl font-bold">You played for {me.teamName}</h2>
+        <h2 className="font-bold">You played for {me.teamName}</h2>
         <p className="mt-1 text-sm text-white/80">{dayVerdict}</p>
         <div className="mt-auto grid grid-cols-3 gap-2 pt-6">
           <Stat value={me.goals} label="Goals" />
@@ -93,7 +95,7 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
         emoji={ratingDelta >= 0 ? "📈" : "📉"}
         kicker="Your rating"
       >
-        <h2 className="text-4xl font-bold tabular-nums">
+        <h2 className="font-bold tabular-nums">
           {rating.prevFinal.toFixed(1)} → {rating.newFinal.toFixed(1)}
         </h2>
         <p className="mt-1 text-sm text-white/80">
@@ -127,7 +129,7 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
     <Card key="motm" tone="bg-gradient-to-br from-amber-400 to-orange-700" emoji="🏆" kicker="Man of the Match">
       {motm ? (
         <>
-          <h2 className="text-3xl font-bold">{isMotm ? "It's you!" : motm.name}</h2>
+          <h2 className="font-bold">{isMotm ? "It's you!" : motm.name}</h2>
           <p className="mt-1 text-sm text-white/85">
             {isMotm
               ? `Your teammates picked you, ${motm.votes} vote${motm.votes === 1 ? "" : "s"}. Frame it.`
@@ -135,7 +137,7 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
           </p>
         </>
       ) : (
-        <h2 className="text-2xl font-bold">No MOTM votes this week</h2>
+        <h2 className="font-bold">No MOTM votes this week</h2>
       )}
       {digest.topScorer ? (
         <p className="mt-auto pt-6 text-sm text-white/85">
@@ -148,7 +150,7 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
     const duo = myDuo ?? bestDuo!;
     cards.push(
       <Card key="duo" tone="bg-gradient-to-br from-fuchsia-500 to-purple-800" emoji="🤝" kicker={myDuo ? "Your best link-up" : "Best duo"}>
-        <h2 className="text-3xl font-bold">
+        <h2 className="font-bold">
           {duo.a} → {duo.b}
         </h2>
         <p className="mt-1 text-sm text-white/85">
@@ -164,7 +166,7 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
   }
   cards.push(
     <Card key="share" tone="bg-gradient-to-br from-neutral-700 to-neutral-950" emoji="📣" kicker="That's a wrap">
-      <h2 className="text-2xl font-bold">
+      <h2 className="font-bold">
         {digest.teams.map((t) => `${t.name} ${t.goals}`).join(" · ") || "Full time"}
       </h2>
       <p className="mt-1 text-sm text-white/80">Send the result to the group chat.</p>
@@ -186,12 +188,9 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
   );
 
   return (
-    <main className="mx-auto w-full max-w-md flex-1 px-4 py-6">
-      <Link href={`/matches/${matchId}`} className="text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">
-        ← Back to match
-      </Link>
-      <h1 className="mb-4 mt-2 text-lg font-semibold tracking-tight">Matchday recap</h1>
-      <StoryDeck>{cards}</StoryDeck>
+    <main className="flex-1">
+      <h1 className="sr-only">Matchday recap</h1>
+      <StoryDeck closeHref={`/matches/${matchId}`}>{cards}</StoryDeck>
     </main>
   );
 }

@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { matchLabel } from "@/lib/format";
-import { getMatchDetail, fmtDate, fmtMatchTime, isPlayerInMatch } from "@/lib/matches";
+import { getMatchDetail, fmtMatchTime, isPlayerInMatch } from "@/lib/matches";
 import { getMatchAdmin } from "@/lib/match-admin";
 import { canRunMatchday } from "@/lib/matchday";
 import { getReactionSummary } from "@/lib/reactions";
@@ -131,12 +131,10 @@ export default async function MatchDetailPage({
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {[
-            fmtDate(match.playedOn),
             fmtMatchTime(match.matchTime),
-            `${match.numTeams} teams`,
-            `${match.teamSize} per side`,
-            `stats scoring ${match.statsScoringEnabled ? "on" : "off"}`,
-          ].map((chip) => (
+            `${match.numTeams} teams × ${match.teamSize}`,
+            isAdmin ? `stats scoring ${match.statsScoringEnabled ? "on" : "off"}` : "",
+          ].filter(Boolean).map((chip) => (
             <span
               key={chip}
               className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800/80 dark:text-neutral-300"

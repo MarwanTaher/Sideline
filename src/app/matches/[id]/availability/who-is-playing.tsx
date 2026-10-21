@@ -49,12 +49,17 @@ export function SquadGrid({
   subscriberIds,
   myPlayerId,
   adminMatchId = null,
+  maxPlayers = 0,
+  adminHint = false,
 }: {
   players: PlayerAvailability[];
   guests: Guest[];
   subscriberIds: Set<number>;
   myPlayerId: number | null;
   adminMatchId?: number | null;
+  /** Squad cap; when set, the header shows a fill bar instead of a bare count. */
+  maxPlayers?: number;
+  adminHint?: boolean;
 }) {
   const mix: Record<string, number> = {};
   for (const p of players) {
@@ -67,12 +72,17 @@ export function SquadGrid({
   }
   const total = players.length + guests.length;
   const noKeeper = total > 0 && !mix.GK;
+  const full = maxPlayers > 0 && total >= maxPlayers;
+  const hasCore = players.some((p) => subscriberIds.has(p.playerId));
 
   return (
     <section className="mt-6 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 className="text-sm font-semibold">
-          Who&apos;s playing <span className="font-normal text-neutral-400">({total})</span>
+          Who&apos;s playing{" "}
+          <span className={`font-normal tabular-nums ${full ? "text-amber-600" : "text-neutral-400"}`}>
+            {maxPlayers > 0 ? `${total}/${maxPlayers}${full ? " · full" : ""}` : total}
+          </span>
         </h2>
         {total > 0 ? (
           <p className="flex flex-wrap gap-1.5 text-xs">
@@ -86,16 +96,20 @@ export function SquadGrid({
                 }`}
               >
                 {mix[pos] ?? 0} {pos}
+                {pos === "GK" && noKeeper ? " ⚠" : ""}
               </span>
             ))}
           </p>
         ) : null}
       </div>
 
-      {noKeeper ? (
-        <p className="mt-2 rounded-lg bg-red-50 px-2.5 py-1.5 text-xs font-medium text-red-700 dark:bg-red-950/30 dark:text-red-300">
-          No goalkeeper yet.
-        </p>
+      {maxPlayers > 0 ? (
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
+          <div
+            className={`bar-grow h-full rounded-full ${full ? "bg-amber-500" : "bg-emerald-500"}`}
+            style={{ width: `${Math.min(100, (total / maxPlayers) * 100)}%` }}
+          />
+        </div>
       ) : null}
 
       {total === 0 ? (
@@ -150,14 +164,21 @@ export function SquadGrid({
           ))}
         </ul>
       )}
-      <p className="mt-3 flex gap-3 text-[10px] text-neutral-400">
-        <span>
-          <span className="text-sky-500">★</span> season player
-        </span>
-        <span>
-          <span className="font-bold text-indigo-500">G</span> guest
-        </span>
-      </p>
+      {hasCore || guests.length > 0 || adminHint ? (
+        <p className="mt-3 flex flex-wrap gap-3 text-[10px] text-neutral-400">
+          {hasCore ? (
+            <span>
+              <span className="text-sky-500">★</span> season player
+            </span>
+          ) : null}
+          {guests.length > 0 ? (
+            <span>
+              <span className="font-bold text-indigo-500">G</span> guest
+            </span>
+          ) : null}
+          {adminHint ? <span className="ml-auto">Tap a player to set IN / OUT</span> : null}
+        </p>
+      ) : null}
     </section>
   );
 }

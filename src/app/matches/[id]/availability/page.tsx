@@ -10,7 +10,7 @@ import {
 import { isWaitlistAutoPromoteEnabled, isWaitlistVisibleToPlayers, isVoteGateEnabled, isAvailabilityLockEnabled, getLastNudgeAt, NUDGE_COOLDOWN_MS } from "@/lib/feature-settings";
 import { AdminActionBar } from "./admin-quick";
 import { isWithinAvailabilityLock, msUntilLock } from "@/lib/match-schedule";
-import { matchLabel, matchLabelWithTime } from "@/lib/format";
+import { matchLabelWithTime } from "@/lib/format";
 import { getSubscriberIdsForMatch } from "@/lib/season-subscriptions";
 import { AvailabilityControls } from "./availability-controls";
 import {
@@ -24,9 +24,6 @@ import { AddGuestForm, GuestList, AdminAddGuestForm } from "./guest-controls";
 import { listGuests, MAX_GUESTS_PER_HOST } from "@/lib/guests";
 import { MatchNav } from "../match-nav";
 import { SquadGrid, PeopleChips } from "./who-is-playing";
-import { PhaseStrip } from "@/components/phase-strip";
-import { getMatchPhase } from "@/lib/match-phase";
-import { matchHasRoster } from "@/lib/matches";
 import { SectionIcon } from "@/components/section-icon";
 
 export const metadata = {
@@ -50,15 +47,40 @@ export default async function AvailabilityPage({
   const matchId = Number(id);
   if (!Number.isFinite(matchId)) notFound();
 
-  const match = await getAvailabilityMatch(matchId);
-  if (!match) notFound();
+  const isAdmin = await isAdminView(
+    session.user.role === "admin" || session.user.role === "super",
+  );
+  const myPlayerId = session.user.playerId;
 
-  const players = await getAvailabilityAllPlayers(matchId);
+  // One round-trip wave: everything below only depends on the match id.
+  const [
+    match,
+    players,
+    availabilityLockEnabled,
+    guests,
+    subscriberIds,
+    waitlistEnabled,
+    waitlistVisible,
+    voteGateEnabled,
+    lastNudgeAt,
+  ] = await Promise.all([
+    getAvailabilityMatch(matchId),
+    getAvailabilityAllPlayers(matchId),
+    isAvailabilityLockEnabled(),
+    listGuests(matchId),
+    getSubscriberIdsForMatch(matchId),
+    isAdmin ? isWaitlistAutoPromoteEnabled() : Promise.resolve(false),
+    isWaitlistVisibleToPlayers(),
+    isAdmin ? isVoteGateEnabled() : Promise.resolve(false),
+    isAdmin ? getLastNudgeAt(matchId) : Promise.resolve(null),
+  ]);
+  if (!match) notFound();
+  // Admins always see the waitlist; players only when it is made visible.
+  const waitlistPlayers = isAdmin || waitlistVisible ? await getWaitlistPlayers(matchId) : [];
   const open = match.availabilityOpen;
 
   // 24h availability lock (admin-toggled). Players can't change within 24h of
   // kickoff; admins always can.
-  const availabilityLockEnabled = await isAvailabilityLockEnabled();
   const availabilityLocked =
     availabilityLockEnabled && isWithinAvailabilityLock(match.kickoffAt);
   const msToLock = availabilityLockEnabled ? msUntilLock(match.kickoffAt) : null;
@@ -66,38 +88,16 @@ export default async function AvailabilityPage({
   const inPlayers = players.filter((p) => p.status === "in");
   const outPlayers = players.filter((p) => p.status === "out");
   const pendingPlayers = players.filter((p) => p.status === "pending");
-
-  const myPlayerId = session.user.playerId;
-  const isAdmin = await isAdminView(
-    session.user.role === "admin" || session.user.role === "super",
-  );
   const mine = myPlayerId == null ? null : players.find((p) => p.playerId === myPlayerId);
 
-  const guests = await listGuests(matchId);
   const approvedGuests = guests.filter((g) => g.status === "approved");
   const pendingGuests = guests.filter((g) => g.status === "pending");
   const myGuests = myPlayerId == null ? [] : guests.filter((g) => g.hostPlayerId === myPlayerId);
   // Same definition the server uses for the cap: players IN + approved guests.
   const squadCount = inPlayers.length + approvedGuests.length;
 
-  const subscriberIds = await getSubscriberIdsForMatch(matchId);
   const iAmSubscriber = myPlayerId != null && subscriberIds.has(Number(myPlayerId));
   const seasonMatch = subscriberIds.size > 0;
-
-  const [waitlistEnabled, waitlistPlayers, waitlistVisible, voteGateEnabled] = isAdmin
-    ? await Promise.all([
-        isWaitlistAutoPromoteEnabled(),
-        getWaitlistPlayers(matchId),
-        isWaitlistVisibleToPlayers(),
-        isVoteGateEnabled(),
-      ])
-    : [false, [], false, false];
-
-  // Non-admin players only see the waitlist when the admin has made it visible.
-  const publicWaitlist =
-    !isAdmin && (await isWaitlistVisibleToPlayers())
-      ? await getWaitlistPlayers(matchId)
-      : [];
 
   // Players an admin can still add to the waitlist: not already IN and not queued.
   const waitlistedIds = new Set(waitlistPlayers.map((w) => w.playerId));
@@ -105,23 +105,14 @@ export default async function AvailabilityPage({
     .filter((p) => p.status !== "in" && !waitlistedIds.has(p.playerId))
     .map((p) => ({ playerId: p.playerId, name: p.name }));
 
-  const hasRoster = await matchHasRoster(matchId);
-  const phase = getMatchPhase({
-    matchdayStatus: match.matchdayStatus,
-    availabilityOpen: open,
-    kickoffAt: match.kickoffAt,
-    lockEnabled: availabilityLockEnabled,
-    hasRoster,
-  });
   const photoById = new Map(players.map((p) => [p.playerId, p.photoUrl]));
-  const shownWaitlist = (isAdmin ? waitlistPlayers : publicWaitlist).map((w) => ({
+  const statusById = new Map(players.map((p) => [p.playerId, p.status]));
+  const shownWaitlist = waitlistPlayers.map((w) => ({
     ...w,
     photoUrl: photoById.get(w.playerId) ?? null,
     status: statusById.get(w.playerId),
   }));
   const full = squadCount >= match.maxPlayers;
-  const lastNudgeAt = isAdmin ? await getLastNudgeAt(matchId) : null;
-  const statusById = new Map(players.map((p) => [p.playerId, p.status]));
   const adminMatchId = isAdmin ? matchId : null;
   // eslint-disable-next-line react-hooks/purity -- request-time snapshot in a server component
   const nowMs = Date.now();
@@ -132,46 +123,20 @@ export default async function AvailabilityPage({
         href={`/matches/${matchId}`}
         className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
       >
-        ← {matchLabel(match.playedOn)}
+        ← Match
       </Link>
 
       <MatchNav matchId={matchId} isAdmin={isAdmin} />
 
-      <div className="mt-3 rounded-2xl border border-black/[0.06] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <SectionIcon name="availability" className="h-9 w-9" />
-          <h1 className="text-2xl font-bold tracking-tight">Availability</h1>
-          {seasonMatch ? (
-            <span className="rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
-              season match
-            </span>
-          ) : null}
-        </div>
-        <p className="mt-1 text-sm text-neutral-500">
-          {matchLabelWithTime(match.playedOn, match.matchTime)}
-        </p>
-        {match.maxPlayers ? (
-          <div className="mt-4">
-            <div className="mb-1 flex items-center justify-between text-xs text-neutral-500">
-              <span className={full ? "font-semibold text-amber-600" : ""}>
-                {full ? "Match full" : `${match.maxPlayers - squadCount} spots left`}
-              </span>
-              <span className="tabular-nums">
-                {squadCount}/{match.maxPlayers}
-                {approvedGuests.length > 0
-                  ? ` · incl. ${approvedGuests.length} guest${approvedGuests.length === 1 ? "" : "s"}`
-                  : ""}
-              </span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
-              <div
-                className={`bar-grow h-full rounded-full ${full ? "bg-amber-500" : "bg-emerald-500"}`}
-                style={{ width: `${Math.min(100, (squadCount / match.maxPlayers) * 100)}%` }}
-              />
-            </div>
-          </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <SectionIcon name="availability" className="h-8 w-8" />
+        <h1 className="text-xl font-bold tracking-tight">Availability</h1>
+        <span className="text-sm text-neutral-500">{matchLabelWithTime(match.playedOn, match.matchTime)}</span>
+        {seasonMatch ? (
+          <span className="rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+            season
+          </span>
         ) : null}
-        <PhaseStrip phase={phase} className="mt-4" />
       </div>
 
       {isAdmin && match.matchdayStatus !== "closed" ? (
@@ -188,7 +153,7 @@ export default async function AvailabilityPage({
       ) : null}
 
       {myPlayerId != null ? (
-        <section className="mt-6">
+        <section className="mt-4">
           <AvailabilityControls
             matchId={matchId}
             currentStatus={mine?.status ?? "pending"}
@@ -224,10 +189,9 @@ export default async function AvailabilityPage({
         subscriberIds={subscriberIds}
         myPlayerId={myPlayerId ?? null}
         adminMatchId={adminMatchId}
+        maxPlayers={match.maxPlayers}
+        adminHint={isAdmin}
       />
-      {isAdmin ? (
-        <p className="mt-1.5 px-1 text-[11px] text-neutral-400">Tip: tap any player to set them IN / OUT.</p>
-      ) : null}
 
       <div className="mt-3 space-y-2">
         <PeopleChips
