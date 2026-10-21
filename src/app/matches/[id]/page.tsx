@@ -3,7 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { matchLabel } from "@/lib/format";
-import { getMatchDetail, fmtDate, fmtMatchTime, isPlayerInMatch, type MatchdayStatus } from "@/lib/matches";
+import { getMatchDetail, fmtMatchTime, isPlayerInMatch } from "@/lib/matches";
 import { getMatchAdmin } from "@/lib/match-admin";
 import { canRunMatchday } from "@/lib/matchday";
 import { getReactionSummary } from "@/lib/reactions";
@@ -15,8 +15,16 @@ import { WeatherIcon } from "@/components/ui/weather-icon";
 import { MatchSettings } from "./match-settings";
 import { MatchNav } from "./match-nav";
 import { TeamsView } from "./teams-view";
+import { getFieldFeatures, getMatchLive } from "@/lib/field-view-settings";
+import { balanceSummary } from "@/lib/field-view";
+import { getDraftState } from "@/lib/draft";
 import { MatchSocial } from "./match-social";
 import { SectionIcon } from "@/components/section-icon";
+import { PhaseStrip } from "@/components/phase-strip";
+import { YouChip } from "@/components/you-chip";
+import { getMatchPhase, phaseAction } from "@/lib/match-phase";
+import { getAvailabilityMatch, getPlayerAvailabilityStatus } from "@/lib/availability";
+import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
 
 export const metadata = {
   title: "Match · Sideline",
@@ -24,12 +32,6 @@ export const metadata = {
 
 // Match data is read live on every request.
 export const dynamic = "force-dynamic";
-
-const MATCHDAY_BADGE: Record<MatchdayStatus, string> = {
-  draft: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-  active: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
-  closed: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
-};
 
 export default async function MatchDetailPage({
   params,
@@ -67,12 +69,41 @@ export default async function MatchDetailPage({
   const canInteract = isMember;
   const hasRoster = match.teams.some((t) => t.players.length > 0);
 
-  const [reactions, digest, baseUrl, weather] = await Promise.all([
+  const fieldFeatures = await getFieldFeatures();
+  const [reactions, digest, baseUrl, weather, availMeta, lockEnabled, myStatus, fieldLive, draftForBalance] = await Promise.all([
     getReactionSummary(matchId, viewerPlayerId ?? null),
     getMatchDigest(matchId),
     getBaseUrl(),
     getMatchWeather(match.locationLat, match.locationLng, match.playedOn, match.matchTime),
+    getAvailabilityMatch(matchId),
+    isAvailabilityLockEnabled(),
+    viewerPlayerId != null
+      ? getPlayerAvailabilityStatus(matchId, viewerPlayerId)
+      : Promise.resolve(undefined),
+    hasRoster && fieldFeatures.live ? getMatchLive(matchId, match.matchdayStatus === "closed") : Promise.resolve(null),
+    hasRoster && isAdmin && fieldFeatures.balance ? getDraftState(matchId) : Promise.resolve(null),
   ]);
+  const fieldBalance = draftForBalance
+    ? balanceSummary(
+        match.teams.map((t) => ({
+          teamNo: t.teamNo,
+          scores: draftForBalance.players.filter((p) => p.teamNo === t.teamNo).map((p) => p.score),
+        })),
+      )
+    : null;
+  const phase = getMatchPhase({
+    matchdayStatus: match.matchdayStatus,
+    availabilityOpen: availMeta?.availabilityOpen ?? true,
+    kickoffAt: availMeta?.kickoffAt ?? null,
+    lockEnabled,
+    hasRoster,
+  });
+  const nextStep = phaseAction(phase, matchId, {
+    isAdmin,
+    canScore,
+    onRoster: isMember,
+    myStatus,
+  });
   const shareUrl = baseUrl ? `${baseUrl}/share/match/${matchId}` : "";
   const shareText = digest ? buildDigestShareText(digest, shareUrl) : "";
   const icsHref = `/api/matches/${matchId}/calendar`;
@@ -90,26 +121,34 @@ export default async function MatchDetailPage({
         <div className="flex flex-wrap items-center gap-2.5">
           <SectionIcon name="matches" className="h-9 w-9" />
             <h1 className="text-2xl font-bold tracking-tight">{matchLabel(match.playedOn)}</h1>
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MATCHDAY_BADGE[match.matchdayStatus]}`}
-          >
-            {match.matchdayStatus}
-          </span>
-          {match.status === "closed" ? (
-            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-              closed
-            </span>
-          ) : null}
+          <YouChip phase={phase} myStatus={myStatus} onRoster={isMember} />
         </div>
+        <PhaseStrip phase={phase} className="mt-3" />
+        {nextStep ? (
+          <Link
+            href={nextStep.href}
+            className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 active:scale-[0.98]"
+          >
+            <span>{nextStep.label}</span>
+            <span aria-hidden="true">→</span>
+          </Link>
+        ) : null}
+        {phase === "done" ? (
+          <Link
+            href={`/matches/${matchId}/recap`}
+            className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-neutral-800 to-neutral-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-[0.98]"
+          >
+            <span>▶ Matchday recap</span>
+            <span aria-hidden="true">→</span>
+          </Link>
+        ) : null}
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {[
-            fmtDate(match.playedOn),
             fmtMatchTime(match.matchTime),
-            `${match.numTeams} teams`,
-            `${match.teamSize} per side`,
-            `stats scoring ${match.statsScoringEnabled ? "on" : "off"}`,
-          ].map((chip) => (
+            `${match.numTeams} teams × ${match.teamSize}`,
+            isAdmin ? `stats scoring ${match.statsScoringEnabled ? "on" : "off"}` : "",
+          ].filter(Boolean).map((chip) => (
             <span
               key={chip}
               className="rounded-md bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800/80 dark:text-neutral-300"
@@ -174,7 +213,7 @@ export default async function MatchDetailPage({
         ) : null}
       </div>
 
-      <MatchNav matchId={match.id} isAdmin={isAdmin} canScore={canScore} />
+      <MatchNav matchId={match.id} isAdmin={isAdmin} canScore={canScore} highlightHref={nextStep?.href} />
 
       <div className="mt-3">
         <Link
@@ -191,7 +230,14 @@ export default async function MatchDetailPage({
         {match.teams.length === 0 ? (
           <p className="mt-2 text-sm text-neutral-500">No teams drafted yet.</p>
         ) : (
-          <TeamsView teams={match.teams} />
+          <TeamsView
+            teams={match.teams}
+            matchId={matchId}
+            myPlayerId={viewerPlayerId ?? null}
+            features={fieldFeatures}
+            live={fieldLive}
+            balance={fieldBalance}
+          />
         )}
       </section>
       ) : null}

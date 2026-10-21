@@ -7,6 +7,8 @@ import type { AvailabilityStatus } from "@/lib/availability";
 import { formatDuration } from "@/lib/match-schedule";
 import { FeedbackMessage } from "@/components/ui/banner";
 import { CheckIcon, XIcon } from "@/components/ui/icons";
+import { useTapSpam } from "@/components/use-tap-spam";
+import { TapSmoke } from "@/components/tap-smoke";
 
 const INITIAL: AvailabilityActionState = { ok: false, message: "" };
 
@@ -24,6 +26,13 @@ export interface AvailabilityControlsProps {
   isSubscriber?: boolean;
 }
 
+function buzz(e: React.MouseEvent) {
+  const btn = (e.target as HTMLElement).closest("button");
+  if (btn && !btn.disabled && typeof navigator !== "undefined" && "vibrate" in navigator) {
+    navigator.vibrate(12);
+  }
+}
+
 export function AvailabilityControls({
   matchId,
   currentStatus,
@@ -34,92 +43,78 @@ export function AvailabilityControls({
 }: AvailabilityControlsProps) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(setAvailabilityAction, INITIAL);
+  const { onTap, puffs, smoking } = useTapSpam();
 
   useEffect(() => {
     if (state.ok) router.refresh();
   }, [state, router]);
 
-  const banner =
-    currentStatus === "in"
-      ? { dot: "bg-emerald-500", label: "You're IN", sub: isSubscriber ? "Your season place is reserved." : "See you on the pitch.", cls: "bg-emerald-50 dark:bg-emerald-950/30" }
-      : currentStatus === "out"
-        ? { dot: "bg-red-500", label: "You're OUT", sub: "You've marked yourself unavailable.", cls: "bg-red-50 dark:bg-red-950/30" }
-        : { dot: "bg-amber-500", label: "No response yet", sub: "Let everyone know if you can play.", cls: "bg-amber-50 dark:bg-amber-950/30" };
+  const closed = !open;
+  const disabled = pending || locked || closed;
+  // One short line, only when there is something the buttons can't say.
+  const note = closed
+    ? "Sign-up is closed."
+    : locked
+      ? "🔒 Locked within 24h of kickoff. Ask an admin to change it."
+      : msToLock != null && msToLock > 0 && msToLock <= LOCK_WARNING_MS
+        ? `⏳ Changes close in ${formatDuration(msToLock)}.`
+        : isSubscriber && currentStatus !== "out"
+          ? "★ Season place: going OUT frees your spot, the fee still applies."
+          : null;
+
+  const btn = (value: "in" | "out") => {
+    const selected = currentStatus === value;
+    const isIn = value === "in";
+    return (
+      <form action={formAction} className="flex-1">
+        <input type="hidden" name="matchId" value={matchId} />
+        <input type="hidden" name="status" value={value} />
+        <button
+          type="submit"
+          disabled={disabled || selected}
+          aria-pressed={selected}
+          className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-base font-bold transition active:scale-[0.97] disabled:pointer-events-none ${
+            selected
+              ? isIn
+                ? "bg-emerald-600 text-white shadow-sm"
+                : "bg-red-600 text-white shadow-sm"
+              : `text-neutral-500 hover:text-neutral-900 disabled:opacity-50 dark:hover:text-white ${
+                  isIn ? "hover:bg-emerald-50 dark:hover:bg-emerald-950/30" : "hover:bg-red-50 dark:hover:bg-red-950/30"
+                }`
+          }`}
+        >
+          <span key={`${value}-${currentStatus}`} className={selected ? "tap-pop" : ""}>
+            {isIn ? <CheckIcon className="h-5 w-5" /> : <XIcon className="h-5 w-5" />}
+          </span>
+          {isIn ? "IN" : "OUT"}
+        </button>
+      </form>
+    );
+  };
 
   return (
-    <div className="rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-      <div className={`flex items-start gap-2.5 rounded-xl px-3 py-2.5 ${banner.cls}`}>
-        <span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${banner.dot}`} />
-        <div>
-          <p className="text-sm font-semibold">{banner.label}</p>
-          <p className="text-xs text-neutral-500">{banner.sub}</p>
-        </div>
+    <div>
+      {currentStatus === "pending" && !closed ? (
+        <p className="mb-2 text-sm font-semibold">Can you play?</p>
+      ) : null}
+      <div
+        className={`relative flex gap-1 rounded-2xl border bg-white p-1 shadow-sm dark:bg-neutral-900 ${smoking ? "tap-shake" : ""} ${
+          currentStatus === "pending" && !closed
+            ? "border-amber-400/60"
+            : "border-black/[0.06] dark:border-white/10"
+        }`}
+        onClickCapture={buzz}
+        // Disabled buttons let the tap through (pointer-events-none) so spam still counts.
+        onPointerDown={onTap}
+      >
+        {btn("in")}
+        {btn("out")}
+        <TapSmoke puffs={puffs} smoking={smoking} />
       </div>
-
-      {open ? (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <form action={formAction}>
-            <input type="hidden" name="matchId" value={matchId} />
-            <input type="hidden" name="status" value="in" />
-            <button
-              type="submit"
-              disabled={pending || currentStatus === "in" || locked}
-              className={`flex w-full flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60 ${
-                currentStatus === "in"
-                  ? "border-emerald-600 bg-emerald-600 text-white shadow-sm"
-                  : "border-emerald-600/40 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
-              }`}
-            >
-              <span className={`flex h-9 w-9 items-center justify-center rounded-full ${currentStatus === "in" ? "bg-white/20" : "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400"}`}>
-                <CheckIcon className="h-5 w-5" />
-              </span>
-              I&apos;m IN
-            </button>
-          </form>
-          <form action={formAction}>
-            <input type="hidden" name="matchId" value={matchId} />
-            <input type="hidden" name="status" value="out" />
-            <button
-              type="submit"
-              disabled={pending || currentStatus === "out" || locked}
-              className={`flex w-full flex-col items-center gap-2 rounded-2xl border px-3 py-4 text-sm font-semibold transition active:scale-[0.98] disabled:opacity-60 ${
-                currentStatus === "out"
-                  ? "border-red-600 bg-red-600 text-white shadow-sm"
-                  : "border-red-600/40 text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
-              }`}
-            >
-              <span className={`flex h-9 w-9 items-center justify-center rounded-full ${currentStatus === "out" ? "bg-white/20" : "bg-red-600/10 text-red-600 dark:text-red-400"}`}>
-                <XIcon className="h-5 w-5" />
-              </span>
-              I&apos;m OUT
-            </button>
-          </form>
-        </div>
-      ) : (
-        <p className="mt-3 text-sm text-neutral-500">Availability is closed for this match.</p>
-      )}
-
-      {open && locked ? (
-        <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
-          Availability is locked within 24 hours of kickoff. Please contact an
-          admin if you need to change it.
-        </p>
-      ) : open && msToLock != null && msToLock > 0 && msToLock <= LOCK_WARNING_MS ? (
-        <p className="mt-3 rounded-xl bg-amber-50/70 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950/30 dark:text-amber-300">
-          Changes close in {formatDuration(msToLock)} — after that only an admin
-          can change your availability.
-        </p>
+      {note ? <p className="mt-2 px-1 text-xs text-neutral-500">{note}</p> : null}
+      {!state.ok && state.message ? (
+        <FeedbackMessage ok={false} message={state.message} className="mt-2" />
       ) : null}
-
-      {isSubscriber && open && currentStatus !== "out" ? (
-        <p className="mt-3 rounded-xl bg-neutral-50 px-3 py-2 text-xs text-neutral-600 dark:bg-neutral-800/60 dark:text-neutral-300">
-          You hold a season place, so you&apos;re IN by default. Marking yourself
-          OUT frees your spot for the reserve list — it does not cancel what you
-          owe for that day.
-        </p>
-      ) : null}
-
-      <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
     </div>
   );
 }

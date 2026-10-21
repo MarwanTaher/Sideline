@@ -5,6 +5,10 @@ import { isAdminView } from "@/lib/view-mode";
 import { getDraftState } from "@/lib/draft";
 import { PitchBoard } from "./pitch-board";
 import { MatchNav } from "../match-nav";
+import { PublishTeams } from "./publish-teams";
+import { getTeamsPublishedAt } from "@/lib/moments";
+import { getFieldFeatures } from "@/lib/field-view-settings";
+import { FieldSettings } from "./field-settings";
 
 export const metadata = {
   title: "Draft · Sideline",
@@ -35,7 +39,11 @@ export default async function DraftPage({
     redirect(`/matches/${matchId}`);
   }
 
-  const state = await getDraftState(matchId);
+  const [state, publishedAt, fieldFeatures] = await Promise.all([
+    getDraftState(matchId),
+    getTeamsPublishedAt(matchId),
+    getFieldFeatures(),
+  ]);
   if (!state) notFound();
 
   return (
@@ -55,6 +63,16 @@ export default async function DraftPage({
           ? "Drag players onto the pitch to set their team and position, or auto-balance by score."
           : "Read-only view. Only admins can edit the draft."}
       </p>
+
+      <PublishTeams matchId={state.matchId} publishedAt={publishedAt} />
+
+      <FieldSettings
+        matchId={state.matchId}
+        numTeams={state.numTeams}
+        teamNames={state.teamNames}
+        teamColors={state.teamColors}
+        features={fieldFeatures}
+      />
 
       <PitchBoard
         matchId={state.matchId}

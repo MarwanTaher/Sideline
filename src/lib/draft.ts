@@ -1,4 +1,5 @@
 import { sqlClient } from "@/lib/db";
+import { parseTeamColors, type KitKey } from "./field-view";
 import { getPlayerScores } from "@/lib/scoring";
 import {
   listGuests,
@@ -47,6 +48,7 @@ export interface DraftState {
   matchdayStatus: MatchdayStatus;
   players: DraftPlayer[];
   teamNames: Record<number, string>;
+  teamColors: Record<number, KitKey>;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,6 +143,7 @@ interface MatchMetaRow {
   status: string | null;
   matchday_status: string | null;
   team_names: string | null;
+  team_colors: string | null;
 }
 
 interface CandidateRow {
@@ -162,7 +165,7 @@ interface CandidateRow {
  */
 export async function getDraftState(matchId: number): Promise<DraftState | null> {
   const metaRaw = await sqlClient.query(
-    `SELECT id, num_teams, team_size, status, matchday_status, team_names
+    `SELECT id, num_teams, team_size, status, matchday_status, team_names, team_colors
        FROM matches WHERE id = $1`,
     [matchId],
   );
@@ -223,6 +226,7 @@ export async function getDraftState(matchId: number): Promise<DraftState | null>
     matchdayStatus: normMatchday(meta.matchday_status),
     players,
     teamNames: parseTeamNames(meta.team_names),
+    teamColors: parseTeamColors(meta.team_colors),
   };
 }
 

@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import type { MatchPhase } from "@/lib/match-phase";
+import { PhaseBadge, YouChip } from "@/components/you-chip";
 
 type MatchdayStatus = "draft" | "active" | "closed";
 
@@ -14,12 +16,9 @@ export type MatchListDisplayItem = {
   statsScoringEnabled: boolean;
   dateLabel: string;
   locationName?: string;
-};
-
-const MATCHDAY_BADGE: Record<MatchdayStatus, string> = {
-  draft: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-  active: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
-  closed: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
+  phase: MatchPhase;
+  myStatus?: "in" | "out" | "pending";
+  onRoster?: boolean;
 };
 
 const FILTERS = [
@@ -70,18 +69,10 @@ export function MatchesList({ items }: { items: MatchListDisplayItem[] }) {
                 className="flex items-center justify-between rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-white/10 dark:bg-neutral-900"
               >
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold">{m.title}</span>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MATCHDAY_BADGE[m.matchdayStatus]}`}
-                    >
-                      {m.matchdayStatus}
-                    </span>
-                    {m.closed ? (
-                      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                        closed
-                      </span>
-                    ) : null}
+                    <PhaseBadge phase={m.phase} />
+                    <YouChip phase={m.phase} myStatus={m.myStatus} onRoster={m.onRoster} />
                   </div>
                   <div className="mt-1 text-sm text-neutral-500">{m.dateLabel}</div>
                   {m.locationName ? (

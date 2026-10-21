@@ -10,6 +10,7 @@ import {
   updatePlayerPhoto,
   getPlayerContact,
 } from "@/lib/player-profile";
+import { setFunMessages } from "@/lib/moments";
 
 export interface ChangePasswordState {
   ok: boolean;
@@ -178,4 +179,14 @@ export async function removePhotoAction(): Promise<PhotoState> {
   } catch {
     return { ok: false, message: "Could not remove the photo." };
   }
+}
+
+/** Toggle the light-hearted "bummer" messages after a rough game. */
+export async function setFunMessagesAction(enabled: boolean): Promise<{ ok: boolean }> {
+  const session = await auth();
+  const playerId = session?.user?.playerId;
+  if (playerId == null) return { ok: false };
+  await setFunMessages(Number(playerId), z.boolean().parse(enabled));
+  revalidatePath("/profile");
+  return { ok: true };
 }

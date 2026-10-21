@@ -1,6 +1,6 @@
 import { SubNav } from "@/components/ui/sub-nav";
 import { SectionIcon, type SectionIconName } from "@/components/section-icon";
-import { MatchTabsMobile, type MatchTab } from "./match-tabs-mobile";
+import { MatchTabsMobile, NextDot, type MatchTab } from "./match-tabs-mobile";
 
 function TabLabel({ icon, text }: { icon: SectionIconName; text: string }) {
   return (
@@ -23,11 +23,14 @@ export function MatchNav({
   isAdmin,
   canScore = false,
   className = "mt-4",
+  highlightHref,
 }: {
   matchId: number;
   isAdmin: boolean;
   canScore?: boolean;
   className?: string;
+  /** Tab to mark with a "do this next" dot (from phaseAction). */
+  highlightHref?: string;
 }) {
   const tabs: MatchTab[] = [
     { href: `/matches/${matchId}`, icon: "matches", text: "Overview" },
@@ -45,7 +48,12 @@ export function MatchNav({
 
   const items = tabs.map((t) => ({
     href: t.href,
-    label: <TabLabel icon={t.icon} text={t.text === "Rate" ? "Rate players" : t.text} />,
+    label: (
+      <span className="relative inline-flex">
+        <TabLabel icon={t.icon} text={t.text === "Rate" ? "Rate players" : t.text} />
+        {t.href === highlightHref ? <NextDot /> : null}
+      </span>
+    ),
   }));
 
   return (
@@ -53,7 +61,7 @@ export function MatchNav({
       <div className="hidden md:block">
         <SubNav items={items} ariaLabel="Match sections" className={className} />
       </div>
-      <MatchTabsMobile tabs={tabs} matchId={matchId} />
+      <MatchTabsMobile tabs={tabs} matchId={matchId} highlightHref={highlightHref} />
     </>
   );
 }

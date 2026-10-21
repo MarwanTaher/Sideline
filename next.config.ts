@@ -14,6 +14,7 @@ const CSP = [
   "frame-ancestors 'none'",
   "object-src 'none'",
   "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com",
+  "media-src 'self' blob: https://*.public.blob.vercel-storage.com",
   "script-src 'self' 'unsafe-inline'",
   "style-src 'self' 'unsafe-inline'",
   "font-src 'self' data:",

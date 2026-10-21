@@ -3,6 +3,7 @@ import { notify } from "@/lib/push";
 import { applySubscribersToMatch } from "@/lib/season-subscriptions";
 import { deleteGuestsForMatch } from "@/lib/guests";
 import { syncAchievements } from "@/lib/achievements";
+import { generateMatchMoments } from "@/lib/moments";
 import {
   captureScoreSnapshot,
   getRatingChangesForMatch,
@@ -380,7 +381,9 @@ async function sendMatchdayCloseNotifications(matchId: number): Promise<void> {
   });
 
   // Personalised rating-change nudges (only meaningful moves, ranked players).
-  const changes = await getRatingChangesForMatch(matchId, { minAbsDelta: 1 });
+  // Moments use a finer 0.5 threshold; pushes keep the >=1.0 / rank-moved rule.
+  const allChanges = await getRatingChangesForMatch(matchId, { minAbsDelta: 0.5 });
+  const changes = allChanges.filter((c) => Math.abs(c.deltaFinal) >= 1 || c.deltaRank !== 0);
   await Promise.all(
     changes.map((c) => {
       const newVal = c.newFinal.toFixed(1);
@@ -410,6 +413,17 @@ async function sendMatchdayCloseNotifications(matchId: number): Promise<void> {
   // Award any newly-earned achievements and celebrate the unlock. Grouped per
   // player so someone unlocking two badges gets one tidy nudge.
   const unlocked = await syncAchievements(matchId);
+
+  // Celebration moments for the next app open. Never block the close on this.
+  try {
+    await generateMatchMoments(matchId, {
+      changes: allChanges,
+      unlocked: unlocked.map((u) => ({ playerId: u.playerId, label: `${u.def.emoji} ${u.def.label}` })),
+    });
+  } catch (err) {
+    console.error("generateMatchMoments failed", err);
+  }
+
   const byPlayer = new Map<number, string[]>();
   for (const u of unlocked) {
     if (!byPlayer.has(u.playerId)) byPlayer.set(u.playerId, []);

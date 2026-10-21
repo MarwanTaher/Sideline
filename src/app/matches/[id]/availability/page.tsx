@@ -1,5 +1,4 @@
 import Link from "next/link";
-import type { ReactNode } from "react";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
@@ -7,28 +6,25 @@ import {
   getAvailabilityMatch,
   getAvailabilityAllPlayers,
   getWaitlistPlayers,
-  summarize,
-  type MatchdayStatus,
-  type PlayerAvailability,
 } from "@/lib/availability";
-import { isWaitlistAutoPromoteEnabled, isWaitlistVisibleToPlayers, isVoteGateEnabled, isAvailabilityLockEnabled } from "@/lib/feature-settings";
+import { isWaitlistAutoPromoteEnabled, isWaitlistVisibleToPlayers, isVoteGateEnabled, isAvailabilityLockEnabled, getLastNudgeAt, NUDGE_COOLDOWN_MS } from "@/lib/feature-settings";
+import { AdminActionBar } from "./admin-quick";
 import { isWithinAvailabilityLock, msUntilLock } from "@/lib/match-schedule";
-import { matchLabel, matchLabelWithTime } from "@/lib/format";
+import { matchLabelWithTime } from "@/lib/format";
 import { getSubscriberIdsForMatch } from "@/lib/season-subscriptions";
 import { AvailabilityControls } from "./availability-controls";
 import {
   AvailabilityOpenToggle,
   MaxPlayersForm,
-  AdminPlayerControls,
   WaitlistToggle,
   VoteGateToggle,
   AvailabilityLockToggle,
 } from "./availability-admin";
 import { AddGuestForm, GuestList, AdminAddGuestForm } from "./guest-controls";
-import { listGuests, MAX_GUESTS_PER_HOST, type Guest } from "@/lib/guests";
+import { listGuests, MAX_GUESTS_PER_HOST } from "@/lib/guests";
 import { MatchNav } from "../match-nav";
+import { SquadGrid, PeopleChips } from "./who-is-playing";
 import { SectionIcon } from "@/components/section-icon";
-import { Avatar } from "@/components/ui/avatar";
 
 export const metadata = {
   title: "Availability · Sideline",
@@ -36,69 +32,6 @@ export const metadata = {
 
 // Availability is read live on every request.
 export const dynamic = "force-dynamic";
-
-const MATCHDAY_BADGE: Record<MatchdayStatus, string> = {
-  draft: "bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300",
-  active: "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300",
-  closed: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300",
-};
-
-function StatusList({
-  title,
-  players,
-  guests = [],
-  dim = false,
-}: {
-  title: ReactNode;
-  players: PlayerAvailability[];
-  guests?: Guest[];
-  dim?: boolean;
-}) {
-  const total = players.length + guests.length;
-  return (
-    <div className="rounded-2xl border border-black/[0.06] bg-white p-3 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-      <h3 className="text-sm font-semibold">
-        {title} <span className="font-normal text-neutral-400">({total})</span>
-      </h3>
-      {total === 0 ? (
-        <p className="mt-2 text-xs text-neutral-400">None</p>
-      ) : (
-        <ul className={`mt-2 space-y-1 text-sm ${dim ? "opacity-[0.55]" : ""}`}>
-          {players.map((p) => (
-            <li key={p.playerId} className="flex items-center gap-2">
-              <Link
-                href={`/players/${p.playerId}`}
-                className="flex min-w-0 flex-1 items-center gap-2 transition hover:text-emerald-600 dark:hover:text-emerald-400"
-              >
-                <Avatar name={p.name} photoUrl={p.photoUrl} size="xs" />
-                <span className="min-w-0 flex-1 truncate">{p.name}</span>
-              </Link>
-              {p.preferredPosition ? (
-                <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                  {p.preferredPosition}
-                </span>
-              ) : null}
-            </li>
-          ))}
-          {guests.map((g) => (
-            <li key={`g-${g.id}`} className="flex items-center justify-between">
-              <span className="truncate">
-                <span className="mr-1.5 rounded bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-700 dark:bg-indigo-950/50 dark:text-indigo-300">
-                  Guest
-                </span>
-                {g.name}
-                <span className="text-xs text-neutral-500"> · of {g.hostName}</span>
-              </span>
-              <span className="rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
-                {g.position}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
 
 export default async function AvailabilityPage({
   params,
@@ -114,16 +47,40 @@ export default async function AvailabilityPage({
   const matchId = Number(id);
   if (!Number.isFinite(matchId)) notFound();
 
-  const match = await getAvailabilityMatch(matchId);
-  if (!match) notFound();
+  const isAdmin = await isAdminView(
+    session.user.role === "admin" || session.user.role === "super",
+  );
+  const myPlayerId = session.user.playerId;
 
-  const players = await getAvailabilityAllPlayers(matchId);
-  const summary = summarize(players);
+  // One round-trip wave: everything below only depends on the match id.
+  const [
+    match,
+    players,
+    availabilityLockEnabled,
+    guests,
+    subscriberIds,
+    waitlistEnabled,
+    waitlistVisible,
+    voteGateEnabled,
+    lastNudgeAt,
+  ] = await Promise.all([
+    getAvailabilityMatch(matchId),
+    getAvailabilityAllPlayers(matchId),
+    isAvailabilityLockEnabled(),
+    listGuests(matchId),
+    getSubscriberIdsForMatch(matchId),
+    isAdmin ? isWaitlistAutoPromoteEnabled() : Promise.resolve(false),
+    isWaitlistVisibleToPlayers(),
+    isAdmin ? isVoteGateEnabled() : Promise.resolve(false),
+    isAdmin ? getLastNudgeAt(matchId) : Promise.resolve(null),
+  ]);
+  if (!match) notFound();
+  // Admins always see the waitlist; players only when it is made visible.
+  const waitlistPlayers = isAdmin || waitlistVisible ? await getWaitlistPlayers(matchId) : [];
   const open = match.availabilityOpen;
 
   // 24h availability lock (admin-toggled). Players can't change within 24h of
   // kickoff; admins always can.
-  const availabilityLockEnabled = await isAvailabilityLockEnabled();
   const availabilityLocked =
     availabilityLockEnabled && isWithinAvailabilityLock(match.kickoffAt);
   const msToLock = availabilityLockEnabled ? msUntilLock(match.kickoffAt) : null;
@@ -131,36 +88,16 @@ export default async function AvailabilityPage({
   const inPlayers = players.filter((p) => p.status === "in");
   const outPlayers = players.filter((p) => p.status === "out");
   const pendingPlayers = players.filter((p) => p.status === "pending");
-
-  const myPlayerId = session.user.playerId;
-  const isAdmin = await isAdminView(
-    session.user.role === "admin" || session.user.role === "super",
-  );
   const mine = myPlayerId == null ? null : players.find((p) => p.playerId === myPlayerId);
 
-  const guests = await listGuests(matchId);
   const approvedGuests = guests.filter((g) => g.status === "approved");
   const pendingGuests = guests.filter((g) => g.status === "pending");
   const myGuests = myPlayerId == null ? [] : guests.filter((g) => g.hostPlayerId === myPlayerId);
+  // Same definition the server uses for the cap: players IN + approved guests.
+  const squadCount = inPlayers.length + approvedGuests.length;
 
-  const subscriberIds = await getSubscriberIdsForMatch(matchId);
   const iAmSubscriber = myPlayerId != null && subscriberIds.has(Number(myPlayerId));
   const seasonMatch = subscriberIds.size > 0;
-
-  const [waitlistEnabled, waitlistPlayers, waitlistVisible, voteGateEnabled] = isAdmin
-    ? await Promise.all([
-        isWaitlistAutoPromoteEnabled(),
-        getWaitlistPlayers(matchId),
-        isWaitlistVisibleToPlayers(),
-        isVoteGateEnabled(),
-      ])
-    : [false, [], false, false];
-
-  // Non-admin players only see the waitlist when the admin has made it visible.
-  const publicWaitlist =
-    !isAdmin && (await isWaitlistVisibleToPlayers())
-      ? await getWaitlistPlayers(matchId)
-      : [];
 
   // Players an admin can still add to the waitlist: not already IN and not queued.
   const waitlistedIds = new Set(waitlistPlayers.map((w) => w.playerId));
@@ -168,53 +105,55 @@ export default async function AvailabilityPage({
     .filter((p) => p.status !== "in" && !waitlistedIds.has(p.playerId))
     .map((p) => ({ playerId: p.playerId, name: p.name }));
 
+  const photoById = new Map(players.map((p) => [p.playerId, p.photoUrl]));
+  const statusById = new Map(players.map((p) => [p.playerId, p.status]));
+  const shownWaitlist = waitlistPlayers.map((w) => ({
+    ...w,
+    photoUrl: photoById.get(w.playerId) ?? null,
+    status: statusById.get(w.playerId),
+  }));
+  const full = squadCount >= match.maxPlayers;
+  const adminMatchId = isAdmin ? matchId : null;
+  // eslint-disable-next-line react-hooks/purity -- request-time snapshot in a server component
+  const nowMs = Date.now();
+
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
       <Link
         href={`/matches/${matchId}`}
         className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
       >
-        ← {matchLabel(match.playedOn)}
+        ← Match
       </Link>
 
       <MatchNav matchId={matchId} isAdmin={isAdmin} />
 
-      <div className="mt-3 rounded-2xl border border-black/[0.06] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-        <div className="flex flex-wrap items-center gap-2.5">
-          <SectionIcon name="availability" className="h-9 w-9" />
-          <h1 className="text-2xl font-bold tracking-tight">Availability</h1>
-          <span
-            className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${MATCHDAY_BADGE[match.matchdayStatus]}`}
-          >
-            {match.matchdayStatus}
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <SectionIcon name="availability" className="h-8 w-8" />
+        <h1 className="text-xl font-bold tracking-tight">Availability</h1>
+        <span className="text-sm text-neutral-500">{matchLabelWithTime(match.playedOn, match.matchTime)}</span>
+        {seasonMatch ? (
+          <span className="rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+            season
           </span>
-        </div>
-        <p className="mt-1 text-sm text-neutral-500">
-          {matchLabelWithTime(match.playedOn, match.matchTime)}
-          {seasonMatch ? (
-            <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
-              season match
-            </span>
-          ) : null}
-        </p>
-        {match.maxPlayers ? (
-          <div className="mt-4">
-            <div className="mb-1 flex items-center justify-between text-xs text-neutral-500">
-              <span>{inPlayers.length >= match.maxPlayers ? "Match full" : "Spots filled"}</span>
-              <span className="tabular-nums">{inPlayers.length}/{match.maxPlayers}</span>
-            </div>
-            <div className="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
-              <div
-                className={`h-full rounded-full ${inPlayers.length >= match.maxPlayers ? "bg-amber-500" : "bg-emerald-500"}`}
-                style={{ width: `${Math.min(100, (inPlayers.length / match.maxPlayers) * 100)}%` }}
-              />
-            </div>
-          </div>
         ) : null}
       </div>
 
+      {isAdmin && match.matchdayStatus !== "closed" ? (
+        <AdminActionBar
+          matchId={matchId}
+          open={open}
+          pendingCount={pendingPlayers.length}
+          pendingGuestCount={pendingGuests.length}
+          squadReady={full || (!open && squadCount >= 10)}
+          lastNudgeAt={lastNudgeAt}
+          nudgeCooldownMs={NUDGE_COOLDOWN_MS}
+          nowMs={nowMs}
+        />
+      ) : null}
+
       {myPlayerId != null ? (
-        <section className="mt-6">
+        <section className="mt-4">
           <AvailabilityControls
             matchId={matchId}
             currentStatus={mine?.status ?? "pending"}
@@ -230,13 +169,64 @@ export default async function AvailabilityPage({
         </p>
       )}
 
+      {isAdmin && pendingGuests.length > 0 ? (
+        <section
+          id="guest-requests"
+          className="mt-6 scroll-mt-24 rounded-2xl border border-amber-500/30 bg-amber-50/60 p-4 dark:bg-amber-950/20"
+        >
+          <h2 className="text-sm font-semibold">
+            Guest requests <span className="font-normal text-neutral-500">({pendingGuests.length})</span>
+          </h2>
+          <div className="mt-3">
+            <GuestList matchId={matchId} guests={pendingGuests} showHost canRemove={false} canApprove />
+          </div>
+        </section>
+      ) : null}
+
+      <SquadGrid
+        players={inPlayers}
+        guests={approvedGuests}
+        subscriberIds={subscriberIds}
+        myPlayerId={myPlayerId ?? null}
+        adminMatchId={adminMatchId}
+        maxPlayers={match.maxPlayers}
+        adminHint={isAdmin}
+      />
+
+      <div className="mt-3 space-y-2">
+        <PeopleChips
+          label="Waitlist"
+          dotClass="bg-sky-500"
+          people={shownWaitlist}
+          numbered
+          highlightId={myPlayerId ?? null}
+          adminMatchId={adminMatchId}
+          defaultOpen={myPlayerId != null && shownWaitlist.some((w) => w.playerId === myPlayerId)}
+        />
+        <PeopleChips
+          label="No reply yet"
+          dotClass="bg-amber-500"
+          people={pendingPlayers}
+          highlightId={myPlayerId ?? null}
+          adminMatchId={adminMatchId}
+          defaultOpen={isAdmin}
+        />
+        <PeopleChips
+          label="Out"
+          dotClass="bg-red-500"
+          people={outPlayers}
+          highlightId={myPlayerId ?? null}
+          adminMatchId={adminMatchId}
+        />
+      </div>
+
       {myPlayerId != null ? (
         <details className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
           <summary className="cursor-pointer text-sm font-semibold">
-            Do you want to bring a guest?
+            Bring a guest{myGuests.length > 0 ? ` (${myGuests.length})` : ""}
           </summary>
           <p className="mt-2 text-xs text-neutral-500">
-            Request up to {MAX_GUESTS_PER_HOST} guests. Requests are approved by an admin before they join the draft.
+            Request up to {MAX_GUESTS_PER_HOST} guests. An admin approves them before they join the draft.
           </p>
           <div className="mt-3">
             <GuestList matchId={matchId} guests={myGuests} canRemove={open} />
@@ -251,166 +241,63 @@ export default async function AvailabilityPage({
         </details>
       ) : null}
 
-      {publicWaitlist.length > 0 ? (
-        <section className="mt-6 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
-          <h2 className="text-sm font-semibold">Waitlist ({publicWaitlist.length})</h2>
-          <p className="mt-1 text-xs text-neutral-500">
-            If the match is full, spots open up in this order.
-          </p>
-          <ol className="mt-3 space-y-1">
-            {publicWaitlist.map((w, i) => {
-              const isMe = w.playerId === myPlayerId;
-              return (
-                <li
-                  key={w.playerId}
-                  className={`flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-sm ${
-                    isMe
-                      ? "bg-emerald-50 font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
-                      : ""
-                  }`}
-                >
-                  <span
-                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold tabular-nums ${
-                      i === 0
-                        ? "bg-amber-500 text-white"
-                        : "bg-neutral-200 text-neutral-600 dark:bg-neutral-700 dark:text-neutral-300"
-                    }`}
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate">
-                    {w.name}
-                    {isMe ? " (you)" : ""}
-                  </span>
-                  {i === 0 ? (
-                    <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
-                      Next up
-                    </span>
-                  ) : null}
-                </li>
-              );
-            })}
-          </ol>
+      {isAdmin ? (
+        <section className="mt-8">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-neutral-500">Admin · this match</h2>
+          <div className="mt-2 space-y-2">
+            <details className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+              <summary className="cursor-pointer text-sm font-semibold">Sign-up &amp; squad size</summary>
+              <div className="mt-3 space-y-4">
+                <AvailabilityOpenToggle matchId={matchId} open={open} />
+                <div className="border-t border-black/5 pt-4 dark:border-white/5">
+                  <MaxPlayersForm matchId={matchId} maxPlayers={match.maxPlayers} />
+                </div>
+              </div>
+            </details>
+            <details className="rounded-xl border border-black/10 p-4 dark:border-white/10">
+              <summary className="cursor-pointer text-sm font-semibold">
+                Guests{approvedGuests.length > 0 ? ` (${approvedGuests.length})` : ""}
+              </summary>
+              <div className="mt-3">
+                <AdminAddGuestForm
+                  matchId={matchId}
+                  hosts={inPlayers.map((p) => ({ playerId: p.playerId, name: p.name }))}
+                  open={open}
+                />
+              </div>
+              <div className="mt-4">
+                <h3 className="mb-2 text-sm font-medium">Approved guests</h3>
+                <GuestList matchId={matchId} guests={approvedGuests} showHost canRemove />
+              </div>
+            </details>
+            <details className="rounded-xl border border-amber-500/30 bg-amber-50/40 p-4 dark:bg-amber-950/10">
+              <summary className="cursor-pointer text-sm font-semibold">
+                Waitlist &amp; club-wide settings
+              </summary>
+              <p className="mt-2 text-xs text-amber-800 dark:text-amber-300">
+                The switches below apply to every match, not just this one.
+              </p>
+              <div className="mt-3 space-y-4">
+                <WaitlistToggle
+                  matchId={matchId}
+                  enabled={waitlistEnabled}
+                  visibleToPlayers={waitlistVisible}
+                  waitlist={waitlistPlayers}
+                  candidates={waitlistCandidates}
+                />
+                <div className="border-t border-amber-500/20 pt-4">
+                  <h4 className="mb-2 text-sm font-medium">Vote-gate</h4>
+                  <VoteGateToggle matchId={matchId} enabled={voteGateEnabled} />
+                </div>
+                <div className="border-t border-amber-500/20 pt-4">
+                  <h4 className="mb-2 text-sm font-medium">Lock 24h before kickoff</h4>
+                  <AvailabilityLockToggle matchId={matchId} enabled={availabilityLockEnabled} />
+                </div>
+              </div>
+            </details>
+          </div>
         </section>
       ) : null}
-
-      {isAdmin ? (
-        <details className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10">
-          <summary className="cursor-pointer text-sm font-semibold">
-            Availability control (admin)
-          </summary>
-
-          <h3 className="mt-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-            This match only
-          </h3>
-          <div className="mt-2 space-y-4">
-            <AvailabilityOpenToggle matchId={matchId} open={open} />
-            <div className="border-t border-black/5 pt-4 dark:border-white/5">
-              <MaxPlayersForm matchId={matchId} maxPlayers={match.maxPlayers} />
-            </div>
-            <div className="border-t border-black/5 pt-4 dark:border-white/5">
-              <h4 className="mb-2 text-sm font-medium">Set player availability</h4>
-              <AdminPlayerControls matchId={matchId} players={players} />
-            </div>
-          </div>
-
-          <h3 className="mt-6 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-            Applies to every match
-          </h3>
-          <p className="mt-1 text-xs text-neutral-500">
-            These are club-wide defaults. Changing one here changes it for all
-            matches, not just this one.
-          </p>
-          <div className="mt-2 space-y-4 rounded-xl border border-amber-500/30 bg-amber-50/40 p-3 dark:bg-amber-950/10">
-            <div>
-              <h4 className="mb-2 text-sm font-medium">Waitlist</h4>
-              <WaitlistToggle
-                matchId={matchId}
-                enabled={waitlistEnabled}
-                visibleToPlayers={waitlistVisible}
-                waitlist={waitlistPlayers}
-                candidates={waitlistCandidates}
-              />
-            </div>
-            <div className="border-t border-amber-500/20 pt-4">
-              <h4 className="mb-2 text-sm font-medium">Vote-gate</h4>
-              <VoteGateToggle matchId={matchId} enabled={voteGateEnabled} />
-            </div>
-            <div className="border-t border-amber-500/20 pt-4">
-              <h4 className="mb-2 text-sm font-medium">Lock 24h before kickoff</h4>
-              <AvailabilityLockToggle matchId={matchId} enabled={availabilityLockEnabled} />
-            </div>
-          </div>
-        </details>
-      ) : null}
-
-      {isAdmin ? (
-        <details className="mt-6 rounded-xl border border-black/10 p-4 dark:border-white/10" open={pendingGuests.length > 0}>
-          <summary className="cursor-pointer text-sm font-semibold">
-            Guests &amp; requests (admin)
-            {pendingGuests.length > 0 ? (
-              <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
-                {pendingGuests.length} pending
-              </span>
-            ) : null}
-          </summary>
-          <p className="mt-2 text-xs text-neutral-500">
-            Approve or decline guest requests, add a guest on behalf of a player, or remove any guest.
-          </p>
-          {pendingGuests.length > 0 ? (
-            <div className="mt-3">
-              <h3 className="mb-2 text-sm font-medium">Pending requests</h3>
-              <GuestList
-                matchId={matchId}
-                guests={pendingGuests}
-                showHost
-                canRemove={false}
-                canApprove
-              />
-            </div>
-          ) : null}
-          <div className="mt-4 border-t border-black/5 pt-4 dark:border-white/5">
-            <AdminAddGuestForm
-              matchId={matchId}
-              hosts={inPlayers.map((p) => ({ playerId: p.playerId, name: p.name }))}
-              open={open}
-            />
-          </div>
-          <div className="mt-4">
-            <h3 className="mb-2 text-sm font-medium">Approved guests</h3>
-            <GuestList matchId={matchId} guests={approvedGuests} showHost canRemove />
-          </div>
-        </details>
-      ) : null}
-
-      <section className="mt-8">
-        <div className="grid grid-cols-3 gap-3">
-          <div className="rounded-xl border border-black/10 p-4 text-center dark:border-white/10">
-            <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-              {summary.inCount + approvedGuests.length}
-            </div>
-            <div className="text-xs uppercase tracking-wide text-neutral-500">
-              In <span className="normal-case text-neutral-400">/ {match.maxPlayers} max</span>
-            </div>
-          </div>
-          <div className="rounded-xl border border-black/10 p-4 text-center dark:border-white/10">
-            <div className="text-2xl font-semibold text-amber-600 dark:text-amber-400">
-              {summary.outCount}
-            </div>
-            <div className="text-xs uppercase tracking-wide text-neutral-500">Out</div>
-          </div>
-          <div className="rounded-xl border border-black/10 p-4 text-center dark:border-white/10">
-            <div className="text-2xl font-semibold text-neutral-500">{summary.pendingCount}</div>
-            <div className="text-xs uppercase tracking-wide text-neutral-500">Pending</div>
-          </div>
-        </div>
-      </section>
-
-      <section className="mt-6 grid gap-4 sm:grid-cols-3">
-        <StatusList title={<span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-emerald-500" /> In</span>} players={inPlayers} guests={approvedGuests} />
-        <StatusList title={<span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-red-500" /> Out</span>} players={outPlayers} dim />
-        <StatusList title={<span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full bg-neutral-400" /> Pending</span>} players={pendingPlayers} />
-      </section>
     </main>
   );
 }
