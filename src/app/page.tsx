@@ -15,6 +15,7 @@ import {
 import { listPlayerInvoices } from "@/lib/season-billing";
 import { formatMinor } from "@/lib/format-money";
 import { getPlayerRank } from "@/lib/leaderboard";
+import { CountUp } from "@/components/count-up";
 import { getLeaderboardMovement } from "@/lib/score-snapshots";
 import { getPendingVoteObligation } from "@/lib/voting";
 import { getLastMatchdayOutcome } from "@/lib/matchday";
@@ -151,7 +152,9 @@ export default async function Home() {
               href="/leaderboard"
               className="inline-flex items-center gap-2 rounded-full bg-white/15 px-3 py-1 text-sm font-medium backdrop-blur transition hover:bg-white/25"
             >
-              <span className="tabular-nums">#{rankInfo.rank}</span>
+              <span className="tabular-nums">
+                #<CountUp to={rankInfo.rank} from={rankDelta ? rankInfo.rank + rankDelta : undefined} />
+              </span>
               <span className="text-white/70">of {rankInfo.total}</span>
               {rankDelta ? (
                 <span className={`tabular-nums font-semibold ${rankDelta > 0 ? "text-lime-200" : "text-red-200"}`}>
@@ -247,6 +250,14 @@ export default async function Home() {
                     ]}
                   />
                 </div>
+              </Link>
+            ) : null}
+            {lastMatchday && lastMatchday.rounds > 0 ? (
+              <Link
+                href={`/matches/${lastMatchday.matchId}/recap`}
+                className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90"
+              >
+                ▶ Watch your recap
               </Link>
             ) : null}
             {form.length > 0 ? (

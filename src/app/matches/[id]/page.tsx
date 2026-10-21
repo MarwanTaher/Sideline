@@ -119,6 +119,15 @@ export default async function MatchDetailPage({
             <span aria-hidden="true">→</span>
           </Link>
         ) : null}
+        {phase === "done" ? (
+          <Link
+            href={`/matches/${matchId}/recap`}
+            className="mt-2 flex items-center justify-between gap-2 rounded-xl bg-gradient-to-r from-neutral-800 to-neutral-900 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 active:scale-[0.98]"
+          >
+            <span>▶ Matchday recap</span>
+            <span aria-hidden="true">→</span>
+          </Link>
+        ) : null}
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {[

@@ -93,7 +93,7 @@ export async function markMomentsSeen(playerId: number, ids: number[]): Promise<
   );
 }
 
-type RosterRow = {
+export type RosterRow = {
   player_id: number;
   name: string;
   team_no: number;
@@ -112,7 +112,7 @@ type RosterRow = {
   last3_goals: number;
 };
 
-async function getMatchRosterFacts(matchId: number): Promise<RosterRow[]> {
+export async function getMatchRosterFacts(matchId: number): Promise<RosterRow[]> {
   const rows = (await sqlClient.query(
     `WITH r AS (
        SELECT mr.id, mr.team_a, mr.team_b,

@@ -90,7 +90,7 @@ function pick<T>(variants: T[], seed: number): T {
 
 export function momentView(m: Moment): MomentView {
   const p = m.payload;
-  const results = m.matchId > 0 ? { href: `/matches/${m.matchId}`, label: "See the match" } : undefined;
+  const results = m.matchId > 0 ? { href: `/matches/${m.matchId}/recap`, label: "See your recap" } : undefined;
   const board = { href: "/leaderboard", label: "Open leaderboard" };
   switch (m.kind) {
     case "motm":
@@ -124,7 +124,7 @@ export function momentView(m: Moment): MomentView {
         title: `You're on ${str(p.teamName, "your team")}`,
         body: mates ? `With ${mates}.` : "Teams are out. Check who you're playing with.",
         tone: "good",
-        cta: results ? { href: results.href, label: "See the teams" } : undefined,
+        cta: m.matchId > 0 ? { href: `/matches/${m.matchId}`, label: "See the teams" } : undefined,
       };
     }
     case "top5":

@@ -24,6 +24,13 @@ export interface AvailabilityControlsProps {
   isSubscriber?: boolean;
 }
 
+function buzz(e: React.MouseEvent) {
+  const btn = (e.target as HTMLElement).closest("button");
+  if (btn && !btn.disabled && typeof navigator !== "undefined" && "vibrate" in navigator) {
+    navigator.vibrate(12);
+  }
+}
+
 export function AvailabilityControls({
   matchId,
   currentStatus,
@@ -57,7 +64,7 @@ export function AvailabilityControls({
       </div>
 
       {open ? (
-        <div className="mt-3 grid grid-cols-2 gap-2">
+        <div className="mt-3 grid grid-cols-2 gap-2" onClickCapture={buzz}>
           <form action={formAction}>
             <input type="hidden" name="matchId" value={matchId} />
             <input type="hidden" name="status" value="in" />
@@ -70,7 +77,10 @@ export function AvailabilityControls({
                   : "border-emerald-600/40 text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
               }`}
             >
-              <span className={`flex h-9 w-9 items-center justify-center rounded-full ${currentStatus === "in" ? "bg-white/20" : "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400"}`}>
+              <span
+                key={`in-${currentStatus}`}
+                className={`flex h-9 w-9 items-center justify-center rounded-full ${currentStatus === "in" ? "tap-pop bg-white/20" : "bg-emerald-600/10 text-emerald-600 dark:text-emerald-400"}`}
+              >
                 <CheckIcon className="h-5 w-5" />
               </span>
               I&apos;m IN
@@ -88,7 +98,10 @@ export function AvailabilityControls({
                   : "border-red-600/40 text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/30"
               }`}
             >
-              <span className={`flex h-9 w-9 items-center justify-center rounded-full ${currentStatus === "out" ? "bg-white/20" : "bg-red-600/10 text-red-600 dark:text-red-400"}`}>
+              <span
+                key={`out-${currentStatus}`}
+                className={`flex h-9 w-9 items-center justify-center rounded-full ${currentStatus === "out" ? "tap-pop bg-white/20" : "bg-red-600/10 text-red-600 dark:text-red-400"}`}
+              >
                 <XIcon className="h-5 w-5" />
               </span>
               I&apos;m OUT
