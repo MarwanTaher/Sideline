@@ -510,6 +510,58 @@ the notification/install prompts in **one** slot, at most once per week.
 
 ---
 
+## 8b. Round 2 ideas — stories, tap-spam sound, editable messages
+
+Agreed with the group owner after the UX bundles shipped to dev. Order of work: **M-1 → T-1 → S-1**
+(smallest first; S-1 needs a migration).
+
+### M-1 Editable moment messages (celebrations + bummers) — P2 · S
+
+- **What:** admins rewrite the pop-up text for every moment kind (MOTM, hat-trick, team reveal,
+  bummers, …). Several variants per kind; one is picked at random per moment and stays stable
+  if the pop-up is shown again. An empty kind falls back to the built-in copy.
+- **Placeholders:** `{name}`, `{votes}`, `{goals}`, `{team}`, `{teammates}`, `{streak}`, `{rank}`,
+  `{n}`. The editor lists which ones each kind supports; unknown placeholders are left as typed.
+- **Storage:** one `app_settings` row `moment_copy` = `{ [kind]: [{ emoji?, title, body }] }`. No migration.
+- **Runtime:** `momentView(m, overrides?)` applies the override, keeps the default CTA and the
+  bummer silver-lining footnote. Overrides are read once per request by `MomentsGate` and cached.
+- **Admin UI:** Admin control › new **Messages** tab (admins and super). Grouped *Celebrations* /
+  *Bummers*; per kind: the default text, the custom variants, a live preview pop-up, **Reset**.
+- **Tests:** placeholder fill, fallback to defaults, stable pick.
+
+### T-1 Tap-spam sound easter egg — P3 · S
+
+- **Trigger:** a 4th tap on the IN / OUT buttons within 2 s (taps count even when the button is
+  disabled, e.g. already IN). Plays once, then a 3 s cooldown. Sound plays on that phone only.
+- **Default sound:** three different fart variations synthesised with Web Audio (noise + wobbling
+  low oscillator), one picked at random. No audio files, no licensing.
+- **Custom sounds:** admin uploads up to 3 files (mp3 / ogg / m4a, ≤ 200 KB each) in Admin control ›
+  Messages; stored in Vercel Blob, list in `app_settings` `tap_spam_sounds`. When the list is empty
+  the synth farts are used. Admin master switch to disable the egg entirely.
+- **Opt-out:** "Silly sounds" switch in Profile (per device, `localStorage`), default on.
+- **Caveat:** an iPhone on silent mutes web audio; that is expected.
+- Exception to §9 "sounds on by default": this only fires on deliberate spam, never on normal use.
+
+### S-1 24-hour photo stories — P2 · M
+
+- **Who:** any player. Max 5 live stories per player.
+- **Post:** "+" on the Home stories row → pick / take photo → optional caption (≤ 120 chars) →
+  optional match link (defaults to this week's match) → share. The phone resizes to 1080 px
+  JPEG/WebP (~150–250 KB) before upload; the server re-checks type and size (≤ 1 MB) and stores it
+  in Vercel Blob under an unguessable path, like profile photos.
+- **See:** a stories row at the top of Home (avatar rings, green = unseen), grouped per player.
+  Tapping opens the full-screen story viewer (the recap viewer, generalised): auto-advance,
+  tap left / right, hold to pause, swipe down / ✕ to close.
+- **Interact:** one emoji reaction per viewer (🔥 😂 👏 ⚽ 😮 ❤️, changeable). The owner sees
+  **Seen by N** with names and reactions. A linked match shows as a chip that opens the match.
+- **Moderation:** owner and any admin can delete a story at once (blob + rows).
+- **Expiry:** every query filters `expires_at > now()`, so a story disappears exactly at 24 h.
+  The existing daily cron also deletes expired blobs and rows (no extra cron needed on Hobby).
+- **DB (migration 0026, additive):** `stories(id, player_id, image_url, caption, match_id,
+  created_at, expires_at)`, `story_views(story_id, player_id, seen_at)`,
+  `story_reactions(story_id, player_id, emoji)`.
+- **Not in v1:** video, text-only stories, replies / DMs, push on every new story (too noisy).
+
 ## 9. Things reviewed and deliberately not recommended
 
 | Idea | Why not |
@@ -520,6 +572,6 @@ the notification/install prompts in **one** slot, at most once per week.
 | Upgrading Vercel plan for frequent cron | Daily cron covers reminders; revisit only if F-6 needs exact timing. |
 | Restoring the removed audit tables' UI | Explicitly removed at the user's request. |
 | "Worst player of the week" or public low-score call-outs | Shaming drives people away from a friends' game; bummers stay private (E-3). |
-| Sounds on by default | Phones at work/home; haptics + visuals are enough. Optional toggle at most. |
+| Sounds on by default | Phones at work/home; haptics + visuals are enough. Only exception: the T-1 tap-spam egg, which needs deliberate spamming and has a Profile mute. |
 | Coins, loot boxes, paid cosmetics | Wrong incentive for a social group; badges and moments cover the fun. |
 | Confetti on every action | Loses meaning; reserve for real achievements (E-2). |
