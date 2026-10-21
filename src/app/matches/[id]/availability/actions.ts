@@ -7,6 +7,7 @@ import {
   setPlayerAvailability,
   clearPlayerAvailability,
   getAvailabilityMatch,
+  getAvailabilityAllPlayers,
   getPlayerAvailabilityStatus,
   countInPlayers,
   addToWaitlist,
@@ -25,7 +26,12 @@ import {
   setVoteGate,
   isAvailabilityLockEnabled,
   setAvailabilityLock,
+  getSetting,
+  setSetting,
+  nudgeKey,
+  NUDGE_COOLDOWN_MS,
 } from "@/lib/feature-settings";
+import { matchLabel } from "@/lib/format";
 import { isWithinAvailabilityLock } from "@/lib/match-schedule";
 import { getPendingVoteObligation } from "@/lib/voting";
 import { notify } from "@/lib/push";
@@ -446,6 +452,56 @@ export async function setAvailabilityLockAction(
         ? "Availability locks 24h before kickoff."
         : "24h availability lock off.",
     };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
+/**
+ * Admin: push a reminder to every active player who hasn't replied yet.
+ * Rate-limited to once per 6 hours per match so players aren't spammed.
+ */
+export async function nudgePendingAction(
+  _prev: AvailabilityActionState,
+  formData: FormData,
+): Promise<AvailabilityActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+
+    const last = Number((await getSetting(nudgeKey(matchId))) ?? 0);
+    const since = Date.now() - last;
+    if (last > 0 && since < NUDGE_COOLDOWN_MS) {
+      const hrs = Math.ceil((NUDGE_COOLDOWN_MS - since) / 3_600_000);
+      return { ok: false, message: `Already nudged recently. Try again in ~${hrs}h.` };
+    }
+
+    const match = await getAvailabilityMatch(matchId);
+    if (!match) throw new Error("Match not found.");
+    if (!match.availabilityOpen) throw new Error("Sign-up is closed.");
+
+    const pending = (await getAvailabilityAllPlayers(matchId))
+      .filter((p) => p.status === "pending")
+      .map((p) => p.playerId);
+    if (pending.length === 0) return { ok: true, message: "Everyone has replied. 🎉" };
+
+    await setSetting(nudgeKey(matchId), String(Date.now()));
+    try {
+      await notify(
+        "availability_reminder",
+        {
+          title: "Are you in? ⚽",
+          body: `We're picking teams for ${matchLabel(match.playedOn)}. Tap to reply IN or OUT.`,
+          url: `/matches/${matchId}/availability`,
+          tag: `nudge-${matchId}`,
+        },
+        { playerIds: pending },
+      );
+    } catch (err) {
+      console.error("nudge push failed", err);
+    }
+    revalidateAvailability(matchId);
+    return { ok: true, message: `Nudged ${pending.length} player${pending.length === 1 ? "" : "s"}.` };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
   }

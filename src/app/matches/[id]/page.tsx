@@ -19,7 +19,7 @@ import { MatchSocial } from "./match-social";
 import { SectionIcon } from "@/components/section-icon";
 import { PhaseStrip } from "@/components/phase-strip";
 import { YouChip } from "@/components/you-chip";
-import { getMatchPhase } from "@/lib/match-phase";
+import { getMatchPhase, phaseAction } from "@/lib/match-phase";
 import { getAvailabilityMatch, getPlayerAvailabilityStatus } from "@/lib/availability";
 import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
 
@@ -84,6 +84,12 @@ export default async function MatchDetailPage({
     lockEnabled,
     hasRoster,
   });
+  const nextStep = phaseAction(phase, matchId, {
+    isAdmin,
+    canScore,
+    onRoster: isMember,
+    myStatus,
+  });
   const shareUrl = baseUrl ? `${baseUrl}/share/match/${matchId}` : "";
   const shareText = digest ? buildDigestShareText(digest, shareUrl) : "";
   const icsHref = `/api/matches/${matchId}/calendar`;
@@ -104,6 +110,15 @@ export default async function MatchDetailPage({
           <YouChip phase={phase} myStatus={myStatus} onRoster={isMember} />
         </div>
         <PhaseStrip phase={phase} className="mt-3" />
+        {nextStep ? (
+          <Link
+            href={nextStep.href}
+            className="mt-3 flex items-center justify-between gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 active:scale-[0.98]"
+          >
+            <span>{nextStep.label}</span>
+            <span aria-hidden="true">→</span>
+          </Link>
+        ) : null}
 
         <div className="mt-3 flex flex-wrap gap-1.5">
           {[
@@ -177,7 +192,7 @@ export default async function MatchDetailPage({
         ) : null}
       </div>
 
-      <MatchNav matchId={match.id} isAdmin={isAdmin} canScore={canScore} />
+      <MatchNav matchId={match.id} isAdmin={isAdmin} canScore={canScore} highlightHref={nextStep?.href} />
 
       <div className="mt-3">
         <Link

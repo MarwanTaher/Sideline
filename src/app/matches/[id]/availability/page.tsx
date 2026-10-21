@@ -7,7 +7,8 @@ import {
   getAvailabilityAllPlayers,
   getWaitlistPlayers,
 } from "@/lib/availability";
-import { isWaitlistAutoPromoteEnabled, isWaitlistVisibleToPlayers, isVoteGateEnabled, isAvailabilityLockEnabled } from "@/lib/feature-settings";
+import { isWaitlistAutoPromoteEnabled, isWaitlistVisibleToPlayers, isVoteGateEnabled, isAvailabilityLockEnabled, getLastNudgeAt, NUDGE_COOLDOWN_MS } from "@/lib/feature-settings";
+import { AdminActionBar } from "./admin-quick";
 import { isWithinAvailabilityLock, msUntilLock } from "@/lib/match-schedule";
 import { matchLabel, matchLabelWithTime } from "@/lib/format";
 import { getSubscriberIdsForMatch } from "@/lib/season-subscriptions";
@@ -15,7 +16,6 @@ import { AvailabilityControls } from "./availability-controls";
 import {
   AvailabilityOpenToggle,
   MaxPlayersForm,
-  AdminPlayerControls,
   WaitlistToggle,
   VoteGateToggle,
   AvailabilityLockToggle,
@@ -117,8 +117,14 @@ export default async function AvailabilityPage({
   const shownWaitlist = (isAdmin ? waitlistPlayers : publicWaitlist).map((w) => ({
     ...w,
     photoUrl: photoById.get(w.playerId) ?? null,
+    status: statusById.get(w.playerId),
   }));
   const full = squadCount >= match.maxPlayers;
+  const lastNudgeAt = isAdmin ? await getLastNudgeAt(matchId) : null;
+  const statusById = new Map(players.map((p) => [p.playerId, p.status]));
+  const adminMatchId = isAdmin ? matchId : null;
+  // eslint-disable-next-line react-hooks/purity -- request-time snapshot in a server component
+  const nowMs = Date.now();
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
@@ -168,6 +174,19 @@ export default async function AvailabilityPage({
         <PhaseStrip phase={phase} className="mt-4" />
       </div>
 
+      {isAdmin && match.matchdayStatus !== "closed" ? (
+        <AdminActionBar
+          matchId={matchId}
+          open={open}
+          pendingCount={pendingPlayers.length}
+          pendingGuestCount={pendingGuests.length}
+          squadReady={full || (!open && squadCount >= 10)}
+          lastNudgeAt={lastNudgeAt}
+          nudgeCooldownMs={NUDGE_COOLDOWN_MS}
+          nowMs={nowMs}
+        />
+      ) : null}
+
       {myPlayerId != null ? (
         <section className="mt-6">
           <AvailabilityControls
@@ -186,7 +205,10 @@ export default async function AvailabilityPage({
       )}
 
       {isAdmin && pendingGuests.length > 0 ? (
-        <section className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-50/60 p-4 dark:bg-amber-950/20">
+        <section
+          id="guest-requests"
+          className="mt-6 scroll-mt-24 rounded-2xl border border-amber-500/30 bg-amber-50/60 p-4 dark:bg-amber-950/20"
+        >
           <h2 className="text-sm font-semibold">
             Guest requests <span className="font-normal text-neutral-500">({pendingGuests.length})</span>
           </h2>
@@ -201,7 +223,11 @@ export default async function AvailabilityPage({
         guests={approvedGuests}
         subscriberIds={subscriberIds}
         myPlayerId={myPlayerId ?? null}
+        adminMatchId={adminMatchId}
       />
+      {isAdmin ? (
+        <p className="mt-1.5 px-1 text-[11px] text-neutral-400">Tip: tap any player to set them IN / OUT.</p>
+      ) : null}
 
       <div className="mt-3 space-y-2">
         <PeopleChips
@@ -210,6 +236,7 @@ export default async function AvailabilityPage({
           people={shownWaitlist}
           numbered
           highlightId={myPlayerId ?? null}
+          adminMatchId={adminMatchId}
           defaultOpen={myPlayerId != null && shownWaitlist.some((w) => w.playerId === myPlayerId)}
         />
         <PeopleChips
@@ -217,8 +244,16 @@ export default async function AvailabilityPage({
           dotClass="bg-amber-500"
           people={pendingPlayers}
           highlightId={myPlayerId ?? null}
+          adminMatchId={adminMatchId}
+          defaultOpen={isAdmin}
         />
-        <PeopleChips label="Out" dotClass="bg-red-500" people={outPlayers} highlightId={myPlayerId ?? null} />
+        <PeopleChips
+          label="Out"
+          dotClass="bg-red-500"
+          people={outPlayers}
+          highlightId={myPlayerId ?? null}
+          adminMatchId={adminMatchId}
+        />
       </div>
 
       {myPlayerId != null ? (
@@ -253,12 +288,6 @@ export default async function AvailabilityPage({
                 <div className="border-t border-black/5 pt-4 dark:border-white/5">
                   <MaxPlayersForm matchId={matchId} maxPlayers={match.maxPlayers} />
                 </div>
-              </div>
-            </details>
-            <details className="rounded-xl border border-black/10 p-4 dark:border-white/10">
-              <summary className="cursor-pointer text-sm font-semibold">Set a player&apos;s availability</summary>
-              <div className="mt-3">
-                <AdminPlayerControls matchId={matchId} players={players} />
               </div>
             </details>
             <details className="rounded-xl border border-black/10 p-4 dark:border-white/10">

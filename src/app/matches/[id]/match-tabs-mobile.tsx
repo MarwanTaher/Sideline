@@ -112,6 +112,15 @@ const ICONS: Record<SectionIconName, (p: IconProps) => ReactElement> = {
   diagnostics: StatsIcon,
 };
 
+export function NextDot() {
+  return (
+    <span aria-label="Next step" className="absolute -right-2 -top-1 flex h-2 w-2">
+      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75 motion-reduce:animate-none" />
+      <span className="relative inline-flex h-2 w-2 rounded-full bg-amber-500" />
+    </span>
+  );
+}
+
 /**
  * Mobile-only bottom bar for a single match. A fixed set of primary tabs plus a
  * "More" sheet holds every section — no horizontal scrolling (which is
@@ -122,9 +131,11 @@ const ICONS: Record<SectionIconName, (p: IconProps) => ReactElement> = {
 export function MatchTabsMobile({
   tabs,
   matchId,
+  highlightHref,
 }: {
   tabs: MatchTab[];
   matchId: number;
+  highlightHref?: string;
 }) {
   const pathname = usePathname();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -143,6 +154,7 @@ export function MatchTabsMobile({
   const primary = tabs.slice(0, 3);
   const overflow = tabs.slice(3);
   const moreActive = overflow.some((t) => isActive(t.href));
+  const moreHighlight = overflow.some((t) => t.href === highlightHref);
 
   const itemCls = (active: boolean) =>
     `flex flex-1 flex-col items-center justify-center gap-0.5 px-1 py-1.5 text-[10px] font-medium transition ${
@@ -159,13 +171,16 @@ export function MatchTabsMobile({
         key={t.href}
         href={t.href}
         aria-current={active ? "page" : undefined}
-        className={`flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-medium transition ${
+        className={`relative flex flex-col items-center gap-1 rounded-xl border px-2 py-3 text-xs font-medium transition ${
           active
             ? "border-emerald-500/40 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
             : "border-black/10 text-neutral-600 hover:bg-neutral-50 dark:border-white/10 dark:text-neutral-300 dark:hover:bg-neutral-800"
         }`}
       >
-        <Icon className="h-6 w-6" />
+        <span className="relative">
+          <Icon className="h-6 w-6" />
+          {t.href === highlightHref && !active ? <NextDot /> : null}
+        </span>
         {t.text}
       </Link>
     );
@@ -229,7 +244,10 @@ export function MatchTabsMobile({
               aria-current={active ? "page" : undefined}
               className={itemCls(active)}
             >
-              <Icon className="h-6 w-6" />
+              <span className="relative">
+                <Icon className="h-6 w-6" />
+                {t.href === highlightHref && !active ? <NextDot /> : null}
+              </span>
               {t.text}
             </Link>
           );
@@ -241,7 +259,10 @@ export function MatchTabsMobile({
             aria-haspopup="dialog"
             className={itemCls(moreActive)}
           >
-            <MoreIcon className="h-6 w-6" />
+            <span className="relative">
+              <MoreIcon className="h-6 w-6" />
+              {moreHighlight && !moreActive ? <NextDot /> : null}
+            </span>
             More
           </button>
         ) : null}

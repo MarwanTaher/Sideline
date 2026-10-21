@@ -106,3 +106,15 @@ export async function isAvailabilityLockEnabled(): Promise<boolean> {
 export async function setAvailabilityLock(enabled: boolean): Promise<void> {
   await setSetting(AVAILABILITY_LOCK_24H_KEY, enabled ? "1" : "0");
 }
+
+/** Availability "nudge the no-replies" push: last-sent timestamp per match. */
+export const NUDGE_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+export function nudgeKey(matchId: number): string {
+  return `nudge:${matchId}`;
+}
+
+export async function getLastNudgeAt(matchId: number): Promise<number | null> {
+  const v = Number((await getSetting(nudgeKey(matchId))) ?? 0);
+  return v > 0 ? v : null;
+}
