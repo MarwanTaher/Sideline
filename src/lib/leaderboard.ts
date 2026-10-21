@@ -1,6 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { sqlClient } from "./db";
-import { getPlayerScores, getScoringPolicy } from "./scoring";
+import { getPlayerScores, getScoringPolicy, type ScorePayload } from "./scoring";
 
 /**
  * Cache tag for all computed-score reads. Score-affecting writes (match close,
@@ -8,6 +8,17 @@ import { getPlayerScores, getScoringPolicy } from "./scoring";
  * call `revalidateScores()` to invalidate it. See `scores-cache.ts`.
  */
 export const SCORES_CACHE_TAG = "scores";
+
+/**
+ * Every player's score, cached behind the `scores` tag. `getPlayerScores()`
+ * recomputes from all votes and stats, so hot paths (leaderboard, Lineup
+ * Builder, score breakdown) share this one cached result instead.
+ */
+export const getCachedPlayerScores = unstable_cache(
+  async (): Promise<Record<number, ScorePayload>> => getPlayerScores(),
+  ["player-scores-v1"],
+  { tags: [SCORES_CACHE_TAG], revalidate: 600 },
+);
 
 export interface LeaderboardRow {
   id: number;
@@ -59,7 +70,7 @@ export async function getLeaderboard(): Promise<LeaderboardData> {
     matchCounts.set(Number(r.player_id), Number(r.n));
   }
 
-  const scores = await getPlayerScores();
+  const scores = await getCachedPlayerScores();
 
   const rows: LeaderboardRow[] = players.map((p) => {
     const id = Number(p.id);

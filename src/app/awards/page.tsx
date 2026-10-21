@@ -2,10 +2,10 @@ import { Suspense } from "react";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import {
-  getAwards,
+  getCachedAwards,
   getAwardsSettings,
   getAwardMatches,
-  getPlayerBadgeCounts,
+  getCachedPlayerBadgeCounts,
   getActivePlayers,
   AWARD_TYPES,
 } from "@/lib/awards";
@@ -151,7 +151,7 @@ async function AwardsResults({
 
   const payload =
     scope === "overall" || matchId !== null
-      ? await getAwards(scope, matchId, thresholds)
+      ? await getCachedAwards(scope, matchId, thresholds)
       : null;
 
   const activePlayers = isAdmin && payload ? await getActivePlayers() : [];
@@ -250,7 +250,7 @@ async function BadgeSection({
   thresholds: Thresholds;
 }) {
   const badgeCounts = playerId
-    ? await getPlayerBadgeCounts(Number(playerId), thresholds)
+    ? await getCachedPlayerBadgeCounts(Number(playerId), thresholds)
     : null;
   return <BadgeGallery counts={badgeCounts} />;
 }

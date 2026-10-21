@@ -47,30 +47,28 @@ export default async function MatchDetailPage({
   const matchId = Number(id);
   if (!Number.isFinite(matchId)) notFound();
 
-  const match = await getMatchDetail(matchId);
-  if (!match) notFound();
-
   const role = session.user.role;
-  const isAdmin = await isAdminView(role === "admin" || role === "super");
   const viewerPlayerId = session.user.playerId;
-  const isMember =
-    viewerPlayerId != null && (await isPlayerInMatch(matchId, viewerPlayerId));
+  // Independent reads in one round-trip window instead of one after another.
+  const [match, isAdmin, isMember, fieldFeatures] = await Promise.all([
+    getMatchDetail(matchId),
+    isAdminView(role === "admin" || role === "super"),
+    viewerPlayerId != null ? isPlayerInMatch(matchId, viewerPlayerId) : Promise.resolve(false),
+    getFieldFeatures(),
+  ]);
+  if (!match) notFound();
   const openForAvailability =
     match.matchdayStatus === "draft" || match.matchdayStatus === "active";
   if (!isAdmin && !isMember && !openForAvailability) {
     redirect("/matches");
   }
-  const adminMatch = isAdmin ? await getMatchAdmin(matchId) : null;
-  const canScore =
-    isAdmin ||
-    (await canRunMatchday(matchId, { role, playerId: viewerPlayerId ?? null }));
-
   // Social hub data (reactions, share). Rostered players may interact.
   const canInteract = isMember;
   const hasRoster = match.teams.some((t) => t.players.length > 0);
 
-  const fieldFeatures = await getFieldFeatures();
-  const [reactions, digest, baseUrl, weather, availMeta, lockEnabled, myStatus, fieldLive, draftForBalance] = await Promise.all([
+  const [adminMatch, canScore, reactions, digest, baseUrl, weather, availMeta, lockEnabled, myStatus, fieldLive, draftForBalance] = await Promise.all([
+    isAdmin ? getMatchAdmin(matchId) : Promise.resolve(null),
+    isAdmin ? Promise.resolve(true) : canRunMatchday(matchId, { role, playerId: viewerPlayerId ?? null }),
     getReactionSummary(matchId, viewerPlayerId ?? null),
     getMatchDigest(matchId),
     getBaseUrl(),

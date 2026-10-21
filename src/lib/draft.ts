@@ -1,6 +1,6 @@
 import { sqlClient } from "@/lib/db";
 import { parseTeamColors, type KitKey } from "./field-view";
-import { getPlayerScores } from "@/lib/scoring";
+import { getCachedPlayerScores } from "@/lib/leaderboard";
 import {
   listGuests,
   updateGuestTeam,
@@ -189,7 +189,7 @@ export async function getDraftState(matchId: number): Promise<DraftState | null>
   );
   const candidateRows = candidatesRaw as CandidateRow[];
 
-  const scores = await getPlayerScores();
+  const scores = await getCachedPlayerScores();
 
   const players: DraftPlayer[] = candidateRows.map((r) => ({
     playerId: Number(r.player_id),

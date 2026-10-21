@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useActionState } from "react";
+import { useEffect, useActionState, useOptimistic } from "react";
 import { useRouter } from "next/navigation";
 import { setAvailabilityAction, type AvailabilityActionState } from "./actions";
 import type { AvailabilityStatus } from "@/lib/availability";
@@ -42,7 +42,19 @@ export function AvailabilityControls({
   isSubscriber = false,
 }: AvailabilityControlsProps) {
   const router = useRouter();
-  const [state, formAction, pending] = useActionState(setAvailabilityAction, INITIAL);
+  // Flip the button the instant it's tapped; React drops the optimistic value
+  // when the action finishes (server rejected → back to the real status).
+  const [shownStatus, setShownStatus] = useOptimistic<AvailabilityStatus, AvailabilityStatus>(
+    currentStatus,
+    (_cur, next) => next,
+  );
+  const [state, formAction] = useActionState(
+    async (prev: AvailabilityActionState, fd: FormData) => {
+      setShownStatus(fd.get("status") === "in" ? "in" : "out");
+      return setAvailabilityAction(prev, fd);
+    },
+    INITIAL,
+  );
   const { onTap, puffs, smoking } = useTapSpam();
 
   useEffect(() => {
@@ -50,7 +62,7 @@ export function AvailabilityControls({
   }, [state, router]);
 
   const closed = !open;
-  const disabled = pending || locked || closed;
+  const disabled = locked || closed;
   // One short line, only when there is something the buttons can't say.
   const note = closed
     ? "Sign-up is closed."
@@ -58,12 +70,12 @@ export function AvailabilityControls({
       ? "🔒 Locked within 24h of kickoff. Ask an admin to change it."
       : msToLock != null && msToLock > 0 && msToLock <= LOCK_WARNING_MS
         ? `⏳ Changes close in ${formatDuration(msToLock)}.`
-        : isSubscriber && currentStatus !== "out"
+        : isSubscriber && shownStatus !== "out"
           ? "★ Season place: going OUT frees your spot, the fee still applies."
           : null;
 
   const btn = (value: "in" | "out") => {
-    const selected = currentStatus === value;
+    const selected = shownStatus === value;
     const isIn = value === "in";
     return (
       <form action={formAction} className="flex-1">
@@ -83,7 +95,7 @@ export function AvailabilityControls({
                 }`
           }`}
         >
-          <span key={`${value}-${currentStatus}`} className={selected ? "tap-pop" : ""}>
+          <span key={`${value}-${shownStatus}`} className={selected ? "tap-pop" : ""}>
             {isIn ? <CheckIcon className="h-5 w-5" /> : <XIcon className="h-5 w-5" />}
           </span>
           {isIn ? "IN" : "OUT"}
@@ -94,12 +106,12 @@ export function AvailabilityControls({
 
   return (
     <div>
-      {currentStatus === "pending" && !closed ? (
+      {shownStatus === "pending" && !closed ? (
         <p className="mb-2 text-sm font-semibold">Can you play?</p>
       ) : null}
       <div
         className={`relative flex gap-1 rounded-2xl border bg-white p-1 shadow-sm dark:bg-neutral-900 ${smoking ? "tap-shake" : ""} ${
-          currentStatus === "pending" && !closed
+          shownStatus === "pending" && !closed
             ? "border-amber-400/60"
             : "border-black/[0.06] dark:border-white/10"
         }`}

@@ -1,4 +1,6 @@
+import { unstable_cache } from "next/cache";
 import { sqlClient } from "./db";
+import { SCORES_CACHE_TAG } from "./leaderboard";
 
 /**
  * Direct TypeScript port of the read/compute path of `src/awards.py`.
@@ -371,6 +373,18 @@ export async function getAwards(
   };
 }
 
+/**
+ * Cached awards for the /awards page. Awards only change when scores do
+ * (votes, stats, roster, matchday close) or an admin override is saved — all
+ * of which call revalidateScores(). Arguments are part of the cache key.
+ */
+export const getCachedAwards = unstable_cache(
+  (scopeType: "match" | "overall", matchId: number | null, thresholds: { minMatchVotes?: number; minOverallVotes?: number }) =>
+    getAwards(scopeType, matchId, thresholds),
+  ["awards-v1"],
+  { revalidate: 600, tags: [SCORES_CACHE_TAG] },
+);
+
 export interface AwardsSettings {
   matchMinValidVotes: number;
   overallMinValidVotes: number;
@@ -446,6 +460,14 @@ export async function getPlayerBadgeCounts(
 
   return counts;
 }
+
+/** Cached badge counts (the heaviest awards query); same invalidation as getCachedAwards. */
+export const getCachedPlayerBadgeCounts = unstable_cache(
+  (playerId: number, thresholds: { minMatchVotes?: number; minOverallVotes?: number }) =>
+    getPlayerBadgeCounts(playerId, thresholds),
+  ["badge-counts-v1"],
+  { revalidate: 600, tags: [SCORES_CACHE_TAG] },
+);
 
 type MaxRow = {
   match_id: number | string;

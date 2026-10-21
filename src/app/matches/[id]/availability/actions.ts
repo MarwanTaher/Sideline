@@ -67,6 +67,11 @@ async function requireAdmin(): Promise<void> {
 }
 
 function revalidateAvailability(matchId: number): void {
+  // Home and the match overview also show "You: IN" and the squad count; the
+  // fresh payload comes back with the action, so the optimistic button never
+  // flickers back while a separate refresh loads.
+  revalidatePath("/");
+  revalidatePath(`/matches/${matchId}`);
   revalidatePath(`/matches/${matchId}/availability`);
   revalidatePath(`/matches/${matchId}/draft`);
 }

@@ -1,5 +1,6 @@
 import { sqlClient } from "./db";
-import { getScoringPolicy, getPlayerScores } from "./scoring";
+import { getScoringPolicy } from "./scoring";
+import { getCachedPlayerScores } from "./leaderboard";
 import { fmtDate } from "./matches";
 
 export interface BreakdownMatch {
@@ -156,7 +157,7 @@ export async function getScoreBreakdown(playerId: number): Promise<ScoreBreakdow
     (validPeerVotes > 0 ? Math.min(1.0, validPeerVotes / peerFullConfidenceVotes) : 0.0) * cMatch;
   const peerAdj = neutralScore + cPeer * (peerScore100 - neutralScore);
 
-  const scores = await getPlayerScores();
+  const scores = await getCachedPlayerScores();
   const livePayload = scores[playerId];
   const finalScore = livePayload ? livePayload.final : round2(peerAdj);
   const peerLive = livePayload ? livePayload.peer : round2(peerAdj);

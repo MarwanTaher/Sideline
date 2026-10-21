@@ -16,13 +16,14 @@ Order: release safely → make it fast → fair teams (the original problem) →
 go-live → polish → maintainability. Items keep their ids; details are in the sections below.
 
 **Already built (on `dev`):** C-9, H-1 (incl. U-1), O-1 (incl. U-2), O-3, AV-1…AV-6, E-1…E-5,
-M-1, T-1, S-1, FV-2, P-6. Partly done: O-2 (phase CTA, no redirect), E-7, U-9, C-4 (DB-free unit
+M-1, T-1, S-1, FV-2, P-6, Phase 0 (C-1, C-2, C-8, P-3) and Phase 1 (P-1, U-3, P-4; P-2 on Home and
+match page; P-5 for awards and badges — players/stats pages stay live because they are admin tools). Partly done: O-2 (phase CTA, no redirect), E-7, U-9, C-4 (DB-free unit
 tests exist; time/money rules not yet covered).
 
 | Phase | Theme | Items | Effort |
 |---|---|---|---|
-| **0** | Release safety | C-2 preview DB · C-8 secrets + `.env.example` · C-1 `kickoff_at NOT NULL` · P-3 function region · ship `dev` → `main` | ½–1 d |
-| **1** | Speed | P-1 cached scores · U-3 optimistic In/Out · P-4 skeletons · P-2 batched reads · P-5 cached read-mostly pages | 1–2 d |
+| **0** ✅ | Release safety | C-2 preview DB · C-8 secrets + `.env.example` · C-1 `kickoff_at NOT NULL` · P-3 function region · ship `dev` → `main` | ½–1 d |
+| **1** ✅ | Speed | P-1 cached scores · U-3 optimistic In/Out · P-4 skeletons · P-2 batched reads · P-5 cached read-mostly pages | 1–2 d |
 | **2** | Fair teams | F-1 position-aware auto-balance · U-4 builder clarity (coverage chips, form, live balance meter) | 2 d |
 | **3** | Money & season go-live | F-3 go-live checklist · C-6 atomic writes · C-4 time/money tests · F-5 payment reminders · U-7 QR + bulk confirm + who owes · C-7 season edge cases | 2–3 d |
 | **4** | Matchday polish | F-6 lock-time push · F-2 results push · O-4 blocked states · O-5 one header · U-6 empty states / welcome · U-5 accessibility · Messages tab for all admins | 2 d |

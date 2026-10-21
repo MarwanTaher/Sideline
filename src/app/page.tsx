@@ -47,10 +47,14 @@ export default async function Home() {
   }
 
   const { name, role, playerId } = session.user;
-  const isAdmin = await isAdminView(role === "admin" || role === "super");
+  const isAdminP = isAdminView(role === "admin" || role === "super");
+  // Admin-only reads that don't depend on the match start alongside the rest.
+  const statsCountsP = isAdminP.then((a) => (a ? getStatsReviewCounts() : null));
+  const playersAdminP = isAdminP.then((a) => (a ? getPlayersAdminData() : null));
 
-  const [match, rankInfo, movement, voteObligation, lastMatchday, form, season, lockEnabled, stories, myPhoto] =
+  const [isAdmin, match, rankInfo, movement, voteObligation, lastMatchday, form, season, lockEnabled, stories, myPhoto] =
     await Promise.all([
+      isAdminP,
       getHomeMatch(playerId ?? null),
       playerId != null ? getPlayerRank(playerId) : Promise.resolve(null),
       playerId != null ? getLeaderboardMovement() : Promise.resolve(null),
@@ -84,8 +88,8 @@ export default async function Home() {
       seasonVisible && season.signupOpen ? countActiveSubscribers(season.id) : Promise.resolve(0),
       seasonVisible && playerId != null ? listPlayerInvoices(season.id, playerId) : Promise.resolve([]),
       isAdmin ? getHomeAdminCounts(match?.id ?? null, seasonVisible ? season.id : null) : Promise.resolve(null),
-      isAdmin ? getStatsReviewCounts() : Promise.resolve(null),
-      isAdmin ? getPlayersAdminData() : Promise.resolve(null),
+      statsCountsP,
+      playersAdminP,
     ]);
 
   // ── To do: at most three things the player actually has to act on. ──
