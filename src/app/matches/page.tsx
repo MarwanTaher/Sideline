@@ -4,6 +4,8 @@ import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getMatchList, fmtDate, fmtMatchTime } from "@/lib/matches";
 import { matchLabel } from "@/lib/format";
+import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
+import { getMatchPhase } from "@/lib/match-phase";
 import { SectionIcon } from "@/components/section-icon";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MatchesList } from "./matches-list";
@@ -27,7 +29,10 @@ export default async function MatchesPage() {
   const isAdmin = await isAdminView(role === "admin" || role === "super");
   const playerId = session.user.playerId;
 
-  const matches = await getMatchList(isAdmin ? undefined : playerId ?? -1);
+  const [matches, lockEnabled] = await Promise.all([
+    getMatchList(isAdmin ? undefined : playerId ?? -1, playerId ?? null),
+    isAvailabilityLockEnabled(),
+  ]);
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
@@ -81,6 +86,15 @@ export default async function MatchesPage() {
             statsScoringEnabled: m.statsScoringEnabled,
             dateLabel: `${fmtDate(m.playedOn)} at ${fmtMatchTime(m.matchTime)}`,
             locationName: m.locationName || undefined,
+            phase: getMatchPhase({
+              matchdayStatus: m.matchdayStatus,
+              availabilityOpen: m.availabilityOpen,
+              kickoffAt: m.kickoffAt,
+              lockEnabled,
+              hasRoster: m.playerCount > 0,
+            }),
+            myStatus: m.myStatus,
+            onRoster: m.onRoster,
           }))}
         />
       )}

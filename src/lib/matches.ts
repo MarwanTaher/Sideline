@@ -16,6 +16,10 @@ export interface MatchListItem {
   playerCount: number;
   availabilityOpen: boolean;
   locationName: string;
+  /** The viewer's own availability; only set when a viewer id is passed. */
+  myStatus?: "in" | "out" | "pending";
+  /** Whether the viewer is on a team sheet for this match. */
+  onRoster?: boolean;
 }
 
 export interface MatchTeamPlayer {
@@ -86,7 +90,10 @@ function parseTeamNames(value: unknown): Record<number, string> {
 }
 
 /** All matches, newest-first, with participant counts. */
-export async function getMatchList(forPlayerId?: number | null): Promise<MatchListItem[]> {
+export async function getMatchList(
+  forPlayerId?: number | null,
+  viewerId?: number | null,
+): Promise<MatchListItem[]> {
   const restrict = typeof forPlayerId === "number";
   const rows = (await sqlClient.query(
     `
@@ -99,14 +106,17 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
            COALESCE(m.stats_scoring_enabled, 1) AS stats_scoring_enabled,
            COALESCE(m.availability_open, 1) AS availability_open,
            COALESCE(m.location_name, '') AS location_name,
-           COUNT(mp.player_id) AS player_count
+           COUNT(mp.player_id) AS player_count,
+           COALESCE(BOOL_OR(mp.player_id = $2::int), false) AS on_roster,
+           (SELECT ma.status FROM match_availability ma
+             WHERE ma.match_id = m.id AND ma.player_id = $2::int) AS my_status
     FROM matches m
     LEFT JOIN match_players mp ON mp.match_id = m.id
-    ${restrict ? "WHERE (EXISTS (SELECT 1 FROM match_players mpx WHERE mpx.match_id = m.id AND mpx.player_id = $1) OR COALESCE(m.matchday_status, 'draft') IN ('draft', 'active'))" : ""}
+    WHERE ($1::int IS NULL OR EXISTS (SELECT 1 FROM match_players mpx WHERE mpx.match_id = m.id AND mpx.player_id = $1::int) OR COALESCE(m.matchday_status, 'draft') IN ('draft', 'active'))
     GROUP BY m.id, m.played_on, m.match_time, m.kickoff_at, m.matchday_status, m.status, m.stats_scoring_enabled, m.availability_open, m.location_name
     ORDER BY m.id DESC
     `,
-    restrict ? [forPlayerId] : [],
+    [restrict ? forPlayerId : null, viewerId ?? -1],
   )) as Array<{
     id: number;
     played_on: string;
@@ -118,6 +128,8 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
     availability_open: number;
     location_name: string;
     player_count: number;
+    on_roster: boolean | null;
+    my_status: string | null;
   }>;
 
   return rows.map((r) => ({
@@ -136,6 +148,15 @@ export async function getMatchList(forPlayerId?: number | null): Promise<MatchLi
     playerCount: Number(r.player_count),
     availabilityOpen: Number(r.availability_open) === 1,
     locationName: String(r.location_name ?? ""),
+    ...(viewerId != null
+      ? {
+          myStatus: (r.my_status === "in" || r.my_status === "out" ? r.my_status : "pending") as
+            | "in"
+            | "out"
+            | "pending",
+          onRoster: r.on_roster === true,
+        }
+      : {}),
   }));
 }
 
@@ -278,4 +299,13 @@ export async function getMatchDetail(matchId: number): Promise<MatchDetail | nul
     teams,
     stats,
   };
+}
+
+/** True once at least one player has been drafted onto a team for the match. */
+export async function matchHasRoster(matchId: number): Promise<boolean> {
+  const rows = (await sqlClient.query(
+    `SELECT 1 FROM match_players WHERE match_id = $1 LIMIT 1`,
+    [matchId],
+  )) as unknown[];
+  return rows.length > 0;
 }

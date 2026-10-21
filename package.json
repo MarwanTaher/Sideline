@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "test:unit": "node --import tsx tests/unit.test.ts",
     "test:scoring": "node --env-file=.env.local --import tsx tests/scoring.golden.test.ts",
     "test:scoring:update": "node --env-file=.env.local --import tsx tests/dump_golden.ts",
     "test:awards": "node --env-file=.env.local --import tsx tests/awards.golden.test.ts",
