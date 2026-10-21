@@ -16,6 +16,7 @@ export type AudienceMode = "default" | "admins";
 export type NotificationTypeKey =
   | "match_created"
   | "match_activated"
+  | "teams_published"
   | "availability_open"
   | "availability_reminder"
   | "payment_due"
@@ -60,6 +61,15 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     description: "Sent to everyone when a matchday is activated.",
     defaultEnabled: true,
     audience: "all",
+    audienceOverridable: true,
+    userConfigurable: true,
+  },
+  {
+    key: "teams_published",
+    label: "Teams are out",
+    description: "Sent to each rostered player when an admin publishes the teams, with their side.",
+    defaultEnabled: true,
+    audience: "players",
     audienceOverridable: true,
     userConfigurable: true,
   },

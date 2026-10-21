@@ -6,6 +6,8 @@ import { SplashScreen } from "@/components/splash-screen";
 import OnboardingFlow from "@/components/onboarding-flow";
 import PullToRefresh from "@/components/pull-to-refresh";
 import { auth } from "@/auth";
+import { Suspense } from "react";
+import { MomentsGate } from "@/components/moments-gate";
 
 const inter = Inter({
   variable: "--font-geist-sans",
@@ -70,6 +72,11 @@ export default async function RootLayout({
         <SiteHeader />
         {children}
         <OnboardingFlow show={Boolean(session?.user)} />
+        {session?.user?.playerId != null ? (
+          <Suspense fallback={null}>
+            <MomentsGate />
+          </Suspense>
+        ) : null}
       </body>
     </html>
   );

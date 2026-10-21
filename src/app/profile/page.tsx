@@ -22,6 +22,8 @@ import { getPlayerRank } from "@/lib/leaderboard";
 import { getPlayerAchievementsLive } from "@/lib/achievements";
 import { getChemistry } from "@/lib/chemistry";
 import { getKudos } from "@/lib/kudos";
+import { getFunMessages } from "@/lib/moments";
+import { FunMessagesToggle } from "./fun-messages-toggle";
 
 export const metadata = {
   title: "Profile · Sideline",
@@ -76,11 +78,12 @@ export default async function ProfilePage() {
     }),
   ]);
 
-  const [season, achievements, chemistry, kudos] = await Promise.all([
+  const [season, achievements, chemistry, kudos, funMessages] = await Promise.all([
     getPlayerSeason(pid),
     getPlayerAchievementsLive(pid),
     getChemistry(pid, { minShared: 3 }),
     getKudos(pid, pid),
+    getFunMessages(pid),
   ]);
 
   const displayName = contact?.name ?? session.user.name ?? "Player";
@@ -196,6 +199,7 @@ export default async function ProfilePage() {
           <div className="mt-2">
             <NotificationsToggle />
             <NotificationPreferences playerId={pid} />
+            <FunMessagesToggle initial={funMessages} />
           </div>
 
           <div className="my-5 h-px bg-black/5 dark:bg-white/10" />

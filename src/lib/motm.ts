@@ -32,6 +32,12 @@ export async function castMotmVote(
   votedForId: number,
 ): Promise<boolean> {
   if (voterId === votedForId) return false;
+  // MOTM freezes with the matchday: once closed, the winner is final.
+  const status = (await sqlClient.query(
+    `SELECT matchday_status FROM matches WHERE id = $1`,
+    [matchId],
+  )) as Array<{ matchday_status: string }>;
+  if (!status.length || status[0].matchday_status === "closed") return false;
   const roster = await rosterPlayerIds(matchId);
   if (!roster.has(voterId) || !roster.has(votedForId)) return false;
 

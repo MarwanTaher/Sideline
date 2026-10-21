@@ -1,6 +1,7 @@
 import "server-only";
 import { sqlClient } from "@/lib/db";
 import { notify } from "@/lib/push";
+import { addKudosMoment } from "@/lib/moments";
 
 export type KudosGiver = {
   playerId: number;
@@ -88,6 +89,11 @@ export async function toggleKudos(
       [fromPlayerId],
     )) as Array<{ name: string }>;
     const fromName = nameRows[0]?.name ?? "A teammate";
+    try {
+      await addKudosMoment(toPlayerId, fromName.split(" ")[0]);
+    } catch {
+      // Moments are best-effort.
+    }
     await notify(
       "kudos",
       {

@@ -3,6 +3,7 @@
  */
 import assert from "node:assert/strict";
 import { getMatchPhase, phaseAction, type MatchPhaseInput } from "../src/lib/match-phase";
+import { sortMoments, momentView, isBummer, MOMENT_PRIORITY, type Moment } from "../src/lib/moment-copy";
 
 const HOUR = 60 * 60 * 1000;
 const NOW = Date.parse("2026-10-21T12:00:00Z");
@@ -69,4 +70,36 @@ test("plain player in teams phase has no CTA", () => {
   assert.equal(phaseAction("teams", 5, viewer), null);
 });
 
+console.log("moments");
+const mk = (id: number, kind: Moment["kind"], payload: Record<string, unknown> = {}, createdAt = "2026-10-21T10:00:00Z"): Moment => ({
+  id, kind, matchId: 7, payload, createdAt,
+});
+test("sortMoments puts MOTM before kudos before bummers", () => {
+  const sorted = sortMoments([mk(1, "bummer_winless"), mk(2, "kudos"), mk(3, "motm")]);
+  assert.deepEqual(sorted.map((m) => m.id), [3, 2, 1]);
+});
+test("sortMoments breaks ties by newest", () => {
+  const sorted = sortMoments([mk(1, "badge", {}, "2026-10-01"), mk(2, "badge", {}, "2026-10-05")]);
+  assert.deepEqual(sorted.map((m) => m.id), [2, 1]);
+});
+test("bummers are tone bummer with a silver lining", () => {
+  const v = momentView(mk(9, "bummer_winless", { silverLining: "You still assisted twice." }));
+  assert.ok(isBummer("bummer_winless"));
+  assert.equal(v.tone, "bummer");
+  assert.ok(v.title.length > 0);
+});
+test("bummer copy is stable per id", () => {
+  assert.equal(momentView(mk(4, "bummer_scoreless")).title, momentView(mk(4, "bummer_scoreless")).title);
+});
+test("team reveal names the team and teammates", () => {
+  const v = momentView(mk(5, "team_reveal", { teamName: "Lions", teammates: ["Ali", "Omar"] }));
+  assert.match(v.title, /Lions/);
+  assert.match(v.body, /Ali, Omar/);
+});
+test("every kind renders", () => {
+  for (const k of Object.keys(MOMENT_PRIORITY) as Moment["kind"][]) {
+    const v = momentView(mk(1, k));
+    assert.ok(v.title && v.emoji, k);
+  }
+});
 console.log(`\n${passed} passed`);

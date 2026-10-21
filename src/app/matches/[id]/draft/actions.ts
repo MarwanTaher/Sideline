@@ -12,6 +12,8 @@ import {
 } from "@/lib/draft";
 import { revalidateScores } from "@/lib/scores-cache";
 import { MIN_TEAMS, MAX_TEAMS } from "@/lib/team-constants";
+import { generateTeamRevealMoments } from "@/lib/moments";
+import { notify } from "@/lib/push";
 
 export interface DraftActionState {
   ok: boolean;
@@ -121,6 +123,42 @@ export async function resetDraftAction(
     revalidatePath(`/matches/${matchId}/draft`);
     revalidatePath(`/matches/${matchId}`);
     return { ok: true, message: "Draft and match data reset." };
+  } catch (err) {
+    return { ok: false, message: errorMessage(err) };
+  }
+}
+
+/**
+ * Publish the saved teams: every rostered player gets a "team reveal" pop-up
+ * next time they open the app, plus a push. Safe to re-run after a re-draft.
+ */
+export async function publishTeamsAction(
+  _prev: DraftActionState,
+  formData: FormData,
+): Promise<DraftActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const playerIds = await generateTeamRevealMoments(matchId);
+    if (playerIds.length === 0) {
+      return { ok: false, message: "Save a lineup with players on teams first." };
+    }
+    try {
+      await notify(
+        "teams_published",
+        {
+          title: "Teams are out 🎽",
+          body: "See which side you're on and who you're playing with.",
+          url: `/matches/${matchId}`,
+          tag: `teams-${matchId}`,
+        },
+        { playerIds },
+      );
+    } catch {
+      // Push is best-effort.
+    }
+    revalidatePath(`/matches/${matchId}`);
+    return { ok: true, message: `Teams published to ${playerIds.length} players.` };
   } catch (err) {
     return { ok: false, message: errorMessage(err) };
   }

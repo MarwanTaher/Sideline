@@ -35,6 +35,7 @@ import { matchLabel } from "@/lib/format";
 import { isWithinAvailabilityLock } from "@/lib/match-schedule";
 import { getPendingVoteObligation } from "@/lib/voting";
 import { notify } from "@/lib/push";
+import { addMoments } from "@/lib/moments";
 
 export interface AvailabilityActionState {
   ok: boolean;
@@ -123,6 +124,11 @@ async function runWaitlistPromotion(matchId: number): Promise<void> {
     const promoted = await promoteWaitlistCandidate(matchId, nextId);
     await removeFromWaitlist(matchId, nextId);
     if (promoted) {
+      try {
+        await addMoments([{ playerId: nextId, kind: "waitlist_promoted", matchId, payload: {} }]);
+      } catch {
+        // Moments are best-effort.
+      }
       try {
         await notify(
           "waitlist_promoted",
