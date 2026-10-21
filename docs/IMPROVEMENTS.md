@@ -10,33 +10,24 @@
 Effort: **S** < ½ day · **M** 1–2 days · **L** 3+ days. Each item states the *evidence* that
 motivated it, so it can be checked rather than taken on trust.
 
-## 0. Summary — recommended order
+## 0. Roadmap — phases
 
-| # | Item | Area | Pri | Effort |
-|---|---|---|---|---|
-| 1 | C-1 Make `kickoff_at` impossible to be NULL | Correctness | P0 | S |
-| 2 | C-2 Separate database for preview deployments | Correctness | P0 | S |
-| 3 | P-1 Stop recomputing scores on draft & breakdown | Performance | P0 | S |
-| 4 | C-3 Bring `drizzle/schema.ts` back in sync with the DB | Maintainability | P1 | M |
-| 5 | C-4 Unit tests for time & money rules | Quality | P1 | M |
-| 6 | U-1 "Your next action" card on Home | UX | P1 | M |
-| 7 | F-1 Position-aware auto-balance | Feature (core problem) | P1 | M |
-| 8 | P-2 Batch multi-statement writes with `sql.transaction([...])` | Perf + correctness | P1 | M |
-| 9 | U-3 Optimistic availability toggle | UX/perf | P1 | S |
-| 10 | F-3 Season release checklist & go-live | Feature | P1 | S |
+Order: release safely → make it fast → fair teams (the original problem) → money and season
+go-live → polish → maintainability. Items keep their ids; details are in the sections below.
 
-**UX & engagement track** (sections 5–8, added after the first review):
+**Already built (on `dev`):** C-9, H-1 (incl. U-1), O-1 (incl. U-2), O-3, AV-1…AV-6, E-1…E-5,
+M-1, T-1, S-1, FV-2, P-6. Partly done: O-2 (phase CTA, no redirect), E-7, U-9, C-4 (DB-free unit
+tests exist; time/money rules not yet covered).
 
-| # | Item | Area | Pri | Effort |
-|---|---|---|---|---|
-| A | C-9 Availability bar ignores guests (shows free spots when full) | Bug | P0 | S |
-| B | H-1 Phase-aware Home ("what matters now") | Home | P0 | M |
-| C | AV-1 Availability page re-ordered: you → who's playing → admin | Availability | P0 | M |
-| D | E-1 Moments system (one-time pop-ups) + MOTM confetti | Engagement | P1 | M |
-| E | AV-3 Admin acts on the list itself (tap a player) + "Nudge no-replies" | Availability | P1 | M |
-| F | O-2 Match opens on the tab that matters for its phase | Orientation | P1 | S |
-| G | E-3 Bummer messages with a silver lining | Engagement | P2 | S |
-| H | E-4 Personal matchday recap (story cards, shareable) | Engagement | P2 | M |
+| Phase | Theme | Items | Effort |
+|---|---|---|---|
+| **0** | Release safety | C-2 preview DB · C-8 secrets + `.env.example` · C-1 `kickoff_at NOT NULL` · P-3 function region · ship `dev` → `main` | ½–1 d |
+| **1** | Speed | P-1 cached scores · U-3 optimistic In/Out · P-4 skeletons · P-2 batched reads · P-5 cached read-mostly pages | 1–2 d |
+| **2** | Fair teams | F-1 position-aware auto-balance · U-4 builder clarity (coverage chips, form, live balance meter) | 2 d |
+| **3** | Money & season go-live | F-3 go-live checklist · C-6 atomic writes · C-4 time/money tests · F-5 payment reminders · U-7 QR + bulk confirm + who owes · C-7 season edge cases | 2–3 d |
+| **4** | Matchday polish | F-6 lock-time push · F-2 results push · O-4 blocked states · O-5 one header · U-6 empty states / welcome · U-5 accessibility · Messages tab for all admins | 2 d |
+| **5** | Maintainability | C-3 schema types · C-5 error log · P-7 score snapshots · F-8 export & backup | 2 d |
+| Later | When needed | E-6 predictions · F-4 season waitlist/replacements · F-7 head-to-head · U-8 desktop · F-9 i18n · F-10 multi-group | — |
 
 ---
 
