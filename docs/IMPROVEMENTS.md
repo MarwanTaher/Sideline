@@ -25,6 +25,19 @@ motivated it, so it can be checked rather than taken on trust.
 | 9 | U-3 Optimistic availability toggle | UX/perf | P1 | S |
 | 10 | F-3 Season release checklist & go-live | Feature | P1 | S |
 
+**UX & engagement track** (sections 5–8, added after the first review):
+
+| # | Item | Area | Pri | Effort |
+|---|---|---|---|---|
+| A | C-9 Availability bar ignores guests (shows free spots when full) | Bug | P0 | S |
+| B | H-1 Phase-aware Home ("what matters now") | Home | P0 | M |
+| C | AV-1 Availability page re-ordered: you → who's playing → admin | Availability | P0 | M |
+| D | E-1 Moments system (one-time pop-ups) + MOTM confetti | Engagement | P1 | M |
+| E | AV-3 Admin acts on the list itself (tap a player) + "Nudge no-replies" | Availability | P1 | M |
+| F | O-2 Match opens on the tab that matters for its phase | Orientation | P1 | S |
+| G | E-3 Bummer messages with a silver lining | Engagement | P2 | S |
+| H | E-4 Personal matchday recap (story cards, shareable) | Engagement | P2 | M |
+
 ---
 
 ## 1. Correctness and robustness fixes
@@ -81,6 +94,15 @@ atomically in one round trip.
 - **Rates changed mid-season** apply to future invoices only (snapshots), which is correct; show
   "rate changed on …" in the invoice detail to avoid disputes.
 
+### C-9 Availability progress bar ignores guests — P0 · S (bug)
+**Evidence.** The server cap check in `availability/actions.ts` counts *players IN + approved
+guests* (`inCount + guestCount >= maxPlayers`). The page header bar uses `inPlayers.length`
+only, while the count tile below uses `inCount + approvedGuests.length`. With 16 players and
+2 guests on an 18 cap, the bar shows "Spots filled 16/18" while the server is already
+rejecting new INs as full. Two numbers on one screen disagree.
+**Fix.** One `squadCount = inPlayers + approvedGuests` used by the bar, tile and copy
+("16/18 · incl. 2 guests").
+
 ### C-8 Secrets hygiene — P0 · S (operational)
 Rotate `CRON_SECRET` (it was once sent to a third-party domain). Document all env vars in
 `.env.example` without values.
@@ -132,14 +154,14 @@ leaderboard, rank movement and trends cheap reads and remove the full recompute 
 
 ## 3. UX and visual
 
-### U-1 "Your next action" card on Home — P1 · M
+### U-1 "Your next action" card on Home — P1 · M  (→ folded into H-1, section 8)
 Today Home shows the next match, countdowns and links; players must know what to do. Show one
 primary call-to-action derived from state, in priority order:
 `Answer availability` → `Pay season invoice (due in 2 d)` → `Rate teammates` → `Submit your stats`
 → `Report MultiSport scan` → nothing ("You're all set ✅"). Admins get a second card:
 `Approve 3 guests · 5 stats · 2 payments`.
 
-### U-2 Match status timeline — P2 · S
+### U-2 Match status timeline — P2 · S  (→ expanded in O-1, section 6)
 A single status strip on the match page: *Open → Locked → Teams out → Live → Rate → Closed*,
 with the current step highlighted. It explains why buttons disappear (e.g. after the lock)
 better than an error.
@@ -231,7 +253,264 @@ scope all queries. Keep deferred.
 
 ---
 
-## 5. Things reviewed and deliberately not recommended
+## 5. Engagement and delight — make the app worth opening
+
+**Principle: fun, not pressure.** Celebrate in public, commiserate in private, never shame.
+Every pop-up shows once, can be dismissed with one tap, and respects
+`prefers-reduced-motion` (no confetti, just the card).
+
+**Evidence that the data already exists.** `getMotmWinner` (motm.ts),
+`getRatingChangesForMatch` + `getLeaderboardMovement` (score-snapshots.ts), `syncAchievements`
+returning `NewlyUnlocked` (achievements.ts), round results (results.ts), kudos (kudos.ts). They
+are calculated but only appear if the player goes looking. Nothing *tells* the player.
+
+### E-1 Moments system (foundation) — P1 · M
+A small queue of personal events, shown as a full-screen sheet the **next time the player
+opens the app**, oldest first, one at a time.
+
+```
+player_moments(id, player_id, kind, match_id NULL, payload jsonb,
+               created_at, seen_at NULL, UNIQUE(player_id, kind, match_id))
+```
+
+- **Produced** server-side when the source event happens: matchday close (results, goals),
+  voting close (MOTM, rating change), `syncAchievements` (badges), kudos received. The unique
+  key makes generation idempotent; safe to re-run.
+- **Consumed** by a client `<MomentsGate>` in the root layout: fetch unseen → show → mark
+  `seen_at` (server action). DB-backed, so it works across phone and laptop and never repeats.
+- Max 3 per open; the rest become a "You have 2 more highlights ▸" chip.
+- Confetti: `canvas-confetti` (≈ 6 kB, lazy-loaded only when a celebration fires).
+- Light haptic on supported phones (`navigator.vibrate(30)`).
+
+### E-2 Celebrations (positive moments) — P1 · S each, on top of E-1
+
+| Trigger | Pop-up | Effect |
+|---|---|---|
+| Man of the match | "🏆 Man of the Match! 9 of 14 votes went to you." | Gold confetti, trophy bounce, share button |
+| New badge unlocked | Badge flips in with its name and rule | Small burst |
+| Rank up (≥ 2 places) or entered top 5 / #1 | "▲ Up 3 places — you're now #4" | Rank number counts up |
+| Hat-trick / top scorer of the day | "⚽⚽⚽ Hat-trick hero" | Ball confetti |
+| Clean sheet (GK/DEF) | "🧤 Wall. 0 conceded in 3 rounds" | Gives defenders a moment too (balances the goals bias) |
+| Unbeaten day | "No losses today — 4W 1D" | Green burst |
+| Attendance streak 5/10/20 weeks | "🔥 10 Sundays in a row" | Flame on avatar for that week |
+| Milestones | 1st goal, 25/50/100 matches, 1st MOTM | Big confetti |
+| Kudos received | "Ahmed gave you kudos 👏" | Quiet card, no confetti |
+| Got off the waitlist | "You're in! A spot opened." | Quick pop |
+
+### E-3 Bummer messages (private, with a silver lining) — P2 · S
+Rules: **only the player sees it**, never shows exact low scores of others, always ends with
+something positive or a next step, max **one per 2 weeks**, rotates copy, can be switched off
+in Profile ("Show cheeky messages").
+
+| Trigger | Example message |
+|---|---|
+| Lost every round | "0 wins today. Even Barça have those days. Your form over 5 matches is still ▲." |
+| Rating dropped ≥ 0.5 | "Rating dipped 6.8 → 6.2. One good Sunday fixes it — 3 players climbed 1+ point last month." |
+| Forward, no goals in 3 matches | "The goal is still there, we checked. 📏 Your assists are up though: 3 this month." |
+| Missed voting | "Your teammates rated you — you didn't return the favour 😢 Vote closes in 6 h." |
+| Marked OUT 3 weeks in a row | "We miss you on the pitch. Next match: Sun 10:00, 4 spots left." |
+| Own goal recorded | "Wrong net, right spirit. 🙃" |
+
+Tone guide: self-deprecating football humour, never about skill ("you're bad"), never
+public, never on a rank page.
+
+### E-4 Personal matchday recap ("story" cards) — P2 · M
+After voting closes, a swipeable 4–5 card story (like Instagram stories): *Your day* (W/D/L,
+goals, assists) → *Rating* (old → new, animated) → *MOTM* → *Best duo* (from chemistry) →
+*Share*. The last card renders a shareable image (`next/og`) for the WhatsApp group.
+`match-digest.ts` already builds the team-level text.
+
+### E-5 Team reveal — P2 · S
+When the admin publishes teams, players get a push, and opening the app shows a card-flip
+reveal: "You're on **Team Blue**" + teammates' avatars + kit colour + "Rival to watch: X".
+Turns a dry list into a moment and stops "which team am I?" messages in WhatsApp.
+
+### E-6 Predictions mini-game — P3 · M
+Before kickoff, players predict which team wins the day (from the published teams). Correct
+guesses earn "pundit points" with a separate small leaderboard and a "Pundit of the Season"
+award. Uses existing rounds/results.
+
+### E-7 Micro-interactions — P2 · S
+In/Out button "pop" + haptic, animated count when the squad number changes, rank numbers
+counting up, skeleton shimmer, pull-to-refresh on Home. Cheap, makes the app feel alive.
+
+---
+
+## 6. Orientation — "I feel lost"
+
+**Diagnosis.**
+- Users don't know *where in the week* they are: the match status is shown as internal words
+  (`draft` / `active` / `closed`) that mean something to admins, not players.
+- A match has up to six tabs (availability, draft/teams, matchday, vote, stats, payments).
+  Most are irrelevant at any given moment, but all look equally important.
+- Home doesn't show the player's own status ("Am I in?"), so they open the match to check.
+
+### O-1 One weekly status strip, everywhere — P1 · S
+```
+ Open ── Locked ── Teams out ── Live ── Rate ── Done
+   ✓        ●
+```
+Shown on the Home match card and at the top of every match tab, with a one-line
+explanation for the current step ("Locked: only admins can change the list now").
+Replace `draft/active/closed` badges with these player words.
+
+### O-2 Open the match on the tab that matters now — P1 · S
+`/matches/[id]` redirects (or highlights) by phase: before lock → Availability; teams
+published → Teams; live → Matchday (live score); after → Vote; done → Recap. Tabs not yet
+relevant are shown greyed with "Opens after the match" instead of empty pages.
+
+### O-3 "You" chip — P1 · S
+A small chip on the match card and header: `You: IN ✅ · Team Blue` / `You: no reply ⚠️` /
+`Waitlist #2`. Answers the most common question without navigation.
+
+### O-4 Plain-language blocked states — P2 · S
+Every disabled control says why and what to do: "Locked 24 h before kickoff. Need a change?
+Message an admin ▸" (deep link to WhatsApp admin).
+
+### O-5 Consistent page header — P2 · S
+`← Sun 25 Oct` + title + phase strip on every match page, same position, same size. Today
+availability has a back link + nav + a large title card; other tabs differ.
+
+---
+
+## 7. Availability page redesign
+
+### 7.1 What's wrong today (top-to-bottom, from `availability/page.tsx`)
+
+| # | Finding | Effect |
+|---|---|---|
+| 1 | Order: header → my buttons → guest form → waitlist → **admin settings** → **guest admin** → counts → **who's in** lists | Players and admins scroll past admin boxes to see who's playing — the main question |
+| 2 | The same number appears three times: progress bar, 3 count tiles, 3 list headers | Noise; and they disagree (C-9) |
+| 3 | **Club-wide settings** (waitlist auto-promote, vote-gate, 24 h lock) live inside a *per-match* page, in the same collapsible as per-match settings | Easy to change every match by accident while editing one; belongs in Admin control |
+| 4 | Admin sets someone's status in a **separate full player list** (`AdminPlayerControls`) instead of on the In/Out/Pending lists already on screen | The roster is shown twice; the admin has to search |
+| 5 | In, Out and Pending lists get equal space | "Out" is the least useful; "No reply" is the one admins act on |
+| 6 | No position mix (how many GK/DEF), no ★ for season core players | Admin can't judge if the draft will work until the draft page |
+| 7 | No way to chase no-replies from here | Admin goes to WhatsApp manually |
+| 8 | Guest request lives in a collapsed "Do you want to bring a guest?" `<details>` | Fine for players; for admins pending guest approvals are in a *different* collapsible further down |
+
+### 7.2 Proposed layout — player
+
+```
+┌─────────────────────────────────────────────┐
+│ ← Sun 25 Oct · 10:00 · Orlik Bemowo  ☀ 12°  │
+│ Open ●── Locked ── Teams ── Live ── Rate    │
+├─────────────────────────────────────────────┤
+│  You:  [ ✅ I'm IN ]   [ Out ]              │
+│  Locks in 18 h 20 m                         │
+│  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░  16 / 18 · 2 guests    │
+├─────────────────────────────────────────────┤
+│ Who's playing (16)    GK 2 · DEF 5 · MID 6 · FWD 3
+│  (●)(●)(●)(●)(●)(●)(●)(●)  avatar grid      │
+│  ★ = season core   G = guest                │
+├─────────────────────────────────────────────┤
+│ Waitlist (2) ▸   No reply (7) ▸   Out (5) ▸ │
+│ + Bring a guest                              │
+└─────────────────────────────────────────────┘
+```
+
+### 7.3 Proposed layout — admin (same page, plus an action bar)
+
+```
+┌─ Admin ─────────────────────────────────────┐
+│ ⚠ 2 guest requests  [Review]                │
+│ ⏳ 7 no reply        [Nudge all 🔔]          │
+│ 🔒 Locks in 18 h     ⚙ Match settings       │
+└─────────────────────────────────────────────┘
+ … then the same "Who's playing" grid as players.
+ Tap any avatar → bottom sheet:
+   Ahmed · MID · season core
+   [ In ] [ Out ] [ Waitlist ] [ Remove guest ]
+```
+
+### 7.4 Items
+
+- **AV-1 Re-order + de-duplicate — P0 · M.** You → squad → secondary lists → (admin) action
+  bar. One squad number (fixes C-9). Collapse Out / No reply / Waitlist into tappable chips.
+- **AV-2 Move club-wide settings to Admin control › Other — P0 · S.** Keep only *this match*
+  settings (open/closed, cap) in a "⚙ Match settings" sheet. Link: "Club defaults ▸".
+- **AV-3 Act on the list — P1 · M.** Tap a player → bottom sheet to set status. Removes the
+  duplicate `AdminPlayerControls` list.
+- **AV-4 Nudge no-replies — P1 · S.** Button sends the existing reminder push only to
+  pending players (reuses the cron's sender), rate-limited to once per 6 h per match.
+- **AV-5 Position mix + core marker — P2 · S.** `GK 2 · DEF 5 · MID 6 · FWD 3` with amber
+  warning when there's no GK; ★ on season subscribers.
+- **AV-6 Guest approvals at the top for admins — P1 · S.** Pending requests in the action bar,
+  approve/decline inline.
+
+---
+
+## 8. Home screen review — does it show the most useful info?
+
+**Short answer: partly.** It shows *links to* useful places, but not the *answers*. The top
+quarter is a greeting, and the most useful facts — "am I in?", "which team?", "how did I do?",
+"do I owe money?" — aren't on it.
+
+### 8.1 What a player needs vs what Home shows
+
+| Moment in the week | What they want to know | Home today |
+|---|---|---|
+| Mon–Fri (before lock) | Am I in? How many are in? When/where? | Generic "Set your availability" card — shown **even after answering**; own status not shown (`MatchListItem` has no `myStatus`) |
+| Lock → kickoff | Which team am I on? Teammates? Weather? Map? | Not shown; card title says "Latest match" with an admin badge `draft` |
+| Live | Score now | Badge `active` only |
+| After match | How did I do? MOTM? Rating change? | Rate card + W/D/L bar. MOTM and rating change exist in the DB but aren't shown |
+| Month start | Do I owe money? By when? | Not shown (season invoice lives in /season) |
+| Any time | My form, streak, rank | Rank (twice: hero chip + "Your standing" card) |
+| Admin | What needs me? | Pending stats + password resets only. Not: guest requests, no-replies, teams not drafted, unpaid invoices, MultiSport approvals |
+
+Other issues: up to **5 full-width banners** can stack (notification prompt, install prompt,
+season prompt, vote, availability) with equal visual weight; rank is shown twice.
+
+### 8.2 H-1 Proposed phase-aware Home — P0 · M
+
+```
+┌─────────────────────────────────────────────┐
+│ Hi Mohamed  · #4 ▲2 · 🔥 6 weeks            │  ← slim header (hero shrinks)
+├─────────────────────────────────────────────┤
+│ NEXT MATCH · Sun 25 Oct 10:00               │  ← one card, changes by phase
+│ Open ●── Locked ── Teams ── Live ── Rate    │
+│ You: [ ✅ IN ] [ Out ]   16/18 · locks 18 h │  ← answer inline (optimistic)
+│ Orlik Bemowo · ☀ 12° · Map ▸                │
+├─────────────────────────────────────────────┤
+│ TO DO (max 3)                                │
+│ ⭐ Rate Sunday's match       closes in 6 h ▸ │
+│ 💳 Season · 143 PLN          due in 3 days ▸ │
+│ ⚽ Submit your goals                         ▸│
+│        (or: "You're all set ✅")             │
+├─────────────────────────────────────────────┤
+│ LAST MATCHDAY · Sun 18 Oct                   │
+│ 3W 1D 1L · 2 ⚽ 1 🅰 · rating 6.8 → 7.1 ▲     │
+│ MOTM: Ahmed 🏆        Recap ▸                │
+├─────────────────────────────────────────────┤
+│ FORM  W W D L W   · Top 20%                  │
+├─────────────────────────────────────────────┤
+│ ADMIN (admins only)                          │
+│ 2 guests · 7 no reply · 3 stats · 4 unpaid  │
+└─────────────────────────────────────────────┘
+```
+
+Phase variants of the NEXT MATCH card:
+- **Open:** inline In/Out + squad count + lock countdown.
+- **Locked / teams out:** "You're on **Team Blue**" + teammate avatars + venue/weather/map.
+- **Live:** live round score, auto-refresh.
+- **Done:** collapses into the LAST MATCHDAY card; NEXT MATCH shows "Next match not created
+  yet" (or the next one).
+
+Implementation notes: add `myStatus`, `myTeam`, `squadCount` to the Home query (one SQL with
+joins, not more round trips); TO DO is a pure function over already-fetched obligations; show
+the notification/install prompts in **one** slot, at most once per week.
+
+### 8.3 Suggested bundles
+
+| Bundle | Contains | Why together |
+|---|---|---|
+| **1. "Clarity"** | C-9, AV-1, AV-2, H-1 (without moments), O-1, O-3 | Fixes "lost" and "too much for admins"; mostly layout, low risk |
+| **2. "Delight"** | E-1, E-2 (MOTM, badge, rank up, clean sheet), E-7 | One table + one gate component; immediate wow on next Sunday |
+| **3. "Personality"** | E-3, E-4, E-5 | Builds on bundle 2 |
+| **4. "Admin speed"** | AV-3, AV-4, AV-6, O-2 | Faster matchday admin |
+
+---
+
+## 9. Things reviewed and deliberately not recommended
 
 | Idea | Why not |
 |---|---|
@@ -240,3 +519,7 @@ scope all queries. Keep deferred.
 | Real-time sockets for matchday | One admin/scorekeeper writes at a time; server actions + refresh suffice. |
 | Upgrading Vercel plan for frequent cron | Daily cron covers reminders; revisit only if F-6 needs exact timing. |
 | Restoring the removed audit tables' UI | Explicitly removed at the user's request. |
+| "Worst player of the week" or public low-score call-outs | Shaming drives people away from a friends' game; bummers stay private (E-3). |
+| Sounds on by default | Phones at work/home; haptics + visuals are enough. Optional toggle at most. |
+| Coins, loot boxes, paid cosmetics | Wrong incentive for a social group; badges and moments cover the fun. |
+| Confetti on every action | Loses meaning; reserve for real achievements (E-2). |
