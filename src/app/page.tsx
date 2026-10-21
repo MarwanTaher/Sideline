@@ -33,6 +33,8 @@ import { PhaseStrip } from "@/components/phase-strip";
 import NotificationPrompt from "@/components/notification-prompt";
 import InstallPrompt from "@/components/install-prompt";
 import { AvailabilityControls } from "./matches/[id]/availability/availability-controls";
+import { StoriesRow } from "@/components/stories-row";
+import { getPlayerPhoto, listActiveStories } from "@/lib/stories";
 
 export const dynamic = "force-dynamic";
 
@@ -47,7 +49,7 @@ export default async function Home() {
   const { name, role, playerId } = session.user;
   const isAdmin = await isAdminView(role === "admin" || role === "super");
 
-  const [match, rankInfo, movement, voteObligation, lastMatchday, form, season, lockEnabled] =
+  const [match, rankInfo, movement, voteObligation, lastMatchday, form, season, lockEnabled, stories, myPhoto] =
     await Promise.all([
       getHomeMatch(playerId ?? null),
       playerId != null ? getPlayerRank(playerId) : Promise.resolve(null),
@@ -57,6 +59,8 @@ export default async function Home() {
       playerId != null ? getRecentForm(playerId) : Promise.resolve([]),
       getActiveSubscriptionSeason(),
       isAvailabilityLockEnabled(),
+      playerId != null ? listActiveStories(Number(playerId)).catch(() => []) : Promise.resolve([]),
+      playerId != null ? getPlayerPhoto(Number(playerId)).catch(() => null) : Promise.resolve(null),
     ]);
 
   const phase: MatchPhase | null = match
@@ -135,6 +139,14 @@ export default async function Home() {
 
   return (
     <main className="mx-auto flex w-full max-w-4xl flex-1 flex-col px-4 py-6">
+      {playerId != null ? (
+        <StoriesRow
+          groups={stories}
+          me={{ name: name ?? "", photoUrl: myPhoto }}
+          canModerate={role === "admin" || role === "super"}
+          match={match ? { id: match.id, label: matchLabel(match.playedOn) } : null}
+        />
+      ) : null}
       <section className="relative overflow-hidden rounded-3xl px-5 py-4 text-white shadow-sm">
         <Image
           src="/home-hero.jpg"

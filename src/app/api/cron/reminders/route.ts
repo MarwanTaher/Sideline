@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { del } from "@vercel/blob";
+import { purgeExpiredStories } from "@/lib/stories";
 import { sqlClient } from "@/lib/db";
 import { notify } from "@/lib/push";
 import { isAvailabilityLockEnabled, getSetting, setSetting } from "@/lib/feature-settings";
@@ -107,5 +109,15 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ ok: true, checked: matches.length, sent });
+  // Expired 24h stories: queries already hide them; this frees the rows and files.
+  let storiesPurged = 0;
+  try {
+    const urls = await purgeExpiredStories();
+    storiesPurged = urls.length;
+    if (urls.length > 0 && process.env.BLOB_READ_WRITE_TOKEN) await del(urls).catch(() => {});
+  } catch {
+    // Never fail the reminders run because of cleanup.
+  }
+
+  return NextResponse.json({ ok: true, checked: matches.length, sent, storiesPurged });
 }

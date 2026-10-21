@@ -566,6 +566,10 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
   created_at, expires_at)`, `story_views(story_id, player_id, seen_at)`,
   `story_reactions(story_id, player_id, emoji)`.
 - **Not in v1:** video, text-only stories, replies / DMs, push on every new story (too noisy).
+- **Status:** built on `dev`; migration 0026 applied to production. The phone resizes to a 1080 px
+  JPEG (≤ 950 KB). The recap and the stories share one viewer (`StoryViewer`), so the recap also
+  supports swipe down to close. Expired stories are purged by the daily `reminders` cron. The CSP
+  gained `media-src` for Blob audio, so custom tap sounds (T-1) can play.
 
 ## 9. Things reviewed and deliberately not recommended
 
