@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Avatar } from "@/components/ui/avatar";
 import { StoryViewer } from "@/components/story-viewer";
@@ -54,11 +54,11 @@ export function StoriesRow({ groups, me, canModerate, match }: Props) {
               type="button"
               aria-label={mine ? "View your story" : "Add a story"}
               onClick={() => (mine ? setOpen(0) : setComposing(true))}
-              className={`rounded-full p-[2.5px] ${mine ? "bg-neutral-300 dark:bg-neutral-700" : "border-2 border-dashed border-neutral-300 p-[1px] dark:border-neutral-700"}`}
+              className="block rounded-full"
             >
-              <span className="block rounded-full bg-white p-[2px] dark:bg-neutral-950">
+              <StoryRing variant={mine ? "seen" : "empty"}>
                 <Avatar name={me.name} photoUrl={me.photoUrl} size="lg" />
-              </span>
+              </StoryRing>
             </button>
             <button
               type="button"
@@ -81,15 +81,9 @@ export function StoriesRow({ groups, me, canModerate, match }: Props) {
               onClick={() => setOpen(ordered.indexOf(g))}
               className="flex w-16 shrink-0 flex-col items-center gap-1"
             >
-              <span
-                className={`rounded-full p-[2.5px] ${
-                  fresh ? "bg-gradient-to-tr from-emerald-500 via-lime-400 to-amber-400" : "bg-neutral-300 dark:bg-neutral-700"
-                }`}
-              >
-                <span className="block rounded-full bg-white p-[2px] dark:bg-neutral-950">
-                  <Avatar name={g.name} photoUrl={g.photoUrl} size="lg" />
-                </span>
-              </span>
+              <StoryRing variant={fresh ? "fresh" : "seen"}>
+                <Avatar name={g.name} photoUrl={g.photoUrl} size="lg" />
+              </StoryRing>
               <span className={`w-full truncate text-center text-[11px] ${fresh ? "font-semibold" : "text-neutral-500"}`}>
                 {g.name.split(/\s+/)[0]}
               </span>
@@ -126,6 +120,23 @@ export function StoriesRow({ groups, me, canModerate, match }: Props) {
         />
       ) : null}
     </>
+  );
+}
+
+/** Fixed-size concentric ring: 48px avatar + 3px gap + 3px ring = 60px, centred on a grid. */
+function StoryRing({ variant, children }: { variant: "fresh" | "seen" | "empty"; children: ReactNode }) {
+  const ring =
+    variant === "fresh"
+      ? "bg-gradient-to-tr from-emerald-500 via-lime-400 to-amber-400"
+      : variant === "seen"
+        ? "bg-neutral-300 dark:bg-neutral-700"
+        : "border-2 border-dashed border-neutral-300 dark:border-neutral-700";
+  return (
+    <span className={`grid h-[60px] w-[60px] place-items-center rounded-full ${ring}`}>
+      <span className="grid h-[54px] w-[54px] place-items-center rounded-full bg-white dark:bg-neutral-950">
+        {children}
+      </span>
+    </span>
   );
 }
 
@@ -206,7 +217,7 @@ function GroupViewer({
     <StoryViewer
       count={group.stories.length}
       startIndex={start}
-      durationMs={5000}
+      durationMs={10_000}
       hold={sheet != null || busy}
       onIndex={onIndex}
       onEnd={onEnd}

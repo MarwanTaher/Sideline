@@ -2,7 +2,8 @@
 // shipped: the default "farts" are synthesised with Web Audio.
 
 export const SILLY_SOUNDS_KEY = "sideline.sillySounds";
-export const TAP_SPAM = { taps: 4, windowMs: 2000, cooldownMs: 3000 } as const;
+/** 3 taps within 1.5 s starts "spam mode"; it lasts until 1 s passes without a tap. */
+export const TAP_SPAM = { taps: 3, windowMs: 1500, calmMs: 1000 } as const;
 
 export function sillySoundsEnabled(): boolean {
   try {
@@ -13,19 +14,23 @@ export function sillySoundsEnabled(): boolean {
 }
 
 /**
- * Pure tap counter: returns true on the tap that should fire the sound.
- * Keeps only taps inside the window; after firing, the cooldown swallows taps.
+ * Pure spam detector: returns true for every tap that should fire the sound.
+ * The `taps`-th tap inside `windowMs` starts spam mode; from then on every tap
+ * fires, with no cooldown, until a gap of `calmMs` ends it.
  */
-export function createTapCounter(cfg: { taps: number; windowMs: number; cooldownMs: number } = TAP_SPAM) {
+export function createTapCounter(cfg: { taps: number; windowMs: number; calmMs: number } = TAP_SPAM) {
   let taps: number[] = [];
-  let quietUntil = 0;
+  let spamming = false;
+  let last = -Infinity;
   return (now: number): boolean => {
-    if (now < quietUntil) return false;
+    if (now - last >= cfg.calmMs) spamming = false;
+    last = now;
+    if (spamming) return true;
     taps = taps.filter((t) => now - t < cfg.windowMs);
     taps.push(now);
     if (taps.length < cfg.taps) return false;
     taps = [];
-    quietUntil = now + cfg.cooldownMs;
+    spamming = true;
     return true;
   };
 }
@@ -57,6 +62,82 @@ function audioContext(): AudioContext | null {
   ctx ??= new Ctor();
   if (ctx.state === "suspended") void ctx.resume();
   return ctx;
+}
+
+type Note = { f: number; at: number; dur: number };
+
+function playNotes(notes: Note[], type: OscillatorType, cutoff: number, vibratoLast = false): void {
+  const ac = audioContext();
+  if (!ac) return;
+  const t0 = ac.currentTime + 0.02;
+  const filter = ac.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = cutoff;
+  filter.connect(ac.destination);
+  notes.forEach((n, i) => {
+    const t = t0 + n.at;
+    const osc = ac.createOscillator();
+    osc.type = type;
+    osc.frequency.setValueAtTime(n.f, t);
+    const g = ac.createGain();
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.28, t + 0.02);
+    g.gain.setValueAtTime(0.28, t + n.dur * 0.6);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + n.dur);
+    if (vibratoLast && i === notes.length - 1) {
+      const lfo = ac.createOscillator();
+      lfo.frequency.value = 6;
+      const depth = ac.createGain();
+      depth.gain.value = n.f * 0.03;
+      lfo.connect(depth).connect(osc.frequency);
+      lfo.start(t);
+      lfo.stop(t + n.dur);
+    }
+    osc.connect(g).connect(filter);
+    osc.start(t);
+    osc.stop(t + n.dur + 0.05);
+  });
+}
+
+/** Short synthesised sting for a moment pop-up: fanfare, chime, ding or sad trombone. */
+export function playMomentSound(tone: "epic" | "good" | "info" | "bummer"): void {
+  if (tone === "epic") {
+    // C5 E5 G5 … C6 held.
+    playNotes(
+      [
+        { f: 523.25, at: 0, dur: 0.14 },
+        { f: 659.25, at: 0.12, dur: 0.14 },
+        { f: 783.99, at: 0.24, dur: 0.14 },
+        { f: 1046.5, at: 0.4, dur: 0.6 },
+      ],
+      "triangle",
+      4000,
+    );
+  } else if (tone === "good") {
+    playNotes(
+      [
+        { f: 659.25, at: 0, dur: 0.16 },
+        { f: 987.77, at: 0.14, dur: 0.4 },
+      ],
+      "triangle",
+      4000,
+    );
+  } else if (tone === "info") {
+    playNotes([{ f: 880, at: 0, dur: 0.35 }], "sine", 3000);
+  } else {
+    // Wah wah wah waaah.
+    playNotes(
+      [
+        { f: 293.66, at: 0, dur: 0.38 },
+        { f: 277.18, at: 0.4, dur: 0.38 },
+        { f: 261.63, at: 0.8, dur: 0.38 },
+        { f: 246.94, at: 1.2, dur: 1.0 },
+      ],
+      "sawtooth",
+      900,
+      true,
+    );
+  }
 }
 
 /** Synthesise one of the built-in farts (random when no index is given). */

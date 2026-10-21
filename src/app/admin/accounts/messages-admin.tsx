@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { playFart } from "@/lib/silly-sounds";
-import { MomentCard } from "@/components/moments-overlay";
+import { MomentCard, MomentsOverlay } from "@/components/moments-overlay";
 import {
   COPY_LIMITS,
   MOMENT_KINDS,
@@ -72,6 +72,7 @@ function KindEditor({ kind, saved, name }: { kind: MomentKind; saved: CopyVarian
   const info = MOMENT_KIND_INFO[kind];
   const [variants, setVariants] = useState<CopyVariant[]>(saved);
   const [previewIdx, setPreviewIdx] = useState(0);
+  const [playing, setPlaying] = useState(0);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   const def = defaultMomentView(sampleMoment(kind));
@@ -184,9 +185,26 @@ function KindEditor({ kind, saved, name }: { kind: MomentKind; saved: CopyVarian
           </span>
         </div>
 
-        <div className="flex justify-center rounded-2xl bg-neutral-900/80 py-2">
+        <div className="relative flex justify-center rounded-2xl bg-neutral-900/80 py-2">
           <MomentCard view={preview} animate={false} />
+          <button
+            type="button"
+            onClick={() => setPlaying((n) => n + 1)}
+            className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-neutral-900 shadow-lg transition hover:bg-emerald-50 active:scale-95"
+          >
+            ▶ Play
+          </button>
         </div>
+        {playing > 0 ? (
+          <MomentsOverlay
+            key={playing}
+            moments={[{ ...sampleMoment(kind), id: 0 }]}
+            overrides={shown ? { [kind]: [shown] } : undefined}
+            name={name}
+            preview
+            onClose={() => setPlaying(0)}
+          />
+        ) : null}
 
         <div className="flex items-center gap-2">
           <button
@@ -243,7 +261,8 @@ function TapSoundsAdmin({ enabled, sounds }: { enabled: boolean; sounds: { url: 
           <span>
             <span className="block text-sm font-medium">Play a sound on IN / OUT spam</span>
             <span className="block text-xs text-neutral-500">
-              4 taps within 2 seconds plays it on that phone only. Players can mute it in Profile.
+              Once someone taps 3 times within 1.5 s, every further tap plays it (with vibration and smoke) until they
+              stop for a second. That phone only. Players can mute it in Profile.
             </span>
           </span>
           <button

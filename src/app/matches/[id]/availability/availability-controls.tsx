@@ -8,6 +8,7 @@ import { formatDuration } from "@/lib/match-schedule";
 import { FeedbackMessage } from "@/components/ui/banner";
 import { CheckIcon, XIcon } from "@/components/ui/icons";
 import { useTapSpam } from "@/components/use-tap-spam";
+import { TapSmoke } from "@/components/tap-smoke";
 
 const INITIAL: AvailabilityActionState = { ok: false, message: "" };
 
@@ -42,7 +43,7 @@ export function AvailabilityControls({
 }: AvailabilityControlsProps) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(setAvailabilityAction, INITIAL);
-  const onTap = useTapSpam();
+  const { onTap, puffs, smoking } = useTapSpam();
 
   useEffect(() => {
     if (state.ok) router.refresh();
@@ -97,7 +98,7 @@ export function AvailabilityControls({
         <p className="mb-2 text-sm font-semibold">Can you play?</p>
       ) : null}
       <div
-        className={`flex gap-1 rounded-2xl border bg-white p-1 shadow-sm dark:bg-neutral-900 ${
+        className={`relative flex gap-1 rounded-2xl border bg-white p-1 shadow-sm dark:bg-neutral-900 ${smoking ? "tap-shake" : ""} ${
           currentStatus === "pending" && !closed
             ? "border-amber-400/60"
             : "border-black/[0.06] dark:border-white/10"
@@ -108,6 +109,7 @@ export function AvailabilityControls({
       >
         {btn("in")}
         {btn("out")}
+        <TapSmoke puffs={puffs} smoking={smoking} />
       </div>
       {note ? <p className="mt-2 px-1 text-xs text-neutral-500">{note}</p> : null}
       {!state.ok && state.message ? (

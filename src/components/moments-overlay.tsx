@@ -12,6 +12,7 @@ import {
 } from "@/lib/moment-copy";
 import type { ReactNode } from "react";
 import { markMomentsSeenAction } from "@/app/moments-actions";
+import { playMomentSound, sillySoundsEnabled } from "@/lib/silly-sounds";
 
 const TONE_STYLE: Record<MomentTone, { card: string; badge: string }> = {
   epic: {
@@ -34,17 +35,23 @@ const TONE_STYLE: Record<MomentTone, { card: string; badge: string }> = {
 
 /**
  * Shows the player's unseen moments (max 3) one after another, the next time
- * they open the app: confetti + haptics for celebrations, a softer card for
- * bummers. Everything shown is marked seen when the stack is dismissed.
+ * they open the app: confetti + haptics + a short sting for celebrations, a
+ * softer card and a sad trombone for bummers. Everything shown is marked seen
+ * when the stack is dismissed. `preview` (admin "Play") marks nothing and
+ * keeps CTAs from navigating.
  */
 export function MomentsOverlay({
   moments,
   overrides,
   name,
+  preview = false,
+  onClose,
 }: {
   moments: Moment[];
   overrides?: MomentCopyOverrides;
   name?: string;
+  preview?: boolean;
+  onClose?: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const [closed, setClosed] = useState(false);
@@ -54,16 +61,22 @@ export function MomentsOverlay({
   const view = current ? momentView(current, { overrides, name }) : null;
   const celebrate = view?.tone === "epic" || view?.tone === "good";
 
+  const tone = view?.tone;
+  const shownId = current?.id;
   useEffect(() => {
-    if (!view || closed) return;
-    if (view.tone === "epic") navigator.vibrate?.([30, 40, 60]);
-    else if (view.tone === "good") navigator.vibrate?.(25);
-  }, [view, closed]);
+    if (!tone || closed) return;
+    if (tone === "epic") navigator.vibrate?.([30, 40, 60]);
+    else if (tone === "good") navigator.vibrate?.(25);
+    // Browsers may block audio until the first tap of the session; that's fine.
+    if (sillySoundsEnabled()) playMomentSound(tone);
+  }, [tone, shownId, index, closed]);
 
   if (!current || !view || closed) return null;
 
   const finish = () => {
     setClosed(true);
+    onClose?.();
+    if (preview) return;
     if (!marked.current) {
       marked.current = true;
       void markMomentsSeenAction(moments.map((m) => m.id)).catch(() => {});
@@ -99,7 +112,10 @@ export function MomentsOverlay({
           {view.cta ? (
             <Link
               href={view.cta.href}
-              onClick={finish}
+              onClick={(e) => {
+                if (preview) e.preventDefault();
+                finish();
+              }}
               className="rounded-xl px-4 py-2.5 text-sm font-medium text-neutral-600 transition hover:bg-black/5 dark:text-neutral-300 dark:hover:bg-white/5"
             >
               {view.cta.label}

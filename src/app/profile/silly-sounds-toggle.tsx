@@ -32,7 +32,7 @@ export function SillySoundsToggle() {
       <span>
         <span className="block text-sm font-medium">Silly sounds</span>
         <span className="block text-xs text-neutral-500">
-          A surprise sound if you spam the IN / OUT buttons. This phone only.
+          Pop-up fanfares and a surprise if you spam IN / OUT. This phone only.
         </span>
       </span>
       <button

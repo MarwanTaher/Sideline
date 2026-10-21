@@ -153,15 +153,19 @@ test("every kind has editor info", () => {
   for (const k of Object.keys(MOMENT_PRIORITY) as Moment["kind"][]) assert.ok(MOMENT_KIND_INFO[k], k);
 });
 console.log("tap-spam");
-test("4th tap within 2s fires, then 3s cooldown", () => {
+test("3rd fast tap starts spam mode; every tap then fires with no delay", () => {
   const tap = createTapCounter();
-  assert.deepEqual([0, 300, 600, 900].map(tap), [false, false, false, true]);
-  assert.equal(tap(1200), false); // cooling down
-  assert.deepEqual([4000, 4100, 4200].map(tap), [false, false, false]);
-  assert.equal(tap(4300), true);
+  assert.deepEqual([0, 300, 600].map(tap), [false, false, true]);
+  assert.deepEqual([700, 800, 1500, 2400].map(tap), [true, true, true, true]);
+});
+test("a 1s pause calms it down", () => {
+  const tap = createTapCounter();
+  [0, 200, 400].forEach(tap);
+  assert.deepEqual([1400, 1500].map(tap), [false, false]);
+  assert.equal(tap(1600), true);
 });
 test("slow taps never fire", () => {
   const tap = createTapCounter();
-  assert.ok([0, 700, 1400, 2100, 2800, 3500].map(tap).every((f) => !f));
+  assert.ok([0, 800, 1600, 2400, 3200, 4000].map(tap).every((f) => !f));
 });
 console.log(`\n${passed} passed`);

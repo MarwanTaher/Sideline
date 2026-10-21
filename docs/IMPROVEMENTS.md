@@ -528,6 +528,9 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
 - **Admin UI:** Admin control › new **Messages** tab (admins and super). Grouped *Celebrations* /
   *Bummers*; per kind: the default text, the custom variants, a live preview pop-up, **Reset**.
 - **Tests:** placeholder fill, fallback to defaults, stable pick.
+- **Play:** each editor has a ▶ Play button that runs the real pop-up (animation, confetti,
+  vibration and sound) with the sample data, without marking anything seen. Pop-ups now play a
+  short synthesised sting (fanfare / chime / sad trombone), muted by Profile → Silly sounds.
 - **Status:** built on `dev`. The Messages tab sits in Admin control, which is super-admin only, so
   only super admins can edit messages for now.
 
@@ -543,6 +546,8 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
 - **Opt-out:** "Silly sounds" switch in Profile (per device, `localStorage`), default on.
 - **Caveat:** an iPhone on silent mutes web audio; that is expected.
 - Exception to §9 "sounds on by default": this only fires on deliberate spam, never on normal use.
+- **Revised (owner feedback):** 3 taps within 1.5 s starts spam mode; from then on *every* tap plays
+  the sound and vibrates with no delay, and the control shakes and puffs smoke until 1 s without a tap.
 - **Status:** built on `dev`. The settings load from `GET /api/tap-spam` on the first tap (not on
   page load, and not via a server action, which would queue ahead of the IN/OUT save). Disabled
   buttons use `pointer-events: none` so taps on them still reach the counter.
@@ -566,6 +571,7 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
   created_at, expires_at)`, `story_views(story_id, player_id, seen_at)`,
   `story_reactions(story_id, player_id, emoji)`.
 - **Not in v1:** video, text-only stories, replies / DMs, push on every new story (too noisy).
+- **Revised:** each story stays on screen 10 s; the avatar ring is a fixed-size concentric circle.
 - **Status:** built on `dev`; migration 0026 applied to production. The phone resizes to a 1080 px
   JPEG (≤ 950 KB). The recap and the stories share one viewer (`StoryViewer`), so the recap also
   supports swipe down to close. Expired stories are purged by the daily `reminders` cron. The CSP
