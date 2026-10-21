@@ -45,12 +45,15 @@ export function MomentsOverlay({
   overrides,
   name,
   preview = false,
+  sound,
   onClose,
 }: {
   moments: Moment[];
   overrides?: MomentCopyOverrides;
   name?: string;
   preview?: boolean;
+  /** Force one sound (admin preview); random per tone otherwise. */
+  sound?: string;
   onClose?: () => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -68,8 +71,8 @@ export function MomentsOverlay({
     if (tone === "epic") navigator.vibrate?.([30, 40, 60]);
     else if (tone === "good") navigator.vibrate?.(25);
     // Browsers may block audio until the first tap of the session; that's fine.
-    if (sillySoundsEnabled()) playMomentSound(tone);
-  }, [tone, shownId, index, closed]);
+    if (preview || sillySoundsEnabled()) playMomentSound(tone, sound);
+  }, [tone, shownId, index, closed, preview, sound]);
 
   if (!current || !view || closed) return null;
 

@@ -530,7 +530,9 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
 - **Tests:** placeholder fill, fallback to defaults, stable pick.
 - **Play:** each editor has a ▶ Play button that runs the real pop-up (animation, confetti,
   vibration and sound) with the sample data, without marking anything seen. Pop-ups now play a
-  short synthesised sting (fanfare / chime / sad trombone), muted by Profile → Silly sounds.
+  short synthesised sound picked at random per tone: big moments fanfare or crowd cheer + applause,
+  good news chime or applause, bummers sad trombone or sitcom studio laugh. Muted by Profile → Silly
+  sounds. The Play button has a picker to hear each sound.
 - **Status:** built on `dev`. The Messages tab sits in Admin control, which is super-admin only, so
   only super admins can edit messages for now.
 

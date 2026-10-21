@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { playFart } from "@/lib/silly-sounds";
+import { MOMENT_SOUNDS, playFart } from "@/lib/silly-sounds";
 import { MomentCard, MomentsOverlay } from "@/components/moments-overlay";
 import {
   COPY_LIMITS,
@@ -21,6 +21,15 @@ import {
   setTapSpamEnabledAction,
   uploadTapSoundAction,
 } from "./messages-actions";
+
+const SOUND_LABEL: Record<string, string> = {
+  fanfare: "🎺 Fanfare",
+  cheer: "🙌 Crowd cheer",
+  chime: "🔔 Chime",
+  applause: "👏 Applause",
+  trombone: "🎷 Sad trombone",
+  laugh: "😂 Studio laugh",
+};
 
 const sampleMoment = (kind: MomentKind): Moment => ({
   id: 0,
@@ -73,6 +82,7 @@ function KindEditor({ kind, saved, name }: { kind: MomentKind; saved: CopyVarian
   const [variants, setVariants] = useState<CopyVariant[]>(saved);
   const [previewIdx, setPreviewIdx] = useState(0);
   const [playing, setPlaying] = useState(0);
+  const [sound, setSound] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [pending, start] = useTransition();
   const def = defaultMomentView(sampleMoment(kind));
@@ -187,13 +197,30 @@ function KindEditor({ kind, saved, name }: { kind: MomentKind; saved: CopyVarian
 
         <div className="relative flex justify-center rounded-2xl bg-neutral-900/80 py-2">
           <MomentCard view={preview} animate={false} />
-          <button
-            type="button"
-            onClick={() => setPlaying((n) => n + 1)}
-            className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-neutral-900 shadow-lg transition hover:bg-emerald-50 active:scale-95"
-          >
-            ▶ Play
-          </button>
+          <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-white p-1 shadow-lg">
+            {MOMENT_SOUNDS[def.tone].length > 1 ? (
+              <select
+                aria-label="Sound"
+                value={sound}
+                onChange={(e) => setSound(e.target.value)}
+                className="rounded-full bg-transparent pl-2 text-xs text-neutral-700 outline-none"
+              >
+                <option value="">🔀 Random sound</option>
+                {MOMENT_SOUNDS[def.tone].map((s) => (
+                  <option key={s} value={s}>
+                    {SOUND_LABEL[s] ?? s}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setPlaying((n) => n + 1)}
+              className="rounded-full bg-emerald-600 px-3 py-1 text-xs font-semibold text-white transition hover:bg-emerald-500 active:scale-95"
+            >
+              ▶ Play
+            </button>
+          </div>
         </div>
         {playing > 0 ? (
           <MomentsOverlay
@@ -202,6 +229,7 @@ function KindEditor({ kind, saved, name }: { kind: MomentKind; saved: CopyVarian
             overrides={shown ? { [kind]: [shown] } : undefined}
             name={name}
             preview
+            sound={sound || undefined}
             onClose={() => setPlaying(0)}
           />
         ) : null}
