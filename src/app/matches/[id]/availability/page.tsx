@@ -142,6 +142,8 @@ export default async function AvailabilityPage({
   const approvedGuests = guests.filter((g) => g.status === "approved");
   const pendingGuests = guests.filter((g) => g.status === "pending");
   const myGuests = myPlayerId == null ? [] : guests.filter((g) => g.hostPlayerId === myPlayerId);
+  // Same definition the server uses for the cap: players IN + approved guests.
+  const squadCount = inPlayers.length + approvedGuests.length;
 
   const subscriberIds = await getSubscriberIdsForMatch(matchId);
   const iAmSubscriber = myPlayerId != null && subscriberIds.has(Number(myPlayerId));
@@ -200,13 +202,18 @@ export default async function AvailabilityPage({
         {match.maxPlayers ? (
           <div className="mt-4">
             <div className="mb-1 flex items-center justify-between text-xs text-neutral-500">
-              <span>{inPlayers.length >= match.maxPlayers ? "Match full" : "Spots filled"}</span>
-              <span className="tabular-nums">{inPlayers.length}/{match.maxPlayers}</span>
+              <span>{squadCount >= match.maxPlayers ? "Match full" : "Spots filled"}</span>
+              <span className="tabular-nums">
+                {squadCount}/{match.maxPlayers}
+                {approvedGuests.length > 0
+                  ? ` · incl. ${approvedGuests.length} guest${approvedGuests.length === 1 ? "" : "s"}`
+                  : ""}
+              </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-neutral-100 dark:bg-neutral-800">
               <div
-                className={`h-full rounded-full ${inPlayers.length >= match.maxPlayers ? "bg-amber-500" : "bg-emerald-500"}`}
-                style={{ width: `${Math.min(100, (inPlayers.length / match.maxPlayers) * 100)}%` }}
+                className={`h-full rounded-full ${squadCount >= match.maxPlayers ? "bg-amber-500" : "bg-emerald-500"}`}
+                style={{ width: `${Math.min(100, (squadCount / match.maxPlayers) * 100)}%` }}
               />
             </div>
           </div>
@@ -387,7 +394,7 @@ export default async function AvailabilityPage({
         <div className="grid grid-cols-3 gap-3">
           <div className="rounded-xl border border-black/10 p-4 text-center dark:border-white/10">
             <div className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
-              {summary.inCount + approvedGuests.length}
+              {squadCount}
             </div>
             <div className="text-xs uppercase tracking-wide text-neutral-500">
               In <span className="normal-case text-neutral-400">/ {match.maxPlayers} max</span>
