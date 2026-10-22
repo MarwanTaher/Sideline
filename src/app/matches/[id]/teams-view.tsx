@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { MatchTeam } from "@/lib/matches";
 import { FieldView, type FieldBalance, type FieldLive } from "./field-view";
 import type { FieldFeatures } from "@/lib/field-view";
 import { teamGridColumns } from "@/lib/team-constants";
+import { useLocalStorage, writeLocal } from "@/lib/local-store";
 
 /* Overview teams block with a segmented toggle between a compact roster list
  * and the static field view. */
@@ -29,17 +29,12 @@ export function TeamsView({
   live: FieldLive | null;
   balance: FieldBalance | null;
 }) {
-  const [mode, setMode] = useState<Mode>("field");
-
-  // Restore the last-used view, then persist changes across matches.
-  useEffect(() => {
-    const saved = window.localStorage.getItem(STORAGE_KEY);
-    if (saved === "list" || saved === "field") setMode(saved);
-  }, []);
+  // The last-used view persists across matches (field until the device says otherwise).
+  const saved = useLocalStorage(STORAGE_KEY);
+  const mode: Mode = saved === "list" ? "list" : "field";
 
   function selectMode(next: Mode) {
-    setMode(next);
-    window.localStorage.setItem(STORAGE_KEY, next);
+    writeLocal(STORAGE_KEY, next);
   }
 
   return (

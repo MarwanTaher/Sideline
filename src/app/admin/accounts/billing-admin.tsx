@@ -26,6 +26,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { FeedbackMessage } from "@/components/ui/banner";
 import { matchLabel } from "@/lib/format";
+import { DesktopSplit } from "@/components/ui/desktop-split";
 
 const INITIAL: BillingActionState = { ok: false, message: "" };
 
@@ -44,6 +45,7 @@ export default function BillingAdmin({
   pendingScans,
   outstandingInvoices,
   withdrawnWarnings,
+  fund,
 }: {
   seasonId: number;
   seasonName: string;
@@ -56,6 +58,8 @@ export default function BillingAdmin({
   pendingScans: MultisportScan[];
   outstandingInvoices: Invoice[];
   withdrawnWarnings: WithdrawnInvoiceWarning[];
+  /** Group fund panel; below the billing card, or in the right column on xl+. */
+  fund?: React.ReactNode;
 }) {
   const router = useRouter();
   const [genState, genAction, genPending] = useActionState(generateInvoicesAction, INITIAL);
@@ -69,6 +73,19 @@ export default function BillingAdmin({
   }, [genState, confirmState, router]);
 
   return (
+    <DesktopSplit
+      aside={
+        <>
+          {/* xl+: rates and transfer details move next to the invoices. */}
+          <section className="hidden rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm xl:mt-8 xl:block dark:border-white/10 dark:bg-neutral-900">
+            <h2 className="text-sm font-semibold">Billing settings</h2>
+            <RatesForm seasonId={seasonId} rates={rates} compact />
+            <PaymentDetailsForm seasonId={seasonId} details={paymentDetails} compact />
+          </section>
+          {fund}
+        </>
+      }
+    >
     <section className="mt-8 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
       <h2 className="text-sm font-semibold">Subscription billing — {seasonName}</h2>
       <p className="mt-1 text-xs text-neutral-500">
@@ -77,8 +94,10 @@ export default function BillingAdmin({
         whether they play or not.
       </p>
 
-      <RatesForm seasonId={seasonId} rates={rates} />
-      <PaymentDetailsForm seasonId={seasonId} details={paymentDetails} />
+      <div className="xl:hidden">
+        <RatesForm seasonId={seasonId} rates={rates} />
+        <PaymentDetailsForm seasonId={seasonId} details={paymentDetails} />
+      </div>
 
       <form action={genAction} className="mt-4 flex flex-wrap items-end gap-2">
         <input type="hidden" name="seasonId" value={seasonId} />
@@ -118,7 +137,7 @@ export default function BillingAdmin({
           {periods.map((p) => (
             <a
               key={p}
-              href={`/admin/accounts?period=${p}`}
+              href={`/admin/accounts?tab=billing&period=${p}`}
               className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                 p === period
                   ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"
@@ -209,6 +228,7 @@ export default function BillingAdmin({
         )}
       </div>
     </section>
+    </DesktopSplit>
   );
 }
 
@@ -221,7 +241,16 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function RatesForm({ seasonId, rates }: { seasonId: number; rates: SeasonRates }) {
+function RatesForm({
+  seasonId,
+  rates,
+  compact = false,
+}: {
+  seasonId: number;
+  rates: SeasonRates;
+  /** Narrow right-column layout used on xl+ screens. */
+  compact?: boolean;
+}) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(saveRatesAction, INITIAL);
 
@@ -236,7 +265,7 @@ function RatesForm({ seasonId, rates }: { seasonId: number; rates: SeasonRates }
       <summary className="flex cursor-pointer list-none items-center justify-between gap-2">
         <span className="text-sm font-medium">Rates &amp; pricing</span>
         <span className="flex items-center gap-1.5 text-xs text-neutral-500">
-          <span className="hidden sm:inline tabular-nums">
+          <span className={compact ? "hidden" : "hidden sm:inline tabular-nums"}>
             Pitch {pln(rates.dayRateMinor)} · Extra player {pln(rates.guestRateMinor)} ·
             Extension {pln(rates.extensionCostMinor)}
           </span>
@@ -245,7 +274,10 @@ function RatesForm({ seasonId, rates }: { seasonId: number; rates: SeasonRates }
           </span>
         </span>
       </summary>
-      <form action={formAction} className="mt-3 grid gap-2 sm:grid-cols-3">
+      <form
+        action={formAction}
+        className={compact ? "mt-3 grid grid-cols-2 gap-2" : "mt-3 grid gap-2 sm:grid-cols-3"}
+      >
         <input type="hidden" name="seasonId" value={seasonId} />
         <Field name="dayRate" label="Pitch per day (PLN)" defaultValue={pln(rates.dayRateMinor)} />
         <Field name="guestRate" label="Extra player (PLN)" defaultValue={pln(rates.guestRateMinor)} />
@@ -271,11 +303,11 @@ function RatesForm({ seasonId, rates }: { seasonId: number; rates: SeasonRates }
           defaultValue={String(rates.extensionMinExtra)}
           type="number"
         />
-        <p className="text-xs text-neutral-500 sm:col-span-3">
+        <p className={`text-xs text-neutral-500 ${compact ? "col-span-2" : "sm:col-span-3"}`}>
           Applies to invoices and charges raised from now on. Anything already
           raised keeps the rate it was billed at.
         </p>
-        <div className="sm:col-span-3">
+        <div className={compact ? "col-span-2" : "sm:col-span-3"}>
           <Button type="submit" variant="secondary" pending={pending} pendingLabel="Saving…">
             Save rates
           </Button>
@@ -314,9 +346,12 @@ function Field({
 function PaymentDetailsForm({
   seasonId,
   details,
+  compact = false,
 }: {
   seasonId: number;
   details: SeasonPaymentDetails;
+  /** Narrow right-column layout used on xl+ screens. */
+  compact?: boolean;
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(savePaymentDetailsAction, INITIAL);
@@ -337,14 +372,17 @@ function PaymentDetailsForm({
               not set
             </span>
           ) : (
-            <span className="hidden truncate sm:inline">{details.paymentName}</span>
+            <span className={compact ? "hidden" : "hidden truncate sm:inline"}>{details.paymentName}</span>
           )}
           <span className="rounded-lg border border-black/10 px-2 py-1 font-medium dark:border-white/15">
             Edit
           </span>
         </span>
       </summary>
-      <form action={formAction} className="mt-3 grid gap-2 sm:grid-cols-2">
+      <form
+        action={formAction}
+        className={compact ? "mt-3 grid gap-2" : "mt-3 grid gap-2 sm:grid-cols-2"}
+      >
         <input type="hidden" name="seasonId" value={seasonId} />
         <label className="block">
           <span className="block text-xs text-neutral-500">Recipient name</span>
@@ -378,7 +416,7 @@ function PaymentDetailsForm({
             className={`${inputCls} w-full`}
           />
         </label>
-        <label className="block sm:col-span-2">
+        <label className={compact ? "block" : "block sm:col-span-2"}>
           <span className="block text-xs text-neutral-500">Extra note for players</span>
           <textarea
             name="paymentNote"
@@ -387,11 +425,11 @@ function PaymentDetailsForm({
             className={`${inputCls} w-full`}
           />
         </label>
-        <p className="text-xs text-neutral-500 sm:col-span-2">
+        <p className={compact ? "text-xs text-neutral-500" : "text-xs text-neutral-500 sm:col-span-2"}>
           Players see these on their Payments tab, with a copy button and the
           reference to put on the transfer.
         </p>
-        <div className="sm:col-span-2">
+        <div className={compact ? undefined : "sm:col-span-2"}>
           <Button type="submit" variant="secondary" pending={pending} pendingLabel="Saving…">
             Save transfer details
           </Button>

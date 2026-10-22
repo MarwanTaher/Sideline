@@ -60,7 +60,9 @@ export default async function DraftPage({
   });
 
   return (
-    <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-10">
+    // The lineup builder gets a wider desktop frame than other railed pages
+    // (see the section-rail rules in globals.css).
+    <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-10 [--section-rail-frame:96rem]">
       <MatchPageHeader
         matchId={matchId}
         dateLabel={matchLabelWithTime(availability.playedOn, availability.matchTime)}

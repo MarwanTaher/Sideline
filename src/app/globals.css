@@ -83,6 +83,32 @@ button:focus-visible,
 }
 
 /* ---------------------------------------------------------------------------
+ * U-8 desktop layout: section rail (see src/components/ui/section-rail.tsx).
+ * On lg+ a <main> containing a SectionRail keeps its own max-w-* for the
+ * content column (content-box) and adds a left gutter inside a frame of
+ * --section-rail-frame (default 80rem = max-w-7xl); the rail is pinned in
+ * that gutter. Nothing here applies below lg, so phones and tablets are
+ * untouched. Unlayered, so it overrides the page's mx-auto / px-4 / w-full.
+ * ------------------------------------------------------------------------- */
+@media (width >= 64rem) {
+  main:has([data-section-rail]) {
+    box-sizing: content-box;
+    width: min(calc(100% - 16rem), calc(var(--section-rail-frame, 80rem) - 16rem));
+    margin-inline-start: max(0px, calc((100% - var(--section-rail-frame, 80rem)) / 2));
+    margin-inline-end: auto;
+    padding-inline-start: 15rem;
+    padding-inline-end: 1rem;
+  }
+  [data-section-rail] {
+    position: fixed;
+    z-index: 10;
+    top: 6.25rem;
+    inset-inline-start: calc(max(0px, calc((100% - var(--section-rail-frame, 80rem)) / 2)) + 1rem);
+    width: 12rem;
+  }
+}
+
+/* ---------------------------------------------------------------------------
  * Sideline logo "draw into place" animation.
  * The mark is built from three horizontal lines + one vertical line, so each
  * stroke scales in from its own edge, staggered, to look hand-drawn.

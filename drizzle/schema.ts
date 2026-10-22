@@ -813,3 +813,52 @@ export const scoreCacheSnapshots = pgTable("score_cache_snapshots", {
 }, (table) => [
 	index("score_cache_snapshots_revision_idx").on(table.revision, table.capturedAt.desc()),
 ]);
+
+export const predictions = pgTable("predictions", {
+	id: integer().primaryKey().generatedByDefaultAsIdentity(),
+	matchId: integer("match_id").notNull(),
+	playerId: integer("player_id").notNull(),
+	teamNo: integer("team_no").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).default(sql`now()`).notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).default(sql`now()`).notNull(),
+}, (table) => [
+	index("predictions_player_id_idx").on(table.playerId),
+	foreignKey({
+			columns: [table.matchId],
+			foreignColumns: [matches.id],
+			name: "predictions_match_id_fkey"
+		}).onDelete("cascade"),
+	foreignKey({
+			columns: [table.playerId],
+			foreignColumns: [players.id],
+			name: "predictions_player_id_fkey"
+		}).onDelete("cascade"),
+	unique("predictions_match_id_player_id_key").on(table.matchId, table.playerId),
+	check("predictions_team_no_check", sql`team_no > 0`),
+]);
+
+export const seatOffers = pgTable("seat_offers", {
+	id: integer().primaryKey().generatedByDefaultAsIdentity(),
+	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+	subscriberId: integer("subscriber_id").notNull().references(() => players.id, { onDelete: "cascade" }),
+	status: text().default("open").notNull(),
+	replacementPlayerId: integer("replacement_player_id").references(() => players.id, { onDelete: "set null" }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	filledAt: timestamp("filled_at", { withTimezone: true, mode: "string" }),
+}, (table) => [
+	uniqueIndex("seat_offers_live_idx").on(table.matchId, table.subscriberId).where(sql`status = ANY (ARRAY['open'::text, 'filled'::text])`),
+	uniqueIndex("seat_offers_replacement_idx").on(table.matchId, table.replacementPlayerId).where(sql`(status = 'filled'::text) AND (replacement_player_id IS NOT NULL)`),
+	index("seat_offers_match_idx").on(table.matchId),
+	check("seat_offers_status_check", sql`status = ANY (ARRAY['open'::text, 'filled'::text, 'withdrawn'::text])`),
+	check("seat_offers_filled_check", sql`(status = 'filled'::text) = (filled_at IS NOT NULL)`),
+	check("seat_offers_not_self_check", sql`(replacement_player_id IS NULL) OR (replacement_player_id <> subscriber_id)`),
+]);
+
+export const seatOfferRequests = pgTable("seat_offer_requests", {
+	offerId: integer("offer_id").notNull().references(() => seatOffers.id, { onDelete: "cascade" }),
+	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	primaryKey({ columns: [table.offerId, table.playerId], name: "seat_offer_requests_pkey" }),
+	index("seat_offer_requests_player_idx").on(table.playerId),
+]);

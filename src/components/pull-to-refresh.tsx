@@ -11,6 +11,8 @@ import { useEffect, useRef, useState } from "react";
 export default function PullToRefresh() {
   const [offset, setOffset] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
+  // Mirrors `pulling` for rendering: no easing while the finger is down.
+  const [dragging, setDragging] = useState(false);
   const startY = useRef<number | null>(null);
   const pulling = useRef(false);
   const offsetRef = useRef(0);
@@ -37,6 +39,7 @@ export default function PullToRefresh() {
       if (refreshingRef.current || !atTop()) return;
       startY.current = e.touches[0].clientY;
       pulling.current = true;
+      setDragging(true);
     }
 
     function onMove(e: TouchEvent) {
@@ -45,6 +48,7 @@ export default function PullToRefresh() {
       if (dy <= 0) {
         if (offsetRef.current !== 0) set(0);
         pulling.current = atTop();
+        if (!pulling.current) setDragging(false);
         return;
       }
       // Rubber-band resistance, capped.
@@ -55,6 +59,7 @@ export default function PullToRefresh() {
     function onEnd() {
       if (!pulling.current) return;
       pulling.current = false;
+      setDragging(false);
       startY.current = null;
       if (offsetRef.current >= THRESHOLD) {
         refreshingRef.current = true;
@@ -88,7 +93,7 @@ export default function PullToRefresh() {
       style={{
         transform: `translateY(${Math.max(0, offset - 24)}px)`,
         opacity: visible ? 1 : 0,
-        transition: pulling.current ? "none" : "transform 0.2s ease, opacity 0.2s ease",
+        transition: dragging ? "none" : "transform 0.2s ease, opacity 0.2s ease",
       }}
     >
       <div className="mt-3 rounded-full bg-white p-2 shadow-md ring-1 ring-black/5 dark:bg-neutral-800 dark:ring-white/10">

@@ -207,12 +207,16 @@ Based on the group's written rules (season 08/11/2026 – 30/03/2027).
 | FR-REL-3 | Show withdrawn subscribers with outstanding invoices, rate-change dates, bulk confirmation of declared payments, and an actionable who-owes list. | S | Local / Preview verified |
 | FR-REL-4 | Generate a local Polish transfer QR on an unpaid positive invoice. Validate the account checksum, exact amount, recipient and full reference; explain manual fallback when unsupported. | S | Local / Preview verified |
 | FR-REL-5 | Send targeted payment reminders three days before and on the due date, excluding declared, paid and zero-balance invoices. Atomically claim each scheduled reminder to avoid duplicate sends. | S | Local / Preview verified |
-| FR-REL-6 | Notify confirmed and waitlisted players on the first daily cron after availability locks and before kickoff. Exact-time lock notifications are not guaranteed on Hobby. | S | Local / Preview verified |
+| FR-REL-6 | Notify confirmed and waitlisted players on the first daily cron after availability locks and before kickoff. Exact-time lock notifications are not guaranteed on Hobby. | S | Built; **off by default** (admin can enable the "Availability locked" notification type) |
 | FR-REL-7 | On matchday/voting close, send a digest with available MOTM, scorer and rating highlights plus a recap link. Do not equate aggregate goal totals with mini-match wins. | S | Local / Preview verified |
 | FR-REL-8 | Offer consistent match headers, actionable blocked/empty states, first-run guidance, labelled keyboard-accessible rating controls, reduced-motion support and larger touch targets. Messages remains a super-admin tab in Admin control. | S | Local / Preview verified |
 | FR-REL-9 | Reuse persisted score payloads only when complete and at the exact scoring-input revision/model. Mutations invalidate authoritatively; time-dependent scores recompute. No score-capture writes during GETs. | M | Local / Preview verified |
 | FR-REL-10 | Provide sanitized persisted server errors and permission-gated, formula-safe CSV exports for matches, scores, invoices and fund ledger. Never export authentication/push credentials. | S | Local / Preview verified |
-| FR-REL-11 | Configure and verify Neon recovery/pre-season snapshots independently of CSV exports. | S | Operational setup pending |
+| FR-REL-11 | Configure and verify Neon recovery/pre-season snapshots independently of CSV exports. | S | Dropped by owner decision (CSV exports + Neon point-in-time restore only) |
+| FR-SOC-1 | Before kickoff (and once teams are published) players predict the matchday winner; points 3/1/0 over completed mini-matches, tied leaders all count; one pundit point per correct pick, scored after close. Others' picks hidden until kickoff. Season and all-time Pundit boards with "Pundit of the Season". | C | Preview verified |
+| FR-SOC-2 | A season subscriber can offer their seat for a match; only that match's waitlisted players may request it; the subscriber approves one. Approval atomically swaps OUT/IN, removes the replacement from the waitlist and records the session fee owed to the subscriber (rules §8). | S | Preview verified |
+| FR-SOC-3 | Another player's profile shows the viewer's head-to-head (mini-match W/D/L against each other, matchdays and win rate together) and that player's best/worst teammate. | C | Preview verified |
+| FR-UX-1 | On wide screens section navigation is a left rail and the lineup builder and admin billing use two columns; phones are unchanged. | C | Preview verified |
 
 ---
 

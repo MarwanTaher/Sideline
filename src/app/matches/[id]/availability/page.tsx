@@ -25,6 +25,8 @@ import { MatchNav } from "../match-nav";
 import { SquadGrid, PeopleChips } from "./who-is-playing";
 import { getMatchPhase } from "@/lib/match-phase";
 import { MatchPageHeader } from "../match-page-header";
+import { loadSeatSwapCard } from "@/lib/seat-offers";
+import { SeatSwapCard } from "./seat-swap-card";
 
 export const metadata = {
   title: "Availability · Sideline",
@@ -76,7 +78,12 @@ export default async function AvailabilityPage({
   ]);
   if (!match) notFound();
   // Admins always see the waitlist; players only when it is made visible.
-  const waitlistPlayers = isAdmin || waitlistVisible ? await getWaitlistPlayers(matchId) : [];
+  const [waitlistPlayers, seatSwap] = await Promise.all([
+    isAdmin || waitlistVisible ? getWaitlistPlayers(matchId) : Promise.resolve([]),
+    myPlayerId != null && subscriberIds.size > 0
+      ? loadSeatSwapCard(matchId, Number(myPlayerId))
+      : Promise.resolve(null),
+  ]);
   const open = match.availabilityOpen;
 
   // 24h availability lock (admin-toggled). Players can't change within 24h of
@@ -165,6 +172,7 @@ export default async function AvailabilityPage({
             msToLock={msToLock}
             isSubscriber={iAmSubscriber}
           />
+          {seatSwap ? <SeatSwapCard data={seatSwap} /> : null}
         </section>
       ) : (
         <p className="mt-6 rounded-xl border border-black/10 p-4 text-sm text-neutral-500 dark:border-white/10">

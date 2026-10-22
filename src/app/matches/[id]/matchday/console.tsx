@@ -9,6 +9,7 @@ import {
   useTransition,
 } from "react";
 import { Button } from "@/components/ui/button";
+import { useLocalStorage, writeLocal } from "@/lib/local-store";
 import { BallIcon, SwapIcon, UndoIcon, PlusIcon, MedalIcon, PencilIcon, XIcon } from "@/components/ui/icons";
 import type { MatchTeam, MatchTeamPlayer } from "@/lib/matches";
 import type {
@@ -117,13 +118,19 @@ function suggestTeams(rounds: MatchRound[], teamNumbers: number[]): [number, num
   return [winner, bench[0] ?? loser];
 }
 
-/** Server/client clock-skew corrected "now" in the server epoch. */
+/**
+ * Server/client clock-skew corrected "now" in the server epoch. The offset is
+ * fixed on the first call after `serverNowMs` arrives (like measuring it at mount).
+ */
 function useServerNow(serverNowMs: number): () => number {
-  const [offset, setOffset] = useState(0);
-  useEffect(() => {
-    setOffset(serverNowMs - Date.now());
+  return useMemo(() => {
+    let offset: number | null = null;
+    return () => {
+      const local = Date.now();
+      offset ??= serverNowMs - local;
+      return local + offset;
+    };
   }, [serverNowMs]);
-  return useCallback(() => Date.now() + offset, [offset]);
 }
 function useTick(active: boolean): void {
   const [, setN] = useState(0);
@@ -143,28 +150,12 @@ interface Cues {
   whistle: () => void;
 }
 function useCues(): Cues {
-  const [enabled, setEnabled] = useState(true);
+  const enabled = useLocalStorage("matchday:sound") !== "off";
   const ctxRef = useRef<AudioContext | null>(null);
 
-  useEffect(() => {
-    try {
-      if (localStorage.getItem("matchday:sound") === "off") setEnabled(false);
-    } catch {
-      /* ignore */
-    }
-  }, []);
-
   const toggle = useCallback(() => {
-    setEnabled((e) => {
-      const next = !e;
-      try {
-        localStorage.setItem("matchday:sound", next ? "on" : "off");
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
-  }, []);
+    writeLocal("matchday:sound", enabled ? "off" : "on");
+  }, [enabled]);
 
   const vibrate = useCallback((pattern: number | number[]) => {
     try {
@@ -236,8 +227,8 @@ function Avatar({
   className?: string;
 }) {
   if (photoUrl) {
-    // eslint-disable-next-line @next/next/no-img-element
     return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={photoUrl}
         alt=""
@@ -326,18 +317,16 @@ export function MatchdayConsole({
   useTick(anyRunning);
 
   // Persisted last pairing (only used before any round exists).
-  const [persistedPair, setPersistedPair] = useState<[number, number] | null>(null);
-  useEffect(() => {
+  const rawPair = useLocalStorage(`matchday:lastPair:${matchId}`);
+  const persistedPair = useMemo<[number, number] | null>(() => {
+    if (!rawPair) return null;
     try {
-      const raw = localStorage.getItem(`matchday:lastPair:${matchId}`);
-      if (raw) {
-        const p = JSON.parse(raw);
-        if (Array.isArray(p) && p.length === 2) setPersistedPair([Number(p[0]), Number(p[1])]);
-      }
+      const p = JSON.parse(rawPair);
+      return Array.isArray(p) && p.length === 2 ? [Number(p[0]), Number(p[1])] : null;
     } catch {
-      /* ignore */
+      return null;
     }
-  }, [matchId]);
+  }, [rawPair]);
 
   const suggested = useMemo<[number, number]>(() => {
     if (rounds.length > 0) return suggestTeams(rounds, teamNumbers);
@@ -378,11 +367,7 @@ export function MatchdayConsole({
         return;
       }
       setError("");
-      try {
-        localStorage.setItem(`matchday:lastPair:${matchId}`, JSON.stringify([teamA, teamB]));
-      } catch {
-        /* ignore */
-      }
+      writeLocal(`matchday:lastPair:${matchId}`, JSON.stringify([teamA, teamB]));
       const tempId = -Date.now();
       const nextNo = (rounds.reduce((m, r) => Math.max(m, r.roundNo), 0) || 0) + 1;
       const temp: MatchRound = {

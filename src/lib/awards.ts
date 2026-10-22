@@ -401,9 +401,8 @@ export async function getAwardsSettings(): Promise<AwardsSettings> {
     `,
   )) as Array<{ key: string; value: string | number | null }>;
   for (const r of rows) {
-    let parsed: number | null;
     const num = Number(r.value);
-    parsed = Number.isFinite(num) ? Math.max(0, Math.trunc(num)) : null;
+    const parsed = Number.isFinite(num) ? Math.max(0, Math.trunc(num)) : null;
     if (parsed === null) continue;
     if (r.key === "scoring_awards_match_min_valid_votes") settings.matchMinValidVotes = parsed;
     else if (r.key === "scoring_awards_overall_min_valid_votes") settings.overallMinValidVotes = parsed;

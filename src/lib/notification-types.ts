@@ -30,7 +30,10 @@ export type NotificationTypeKey =
   | "guest_decision"
   | "achievement_unlocked"
   | "kudos"
-  | "announcement";
+  | "announcement"
+  | "seat_offer_posted"
+  | "seat_offer_requested"
+  | "seat_offer_approved";
 
 export type NotificationType = {
   key: NotificationTypeKey;
@@ -98,8 +101,8 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     key: "availability_locked",
     label: "Availability locked",
     description:
-      "Sent when the availability deadline passes, with the confirmed player count or waitlist position.",
-    defaultEnabled: true,
+      "Sent when the availability deadline passes, with the confirmed player count or waitlist position. Off by default: on the Hobby plan it can arrive up to a day late.",
+    defaultEnabled: false,
     audience: "players",
     audienceOverridable: false,
     userConfigurable: true,
@@ -210,6 +213,36 @@ export const NOTIFICATION_TYPES: NotificationType[] = [
     audience: "all",
     audienceOverridable: true,
     userConfigurable: false,
+  },
+  {
+    key: "seat_offer_posted",
+    label: "Season seat available",
+    description:
+      "Sent to players on a season match's waitlist when a subscriber offers their seat.",
+    defaultEnabled: true,
+    audience: "players",
+    audienceOverridable: false,
+    userConfigurable: true,
+  },
+  {
+    key: "seat_offer_requested",
+    label: "Seat requested",
+    description:
+      "Sent to a subscriber when a waitlisted player asks for the seat they offered.",
+    defaultEnabled: true,
+    audience: "players",
+    audienceOverridable: false,
+    userConfigurable: true,
+  },
+  {
+    key: "seat_offer_approved",
+    label: "Seat approved",
+    description:
+      "Sent to a waitlisted player when a subscriber gives them their seat, with what they owe.",
+    defaultEnabled: true,
+    audience: "players",
+    audienceOverridable: false,
+    userConfigurable: true,
   },
 ];
 

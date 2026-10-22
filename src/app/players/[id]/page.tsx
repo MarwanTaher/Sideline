@@ -9,6 +9,7 @@ import { getPlayerRank, SCORES_CACHE_TAG } from "@/lib/leaderboard";
 import { getPlayerAchievementsLive } from "@/lib/achievements";
 import { getLastMatchdayStatline } from "@/lib/matchday";
 import { getKudos } from "@/lib/kudos";
+import { getChemistry, getHeadToHead } from "@/lib/chemistry";
 import {
   getCachedAwardsSettings,
   getCachedPlayerBadgeCounts,
@@ -19,6 +20,7 @@ import { Card } from "@/components/ui/card";
 import BadgeGallery from "@/components/badge-gallery";
 import AchievementsGrid from "@/app/profile/achievements-grid";
 import KudosButton from "./kudos-button";
+import HeadToHeadCard from "./head-to-head-card";
 
 export const metadata = {
   title: "Player · Sideline",
@@ -58,6 +60,34 @@ const getCachedProfileBundle = unstable_cache(
   ["public-player-profile"],
   { revalidate: 300, tags: [SCORES_CACHE_TAG] },
 );
+
+/**
+ * The profiled player's own best/worst teammate. Depends only on `pid`, so it
+ * is safe to share across viewers. The viewer-vs-player head-to-head is
+ * viewer-specific and is deliberately loaded outside any cache.
+ */
+const getCachedPartnerHighlights = unstable_cache(
+  async (pid: number) => {
+    const { bestPartner, worstPartner } = await getChemistry(pid);
+    return { bestPartner, worstPartner };
+  },
+  ["public-player-partner-highlights"],
+  { revalidate: 300, tags: [SCORES_CACHE_TAG] },
+);
+
+async function loadHeadToHead(viewerId: number, pid: number) {
+  try {
+    const [h2h, partners] = await Promise.all([
+      getHeadToHead(viewerId, pid),
+      getCachedPartnerHighlights(pid),
+    ]);
+    return { h2h, ...partners };
+  } catch (err) {
+    // A fun extra: never take the whole profile down with it.
+    console.error("head-to-head failed", err);
+    return null;
+  }
+}
 
 function StatTile({
   label,
@@ -108,10 +138,13 @@ export default async function PublicPlayerProfilePage({
 
   const viewerId = session.user.playerId != null ? Number(session.user.playerId) : null;
 
-  const [contact, bundle, kudos] = await Promise.all([
+  const isOwnProfile = viewerId != null && viewerId === pid;
+
+  const [contact, bundle, kudos, headToHead] = await Promise.all([
     getPlayerContact(pid),
     getCachedProfileBundle(pid),
     getKudos(pid, viewerId),
+    viewerId != null && !isOwnProfile ? loadHeadToHead(viewerId, pid) : null,
   ]);
   if (!contact) {
     notFound();
@@ -121,7 +154,7 @@ export default async function PublicPlayerProfilePage({
   const standingLabel = rankInfo?.ranked
     ? `#${rankInfo.rank} · Top ${Math.ceil((rankInfo.rank / rankInfo.total) * 100)}%`
     : "Unranked";
-  const isOwnProfile = viewerId != null && viewerId === pid;
+  const firstName = contact.name.trim().split(/\s+/)[0] || contact.name;
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8">
@@ -202,6 +235,19 @@ export default async function PublicPlayerProfilePage({
           </div>
         </Card>
       </div>
+
+      {/* You vs them */}
+      {headToHead && viewerId != null ? (
+        <div className="mt-5">
+          <HeadToHeadCard
+            firstName={firstName}
+            viewerId={viewerId}
+            h2h={headToHead.h2h}
+            bestPartner={headToHead.bestPartner}
+            worstPartner={headToHead.worstPartner}
+          />
+        </div>
+      ) : null}
 
       {/* Kudos */}
       <div className="mt-5">

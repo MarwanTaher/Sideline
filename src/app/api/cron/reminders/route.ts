@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { del } from "@vercel/blob";
 import { purgeExpiredStories } from "@/lib/stories";
 import { sqlClient } from "@/lib/db";
-import { notify } from "@/lib/push";
+import { notify, getNotificationTypeStatuses } from "@/lib/push";
 import { isAvailabilityLockEnabled, getSetting, setSetting } from "@/lib/feature-settings";
 import { matchLabel } from "@/lib/format";
 import { kickoffAtSql } from "@/lib/kickoff-sql";
@@ -64,6 +64,13 @@ export async function GET(request: Request) {
   )) as UpcomingMatch[];
 
   const lockEnabled = await isAvailabilityLockEnabled();
+  // Lock pushes are off unless an admin re-enables the "Availability locked"
+  // notification type; while off, nothing is claimed so re-enabling still works.
+  const lockPushEnabled =
+    lockEnabled &&
+    (await getNotificationTypeStatuses()).some(
+      (t) => t.key === "availability_locked" && t.enabled,
+    );
 
   // Hobby runs once daily: lock pushes arrive at the first run after the
   // deadline (up to roughly 24 hours late), provided kickoff is still ahead.
@@ -75,7 +82,7 @@ export async function GET(request: Request) {
     const msToLock = kickoff - AVAILABILITY_LOCK_MS - now;
 
     if (
-      lockEnabled &&
+      lockPushEnabled &&
       isAvailabilityLockPushDue(match.kickoff_at, now)
     ) {
       const lockKey = `reminder_sent_lock_${matchId}`;

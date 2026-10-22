@@ -11,6 +11,14 @@ import {
   winRate,
   type WinRecord,
 } from "./results";
+import {
+  computeHeadToHead,
+  emptyHeadToHead,
+  type HeadToHead,
+  type SharedMatch,
+} from "./head-to-head";
+
+export type { HeadToHead } from "./head-to-head";
 
 /**
  * Chemistry & head-to-head: fun social stats derived from who played with whom
@@ -200,4 +208,35 @@ export async function getChemistry(
     partners,
     rivals,
   };
+}
+
+/**
+ * One pair, from the viewer's perspective: rounds faced against each other and
+ * matchdays on the same team. Two queries (shared matchdays, then their round
+ * results) instead of two full chemistry reports. Viewer-specific — never put
+ * the result in a cache shared across viewers.
+ */
+export async function getHeadToHead(
+  viewerId: number,
+  otherId: number,
+): Promise<HeadToHead> {
+  if (viewerId === otherId) return emptyHeadToHead();
+
+  const rows = (await sqlClient.query(
+    `SELECT me.match_id, me.team_no AS viewer_team, them.team_no AS other_team
+       FROM match_players me
+       JOIN match_players them
+         ON them.match_id = me.match_id AND them.player_id = $2
+      WHERE me.player_id = $1`,
+    [viewerId, otherId],
+  )) as Array<{ match_id: number; viewer_team: number; other_team: number }>;
+  if (rows.length === 0) return emptyHeadToHead();
+
+  const shared: SharedMatch[] = rows.map((r) => ({
+    matchId: Number(r.match_id),
+    viewerTeam: Number(r.viewer_team),
+    otherTeam: Number(r.other_team),
+  }));
+  const rounds = await getRoundOutcomes(shared.map((s) => s.matchId));
+  return computeHeadToHead(shared, rounds);
 }

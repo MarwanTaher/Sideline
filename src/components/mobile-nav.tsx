@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 
 /**
@@ -10,13 +10,12 @@ import { usePathname } from "next/navigation";
  * full-width stacked panel. From `md` upwards it renders inline as before.
  */
 export default function MobileNav({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = useState(false);
+  // Remember which page the menu was opened on; navigating anywhere closes it.
   const pathname = usePathname();
-
-  // Close the menu whenever the route changes.
-  useEffect(() => {
-    setOpen(false);
-  }, [pathname]);
+  const [openOn, setOpenOn] = useState<string | null>(null);
+  const open = openOn === pathname;
+  const setOpen = (next: boolean | ((v: boolean) => boolean)) =>
+    setOpenOn((typeof next === "function" ? next(open) : next) ? pathname : null);
 
   return (
     <>

@@ -94,6 +94,13 @@ function formationString(byPos: Record<Position, DraftPlayer[]>): string {
   return kept.length ? kept.join("-") : "—";
 }
 
+// Below xl identical to teamGridColumns. On xl the controls column sits beside
+// the pitches, so 4+ teams keep three columns until 2xl.
+function boardGridColumns(count: number): string {
+  if (count >= 4) return "sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4";
+  return teamGridColumns(count);
+}
+
 export interface PitchBoardProps {
   matchId: number;
   numTeams: number;
@@ -136,12 +143,15 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
     setDirty(true);
   }
 
-  useEffect(() => {
+  // Reset the board when the server sends a different draft (after a save,
+  // auto-balance or reset) — during render, not in an effect.
+  const [lastSignature, setLastSignature] = useState(signature);
+  if (signature !== lastSignature) {
+    setLastSignature(signature);
     setAssign(buildInitial(players));
     setTeamCount(numTeams);
     setDirty(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature]);
+  }
 
   const [autoState, autoFormAction, autoPending] = useActionState(autoBalanceAction, INITIAL);
   const [saveState, saveFormAction, savePending] = useActionState(saveDraftAction, INITIAL);
@@ -270,6 +280,10 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
             lastDragEnd.current = Date.now();
           }}
         >
+          {/* xl+: pitches on the left; balance meter, display controls and
+              bench on the right. Below xl these wrappers are plain blocks. */}
+          <div className="xl:grid xl:grid-cols-[minmax(0,1fr)_18rem] xl:grid-rows-[auto_1fr] xl:items-start xl:gap-x-6">
+          <div className="xl:col-start-2 xl:row-start-1">
           <BalanceMeter
             teams={teamScores.map((team) => ({
               teamNo: team.teamNo,
@@ -280,9 +294,10 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
             scoreGap={scoreGap}
             verdict={balance.verdict}
           />
-          <div className="flex flex-col gap-6 lg:flex-row">
+          </div>
+          <div className="flex flex-col gap-6 xl:contents">
             {/* -------- Settings rail -------- */}
-            <aside className="w-full shrink-0 lg:w-72">
+            <aside className="w-full shrink-0 xl:col-start-2 xl:row-start-2">
               <div className="rounded-2xl border border-white/10 bg-[#111315] p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500">
                   Display
@@ -375,12 +390,12 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
             </aside>
 
             {/* -------- Pitches -------- */}
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 xl:col-start-1 xl:row-span-2 xl:row-start-1">
               {view === "list" ? (
                 <TeamList teamNos={teamNos} byTeam={byTeam} bench={bench} teamNames={teamNames} />
               ) : (
               <div
-                className={`grid gap-5 ${teamGridColumns(teamNos.length)}`}
+                className={`grid gap-5 ${boardGridColumns(teamNos.length)}`}
               >
                 {teamNos.map((n) => {
                   const byPos = byTeam.get(n)!;
@@ -417,6 +432,7 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
               </div>
               )}
             </div>
+          </div>
           </div>
 
           <DragOverlay dropAnimation={null}>

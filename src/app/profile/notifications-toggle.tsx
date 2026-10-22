@@ -15,26 +15,32 @@ type Status =
   | "subscribed"
   | "unsubscribed";
 
+/** This device's current push state (registers the worker if needed). */
+async function detectStatus(): Promise<Status> {
+  if (!pushSupported()) return "unsupported";
+  if (Notification.permission === "denied") return "denied";
+  try {
+    // Register the SW up front; `serviceWorker.ready` never resolves until a
+    // worker exists, so we must not depend on it for the initial state.
+    const reg = await navigator.serviceWorker.register("/sw.js");
+    return (await reg.pushManager.getSubscription()) ? "subscribed" : "unsubscribed";
+  } catch {
+    return "unsubscribed";
+  }
+}
+
 export default function NotificationsToggle() {
   const [status, setStatus] = useState<Status>("loading");
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (!pushSupported()) {
-      setStatus("unsupported");
-      return;
-    }
-    if (Notification.permission === "denied") {
-      setStatus("denied");
-      return;
-    }
-    // Register the SW up front; `serviceWorker.ready` never resolves until a
-    // worker exists, so we must not depend on it for the initial state.
-    navigator.serviceWorker
-      .register("/sw.js")
-      .then((reg) => reg.pushManager.getSubscription())
-      .then((sub) => setStatus(sub ? "subscribed" : "unsubscribed"))
-      .catch(() => setStatus("unsubscribed"));
+    let alive = true;
+    void detectStatus().then((s) => {
+      if (alive) setStatus(s);
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   async function enable() {

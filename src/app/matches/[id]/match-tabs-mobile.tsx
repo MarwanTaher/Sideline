@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState, type ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import type { SectionIconName } from "@/components/section-icon";
 
 export type MatchTab = {
@@ -125,8 +125,8 @@ export function NextDot() {
  * Mobile-only bottom bar for a single match. A fixed set of primary tabs plus a
  * "More" sheet holds every section — no horizontal scrolling (which is
  * unreliable in the installed iOS PWA). A leading "Back" tab and a prominent
- * sheet action both return to the match list. The desktop tab strip lives in
- * MatchNav.
+ * sheet action both return to the match list. The tablet tab strip and the
+ * desktop rail live in MatchNav.
  */
 export function MatchTabsMobile({
   tabs,
@@ -138,12 +138,12 @@ export function MatchTabsMobile({
   highlightHref?: string;
 }) {
   const pathname = usePathname();
-  const [moreOpen, setMoreOpen] = useState(false);
+  // The More sheet belongs to the page it was opened on, so navigating closes it.
+  const [moreOpenOn, setMoreOpenOn] = useState<string | null>(null);
+  const moreOpen = moreOpenOn === pathname;
+  const setMoreOpen = (next: boolean | ((v: boolean) => boolean)) =>
+    setMoreOpenOn((typeof next === "function" ? next(moreOpen) : next) ? pathname : null);
   const overviewHref = `/matches/${matchId}`;
-
-  useEffect(() => {
-    setMoreOpen(false);
-  }, [pathname]);
 
   const isActive = (href: string) =>
     href === overviewHref

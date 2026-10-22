@@ -18,7 +18,7 @@ go-live → polish → maintainability. Items keep their ids; details are in the
 **Already built (on `dev`):** C-9, H-1 (incl. U-1), O-1 (incl. U-2), O-3, AV-1…AV-6, E-1…E-5,
 M-1, T-1, S-1, FV-2, P-6, Phase 0 (C-1, C-2, C-8, P-3) and Phase 1 (P-1, U-3, P-4; P-2 on Home and
 match page; P-5 for awards and badges — players/stats pages stay live because they are admin tools).
-**Implemented locally, not deployed:** Phases 3–5 below, including time/money tests.
+**Shipped to production (2026-10-22):** Phases 3–5 below, including time/money tests.
 Partly done: O-2 (phase CTA, no redirect), E-7, U-9.
 
 | Phase | Theme | Items | Effort |
@@ -27,9 +27,42 @@ Partly done: O-2 (phase CTA, no redirect), E-7, U-9.
 | **1** ✅ | Speed | P-1 cached scores · U-3 optimistic In/Out · P-4 skeletons · P-2 batched reads · P-5 cached read-mostly pages | 1–2 d |
 | **2** ✅ | Fair teams | F-1 skipped (positions rotate) · U-4 balance meter + recent form (no fixed-position coverage warnings) | 2 d |
 | **3** ✅ code | Money & season go-live | F-3 go-live checklist · C-6 atomic writes · C-4 time/money tests · F-5 payment reminders · U-7 QR + bulk confirm + who owes · C-7 season edge cases | 2–3 d |
-| **4** ✅ code | Matchday polish | F-6 daily lock push · F-2 results digest · O-4 blocked states · O-5 one header · U-6 empty states / welcome · U-5 accessibility · Messages stays in Admin control | 2 d |
-| **5** ✅ code / ops pending | Maintainability | C-3 schema types · C-5 error log · P-7 revision-stamped snapshots · F-8 CSV exports; Neon backup scheduling remains external | 2 d |
-| Later | When needed | E-6 predictions · F-4 season waitlist/replacements · F-7 head-to-head · U-8 desktop · F-9 i18n · F-10 multi-group | — |
+| **4** ✅ code | Matchday polish | F-6 daily lock push (off by default) · F-2 results digest · O-4 blocked states · O-5 one header · U-6 empty states / welcome · U-5 accessibility · Messages stays in Admin control | 2 d |
+| **5** ✅ code | Maintainability | C-3 schema types · C-5 error log · P-7 revision-stamped snapshots · F-8 CSV exports; scheduled Neon backups dropped by owner decision | 2 d |
+| **6** ✅ code | Social & desktop | E-6 predictions + Pundit boards · F-4 seat-swap board · F-7 head-to-head · U-8 desktop layout · all ESLint errors fixed | 2–3 d |
+| Later | When needed | F-9 i18n · F-10 multi-group | — |
+
+### Phase 6 delivery notes
+
+- Migrations **0033 (predictions) and 0034 (seat_offers, seat_offer_requests) are applied to
+  Preview only**. Production needs both before Phase 6 ships.
+- **E-6 Predictions:** once teams are published and until kickoff (or close, whichever is first),
+  any player picks the matchday winner on the match overview; picks can change until then and the
+  lock is re-checked in SQL against the database clock. Others' picks stay hidden until kickoff.
+  Winner = most points over completed mini-matches (win 3, draw 1); picking any of the tied
+  leaders counts. Scored only once the matchday is closed; 1 pundit point per correct pick.
+  Awards › Pundit shows Season (the current season by date range, like the leaderboard's season
+  table) and All-time, with "Pundit of the Season" for the season leader(s).
+- **F-4 Seat swap:** on the availability page a season subscriber who will miss a match offers
+  their seat; only players on that match's waitlist can request it; the subscriber approves one.
+  Approval is one guarded transaction: offer filled, subscriber OUT, replacement IN and off the
+  waitlist, and a `guest_charges` row (kind `replacement`, the season's session fee) owed to the
+  subscriber. Concurrent approvals fill a seat once; a player can take at most one seat per match.
+  Works inside the 24 h lock (it is an explicit swap) but not after kickoff. Pushes: seat posted
+  (waitlisted players), request (subscriber), approved (replacement).
+- **F-7 Head-to-head:** other players' profiles show "You vs <name>": mini-match W·D·L against each
+  other, matchdays together with the win rate together, and that player's best/worst teammate.
+  The pair data is never put in the shared profile cache.
+- **U-8 Desktop:** from `lg` (1024 px) the match, season and Admin control section tabs become a
+  sticky left rail (`SectionRail`); mobile keeps the bottom bars and `md` keeps the tab strip.
+  From `xl` the draft board and Admin › Billing use two columns (`DesktopSplit`). Known limits:
+  the billing settings forms render twice (one copy hidden per breakpoint), and the rail's top
+  offset assumes the current header height.
+  Also fixed: the Admin/Season tab strips now highlight the active tab, and billing month links
+  keep the Billing tab.
+- **Lint:** `npm run lint` reports no errors; effects that only synchronised state were replaced
+  by render-time resets, `useSyncExternalStore` for device preferences (`src/lib/local-store.ts`)
+  and pathname-scoped open state for menus.
 
 ### Phase 3–5 delivery notes
 
@@ -47,8 +80,10 @@ Partly done: O-2 (phase CTA, no redirect), E-7, U-9.
   copying the full transfer details; no third-party QR service receives banking information.
 - Lock pushes run on the **first daily cron after the lock and before kickoff**. They can be up to
   about 24 hours late; exact-time delivery needs different scheduling. Claims are atomic and
-  at-most-once. Result pushes contain MOTM/top-scorer/rating highlights when voting closes;
-  mini-match winners are not inferred from aggregate player goals.
+  at-most-once. **Owner decision: lock pushes are off by default** (the "Availability locked"
+  notification type defaults to disabled and the cron claims nothing while it is off), so an admin
+  can re-enable them later in Notifications settings. Result pushes contain MOTM/top-scorer/rating
+  highlights when voting closes; mini-match winners are not inferred from aggregate player goals.
 - Score reads accept a persisted payload only at the exact database revision and scoring-model
   version. Triggers cover every scoring-input table and scoring settings; otherwise readers
   compute current scores. Time-decayed scores bypass persistent reuse. GETs never capture scores.
