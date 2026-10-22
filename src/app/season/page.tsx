@@ -16,6 +16,7 @@ import { listPlayerScans, uncreditedTotalMinor } from "@/lib/multisport";
 import { getFundBalance } from "@/lib/season-fund";
 import { formatMinor } from "@/lib/format-money";
 import { SubNav } from "@/components/ui/sub-nav";
+import { SectionRail } from "@/components/ui/section-rail";
 import { sqlClient } from "@/lib/db";
 import {
   AcceptTerms,
@@ -144,6 +145,13 @@ export default async function SeasonPage({
     playedOn: String(m.played_on),
   }));
 
+  const sectionItems = [
+    { href: "/season", label: "Overview" },
+    { href: "/season?tab=payments", label: "Payments" },
+    { href: "/season?tab=multisport", label: "MultiSport" },
+    { href: "/season?tab=fund", label: "Group fund" },
+  ];
+
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
       <div className="flex items-center gap-3">
@@ -162,14 +170,16 @@ export default async function SeasonPage({
       ) : null}
 
       <SubNav
-        className="mt-4 hidden md:block"
+        className="mt-4 hidden md:block lg:hidden"
         ariaLabel="Season sections"
-        items={[
-          { href: "/season", label: "Overview" },
-          { href: "/season?tab=payments", label: "Payments" },
-          { href: "/season?tab=multisport", label: "MultiSport" },
-          { href: "/season?tab=fund", label: "Group fund" },
-        ]}
+        items={sectionItems}
+        activeHref={activeTab === "overview" ? "/season" : `/season?tab=${activeTab}`}
+      />
+      <SectionRail
+        ariaLabel="Season sections"
+        heading="Season"
+        items={sectionItems}
+        activeHref={activeTab === "overview" ? "/season" : `/season?tab=${activeTab}`}
       />
       <Suspense fallback={null}>
         <SeasonTabsMobile />

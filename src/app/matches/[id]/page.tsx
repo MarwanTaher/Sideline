@@ -24,6 +24,8 @@ import { getMatchPhase, phaseAction } from "@/lib/match-phase";
 import { getAvailabilityMatch, getPlayerAvailabilityStatus } from "@/lib/availability";
 import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
 import { MatchPageHeader } from "./match-page-header";
+import { getMatchPredictionView } from "@/lib/predictions";
+import { PredictionsCard } from "./predictions-card";
 
 export const metadata = {
   title: "Match · Sideline",
@@ -64,6 +66,8 @@ export default async function MatchDetailPage({
   // Social hub data (reactions, share). Rostered players may interact.
   const canInteract = isMember;
   const hasRoster = match.teams.some((t) => t.players.length > 0);
+  // Never rejects (failures hide the card), so it can run alongside the batch below.
+  const predictionPromise = getMatchPredictionView(matchId, viewerPlayerId ?? null);
 
   const [adminMatch, canScore, reactions, digest, baseUrl, weather, availMeta, lockEnabled, myStatus, fieldLive, draftForBalance] = await Promise.all([
     isAdmin ? getMatchAdmin(matchId) : Promise.resolve(null),
@@ -80,6 +84,7 @@ export default async function MatchDetailPage({
     hasRoster && fieldFeatures.live ? getMatchLive(matchId, match.matchdayStatus === "closed") : Promise.resolve(null),
     hasRoster && isAdmin && fieldFeatures.balance ? getDraftState(matchId) : Promise.resolve(null),
   ]);
+  const prediction = await predictionPromise;
   const fieldBalance = draftForBalance
     ? balanceSummary(
         match.teams.map((t) => ({
@@ -219,6 +224,19 @@ export default async function MatchDetailPage({
           View match awards →
         </Link>
       </div>
+
+      {prediction && match.teams.length > 0 ? (
+        <PredictionsCard
+          matchId={matchId}
+          teams={match.teams.map((t) => ({
+            teamNo: t.teamNo,
+            label: t.name?.trim() || `Team ${t.teamNo}`,
+            color: t.color,
+          }))}
+          view={prediction}
+          canPredict={viewerPlayerId != null}
+        />
+      ) : null}
 
       {isAdmin || isMember ? (
       <section className="mt-8">

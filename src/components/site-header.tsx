@@ -85,7 +85,8 @@ export default async function SiteHeader() {
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-black/10 bg-white/80 backdrop-blur dark:border-white/10 dark:bg-neutral-950/80">
-        <div className="mx-auto w-full max-w-4xl px-4 py-3">
+        {/* lg+: as wide as the section-rail frame, so the brand lines up with the rail. */}
+        <div className="mx-auto w-full max-w-4xl px-4 py-3 lg:max-w-7xl">
           {/* Mobile: brand left · mode pill + avatar right (nav is the bottom bar) */}
           <div className="flex items-center justify-between gap-2 md:hidden">
             {brand}

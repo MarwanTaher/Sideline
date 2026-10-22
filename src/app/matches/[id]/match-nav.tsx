@@ -1,4 +1,5 @@
 import { SubNav } from "@/components/ui/sub-nav";
+import { SectionRail } from "@/components/ui/section-rail";
 import { SectionIcon, type SectionIconName } from "@/components/section-icon";
 import { MatchTabsMobile, NextDot, type MatchTab } from "./match-tabs-mobile";
 
@@ -12,9 +13,10 @@ function TabLabel({ icon, text }: { icon: SectionIconName; text: string }) {
 }
 
 /**
- * Secondary navigation shared across the pages of a single match. On desktop it
- * renders a top tab strip; on mobile it renders a fixed bottom bar (see
- * MatchTabsMobile) so section switching feels like the rest of the app.
+ * Secondary navigation shared across the pages of a single match. On desktop
+ * (lg+) it renders a left rail (SectionRail); on tablets a top tab strip; on
+ * phones a fixed bottom bar (see MatchTabsMobile) so section switching feels
+ * like the rest of the app.
  * The Payments tab is always shown; the page itself explains when payments
  * are not open yet.
  */
@@ -56,11 +58,15 @@ export function MatchNav({
     ),
   }));
 
+  // The rail matches nested section routes like the phone bar does.
+  const railItems = items.map((item, i) => ({ ...item, startsWith: i > 0 }));
+
   return (
     <>
-      <div className="hidden md:block">
+      <div className="hidden md:block lg:hidden">
         <SubNav items={items} ariaLabel="Match sections" className={className} />
       </div>
+      <SectionRail items={railItems} ariaLabel="Match sections" heading="Match" />
       <MatchTabsMobile tabs={tabs} matchId={matchId} highlightHref={highlightHref} />
     </>
   );

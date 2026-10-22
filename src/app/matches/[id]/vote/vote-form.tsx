@@ -61,11 +61,13 @@ export function VoteForm({ matchId, ballot, hasVotedBefore }: VoteFormProps) {
 
   const [rows, setRows] = useState<Record<number, RowState>>(initialRows);
 
-  // Resync when the server sends updated ballot data (after a save).
-  useEffect(() => {
+  // Resync when the server sends updated ballot data (after a save), during
+  // render rather than in an effect, so there is no flash of stale rows.
+  const [lastSignature, setLastSignature] = useState(signature);
+  if (signature !== lastSignature) {
+    setLastSignature(signature);
     setRows(initialRows);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [signature]);
+  }
 
   const [state, formAction, pending] = useActionState(submitVotesAction, INITIAL);
 

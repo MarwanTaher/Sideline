@@ -71,13 +71,16 @@ export default function ProfileDetails({
   const [photoBusy, startPhoto] = useTransition();
   const [photoMsg, setPhotoMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
+  // Follow a new photo from the server (e.g. after refresh) without an effect.
+  const [lastPhotoProp, setLastPhotoProp] = useState(photoUrl);
+  if (photoUrl !== lastPhotoProp) {
+    setLastPhotoProp(photoUrl);
+    setCurrentPhoto(photoUrl);
+  }
+
   useEffect(() => {
     if (contactState.ok) router.refresh();
   }, [contactState, router]);
-
-  useEffect(() => {
-    setCurrentPhoto(photoUrl);
-  }, [photoUrl]);
 
   function onPickFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

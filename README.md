@@ -39,7 +39,7 @@ CC0 sources and file checksums are listed in [LICENSES.txt](./public/audio/LICEN
 
 ### Preview integration tests
 
-Apply migrations `0029`–`0032` to the approved Preview branch first. Point the local
+Apply migrations `0029`–`0034` to the approved Preview branch first. Point the local
 `.env.local` at **Preview, never production**, and ensure Preview has no registered
 push devices. The following PowerShell opt-ins must identify that same approved host:
 
@@ -67,11 +67,13 @@ It is deliberately excluded from the build/unit gate.
 
 ### Release prerequisites
 
-- Migrations `0029`–`0032` are applied to Preview and production (2026-10-22). Any new
-  environment needs them before running this code.
+- Migrations `0029`–`0034` are applied to Preview and production (2026-10-22). Any new
+  environment needs them before running this code. `0033` adds predictions and `0034` the
+  seat-swap tables.
   `0032` adds the per-match payment currency (`matches.payment_currency`, default `PLN`).
 - Verify Vercel's daily reminders cron and separate Preview push configuration.
-  Lock notifications are daily, not exact-time.
+  Lock notifications are daily, not exact-time, and are **off by default** (enable the
+  "Availability locked" type in Notifications settings to turn them on).
 - Configure and verify Neon recovery/pre-season snapshots separately. The Diagnostics
   CSV exports are not a full database backup.
 - Payment QR uses the Polish ZBP field layout (26-digit NRB, zero-padded grosz amount,

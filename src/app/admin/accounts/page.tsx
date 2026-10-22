@@ -36,6 +36,7 @@ import { getTapSpamConfig } from "@/lib/tap-spam-settings";
 import { getMomentSoundConfig } from "@/lib/moment-sound-settings";
 import AdminTabsMobile from "./admin-tabs-mobile";
 import { SubNav } from "@/components/ui/sub-nav";
+import { SectionRail } from "@/components/ui/section-rail";
 
 export const metadata = {
   title: "Admin control · Sideline",
@@ -146,20 +147,37 @@ export default async function AccountsPage({
   const lockedByAdmin: Record<number, AdminTabKey[]> = {};
   for (const [adminId, keys] of tabLocks) lockedByAdmin[adminId] = keys;
 
+  const sectionItems = [
+    { href: "/admin/accounts", label: "Admins" },
+    { href: "/admin/accounts?tab=seasons", label: "Seasons" },
+    { href: "/admin/accounts?tab=billing", label: "Billing" },
+    { href: "/admin/accounts?tab=messages", label: "Messages" },
+    { href: "/admin/accounts?tab=other", label: "Other" },
+  ];
+
   return (
-    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
+    <main
+      className={`mx-auto w-full max-w-3xl flex-1 px-4 py-10${
+        activeTab === "billing" ? " xl:max-w-none" : ""
+      }`}
+    >
       <h1 className="text-2xl font-semibold tracking-tight">Admin control</h1>
 
       <SubNav
-        className="mt-4 hidden md:block"
+        className="mt-4 hidden md:block lg:hidden"
         ariaLabel="Admin sections"
-        items={[
-          { href: "/admin/accounts", label: "Admins" },
-          { href: "/admin/accounts?tab=seasons", label: "Seasons" },
-          { href: "/admin/accounts?tab=billing", label: "Billing" },
-          { href: "/admin/accounts?tab=messages", label: "Messages" },
-          { href: "/admin/accounts?tab=other", label: "Other" },
-        ]}
+        items={sectionItems}
+        activeHref={
+          activeTab === "admins" ? "/admin/accounts" : `/admin/accounts?tab=${activeTab}`
+        }
+      />
+      <SectionRail
+        ariaLabel="Admin sections"
+        heading="Admin"
+        items={sectionItems}
+        activeHref={
+          activeTab === "admins" ? "/admin/accounts" : `/admin/accounts?tab=${activeTab}`
+        }
       />
       <Suspense fallback={null}>
         <AdminTabsMobile />
@@ -192,27 +210,27 @@ export default async function AccountsPage({
 
       {activeTab === "billing" ? (
         subscriptionSeason && billing ? (
-          <>
-            <BillingAdmin
-              seasonId={subscriptionSeason.id}
-              seasonName={subscriptionSeason.name}
-              period={billing.period}
-              periods={billing.periods}
-              invoices={billing.invoices}
-              summary={billing.summary}
-              rates={billing.rates!}
-              paymentDetails={billing.paymentDetails}
-              pendingScans={billing.pendingScans}
-              outstandingInvoices={billing.outstandingInvoices}
-              withdrawnWarnings={billing.withdrawnWarnings}
-            />
-            <FundAdmin
-              seasonId={subscriptionSeason.id}
-              balance={billing.fund}
-              adjustments={billing.adjustments}
-              roundingLines={billing.rounding.lines}
-            />
-          </>
+          <BillingAdmin
+            seasonId={subscriptionSeason.id}
+            seasonName={subscriptionSeason.name}
+            period={billing.period}
+            periods={billing.periods}
+            invoices={billing.invoices}
+            summary={billing.summary}
+            rates={billing.rates!}
+            paymentDetails={billing.paymentDetails}
+            pendingScans={billing.pendingScans}
+            outstandingInvoices={billing.outstandingInvoices}
+            withdrawnWarnings={billing.withdrawnWarnings}
+            fund={
+              <FundAdmin
+                seasonId={subscriptionSeason.id}
+                balance={billing.fund}
+                adjustments={billing.adjustments}
+                roundingLines={billing.rounding.lines}
+              />
+            }
+          />
         ) : (
           <p className="mt-4 rounded-xl bg-neutral-50 px-4 py-6 text-sm text-neutral-500 dark:bg-neutral-900">
             Billing appears once a subscription season is set up on the Seasons

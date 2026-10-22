@@ -11,6 +11,7 @@ import {
 } from "@/lib/awards";
 import AwardsControls from "./awards-controls";
 import AdminOverridePanel, { type OverrideItem } from "./admin-override";
+import PunditLeaderboard, { PunditSkeleton } from "./pundit-leaderboard";
 import BadgeGallery from "@/components/badge-gallery";
 import { SubNav } from "@/components/ui/sub-nav";
 import { SectionIcon } from "@/components/section-icon";
@@ -112,6 +113,10 @@ export default async function AwardsPage({
           isAdmin={isAdmin}
           noMatches={scope === "match" && matches.length === 0}
         />
+      </Suspense>
+
+      <Suspense fallback={<PunditSkeleton />}>
+        <PunditLeaderboard playerId={playerId} />
       </Suspense>
 
       <section className="mt-10">

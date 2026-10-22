@@ -1,3 +1,5 @@
+import { SectionRailSkeleton } from "@/components/ui/section-rail";
+
 const BAR = "bg-neutral-200 dark:bg-neutral-800";
 
 /**
@@ -6,17 +8,27 @@ const BAR = "bg-neutral-200 dark:bg-neutral-800";
  *  - "list": title + a column of rows (matches, players, leaderboard)
  *  - "detail": header card + tab strip + content cards (match, profile)
  */
-export function PageSkeleton({ variant = "list", rows = 6 }: { variant?: "list" | "detail"; rows?: number }) {
+export function PageSkeleton({
+  variant = "list",
+  rows = 6,
+  rail = false,
+}: {
+  variant?: "list" | "detail";
+  rows?: number;
+  /** Reserve the desktop section rail (pages that render a SectionRail). */
+  rail?: boolean;
+}) {
   return (
     <main
       aria-busy="true"
       aria-label="Loading"
       className="mx-auto w-full max-w-3xl flex-1 animate-pulse px-4 py-8"
     >
+      {rail ? <SectionRailSkeleton rows={6} /> : null}
       {variant === "detail" ? (
         <>
           <div className={`h-36 rounded-3xl ${BAR}`} />
-          <div className="mt-4 flex gap-2">
+          <div className={`mt-4 flex gap-2${rail ? " lg:hidden" : ""}`}>
             {[0, 1, 2, 3].map((i) => (
               <div key={i} className={`h-9 flex-1 rounded-full ${BAR}`} />
             ))}
