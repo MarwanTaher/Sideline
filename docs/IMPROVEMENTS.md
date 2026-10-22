@@ -70,6 +70,12 @@ Partly done: O-2 (phase CTA, no redirect), E-7, U-9.
   "Show previous bills" toggle. Admin › Billing › Manage can hide an invoice from the player
   (migration 0035) or delete it after a confirmation; hidden invoices get no reminders and drop
   out of "Who still owes".
+- **MultiSport credit (follow-up):** a bill only takes credit up to what it charges (scan order);
+  the rest carries to the next bill. Recalculate and Hide/Show re-fit the credit on unpaid bills
+  (hiding gives it back; paid bills keep theirs). Admin › Billing lists "Unused MultiSport credit"
+  per player, tagged "next bill" or "no more bills" (withdrawn, or the season's last month billed),
+  with Refunded / To group fund (one fund adjustment). Settled scans are never applied again
+  (migration 0036).
 
 ### Phase 3–5 delivery notes
 

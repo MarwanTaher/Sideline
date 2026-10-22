@@ -7,7 +7,7 @@
     "build": "npm run test:unit && next build",
     "start": "next start",
     "lint": "eslint",
-    "test:unit": "node --import tsx tests/unit.test.ts && node --import tsx --test tests/audio.test.ts tests/payment-qr.test.ts tests/predictions.test.ts tests/seat-offers.test.ts tests/head-to-head.test.ts tests/season-payments.test.ts tests/phase3.test.ts tests/phase4.test.ts tests/phase5.test.ts",
+    "test:unit": "node --import tsx tests/unit.test.ts && node --import tsx --test tests/audio.test.ts tests/payment-qr.test.ts tests/predictions.test.ts tests/seat-offers.test.ts tests/head-to-head.test.ts tests/season-payments.test.ts tests/multisport-credit.test.ts tests/phase3.test.ts tests/phase4.test.ts tests/phase5.test.ts",
     "test:scoring": "node --env-file=.env.local --import tsx tests/scoring.golden.test.ts",
     "test:scoring:update": "node --env-file=.env.local --import tsx tests/dump_golden.ts",
     "test:awards": "node --env-file=.env.local --import tsx tests/awards.golden.test.ts",

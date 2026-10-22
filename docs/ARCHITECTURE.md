@@ -359,7 +359,7 @@ sequenceDiagram
   Ad->>B: generate invoices for YYYY-MM
   B->>DB: count season Sundays in month, active seats, approved unapplied MultiSport scans
   B->>B: gross = day_rate × playing_days / split_between (grosz)
-  B->>B: charged = CEIL(gross / 100) × 100, payable = charged − MultiSport credit
+  B->>B: charged = CEIL(gross / 100) × 100, payable = charged − MultiSport credit (credit capped at charged; rest carries over)
   B->>DB: Transaction: lock eligible scans FOR UPDATE, INSERT invoices, allocate locked scans
   DB-->>B: commit invoices + credits together (duplicate invoices do not consume credit)
   Pl->>DB: view invoice, due countdown (SQL, Warsaw end-of-day)

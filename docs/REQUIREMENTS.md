@@ -157,7 +157,7 @@ Based on the group's written rules (season 08/11/2026 – 30/03/2027).
 | FR-SE-5 | Money is computed in integer grosz; charged amount is rounded **up** to whole PLN; the rounding surplus goes to the group fund. Invoice inputs are snapshotted. | M | Done |
 | FR-SE-6 | Payment due on the **3rd** of the month (configurable); countdown, transfer details and a copyable reference `Sideline YYYY-MM Name`. | M | Done |
 | FR-SE-7 | Player can declare "I've sent it"; only an admin confirms payment. | M | Done |
-| FR-SE-8 | MultiSport: player reports a scan → admin approves → credit (default 15 PLN) applied on the next invoice. | S | Done |
+| FR-SE-8 | MultiSport: player reports a scan → admin approves → credit (default 15 PLN) applied on the next invoice, only as much as the bill charges; the rest carries to later bills. Recalculating, hiding or showing an unpaid bill re-fits its credit (paid bills are never changed). Credit with no bill left (withdrawn, or the season's last month billed) is settled by an admin as refunded or moved to the group fund. | S | Done |
 | FR-SE-9 | Non-core (extra) players on a season match pay a flat fee (default 36 PLN) into the group fund. A replacement for an absent subscriber pays that subscriber instead. | M | Done |
 | FR-SE-10 | Extending a session by 0.5 h costs a configurable amount (default 100 PLN) paid from the fund; the app warns when fewer than the minimum extras (default 4) are present. | S | Done |
 | FR-SE-11 | Group fund balance is **derived** (fees + rounding surplus − extensions ± manual adjustments), never stored. Visible to players. | M | Done |

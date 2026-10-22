@@ -10,6 +10,7 @@ import { sqlClient } from "./db";
  */
 
 export type ScanStatus = "pending" | "approved" | "rejected";
+export type ScanSettlement = "refunded" | "fund";
 
 export type MultisportScan = {
   id: number;
@@ -21,6 +22,8 @@ export type MultisportScan = {
   creditMinor: number;
   reportedAt: string;
   applied: boolean;
+  /** Leftover credit an admin refunded or moved to the group fund. */
+  settledAs: ScanSettlement | null;
 };
 
 type ScanRow = {
@@ -33,6 +36,7 @@ type ScanRow = {
   credit_minor: number;
   reported_at: string | Date;
   applied_invoice_id: number | null;
+  settled_as: string | null;
 };
 
 function toScan(r: ScanRow): MultisportScan {
@@ -48,11 +52,13 @@ function toScan(r: ScanRow): MultisportScan {
     reportedAt:
       r.reported_at instanceof Date ? r.reported_at.toISOString() : String(r.reported_at),
     applied: r.applied_invoice_id != null,
+    settledAs: r.settled_as === "refunded" || r.settled_as === "fund" ? r.settled_as : null,
   };
 }
 
 const SCAN_SELECT = `SELECT ms.id, ms.match_id, m.played_on, ms.player_id, p.name,
-                            ms.status, ms.credit_minor, ms.reported_at, ms.applied_invoice_id
+                            ms.status, ms.credit_minor, ms.reported_at, ms.applied_invoice_id,
+                            ms.settled_as
                        FROM multisport_scans ms
                        JOIN players p ON p.id = ms.player_id
                        JOIN matches m ON m.id = ms.match_id`;
@@ -98,7 +104,8 @@ export async function reportScan(
             reported_at = CURRENT_TIMESTAMP,
             reviewed_at = NULL,
             reviewed_by = ''
-      WHERE multisport_scans.applied_invoice_id IS NULL`,
+      WHERE multisport_scans.applied_invoice_id IS NULL
+        AND multisport_scans.settled_at IS NULL`,
     [matchId, playerId, creditMinor],
   );
 }
@@ -121,7 +128,7 @@ export async function reviewScan(
   await sqlClient.query(
     `UPDATE multisport_scans
         SET status = $1, reviewed_at = CURRENT_TIMESTAMP, reviewed_by = $2
-      WHERE id = $3 AND applied_invoice_id IS NULL`,
+      WHERE id = $3 AND applied_invoice_id IS NULL AND settled_at IS NULL`,
     [approve ? "approved" : "rejected", actor, scanId],
   );
 }
@@ -131,8 +138,92 @@ export async function uncreditedTotalMinor(playerId: number): Promise<number> {
   const rows = (await sqlClient.query(
     `SELECT COALESCE(SUM(credit_minor), 0)::int AS total
        FROM multisport_scans
-      WHERE player_id = $1 AND status = 'approved' AND applied_invoice_id IS NULL`,
+      WHERE player_id = $1 AND status = 'approved' AND applied_invoice_id IS NULL
+        AND settled_at IS NULL`,
     [playerId],
   )) as Array<{ total: number }>;
   return Number(rows[0]?.total ?? 0);
+}
+
+export type LeftoverCredit = {
+  playerId: number;
+  name: string;
+  creditMinor: number;
+  scans: number;
+  withdrawn: boolean;
+  /** Newest period this player was billed for in the season, if any. */
+  lastBilledPeriod: string | null;
+};
+
+/** Approved, unused, unsettled credit per player from this season's matches. */
+export async function listLeftoverCredits(seasonId: number): Promise<LeftoverCredit[]> {
+  const rows = (await sqlClient.query(
+    `SELECT ms.player_id, p.name,
+            SUM(ms.credit_minor)::int AS credit,
+            COUNT(*)::int AS scans,
+            COALESCE(MAX(ss.status), '') AS sub_status,
+            (SELECT MAX(si.period) FROM season_invoices si
+              WHERE si.season_id = $1::int AND si.player_id = ms.player_id) AS last_period
+       FROM multisport_scans ms
+       JOIN matches m ON m.id = ms.match_id AND m.season_id = $1::int
+       JOIN players p ON p.id = ms.player_id
+       LEFT JOIN season_subscriptions ss
+              ON ss.season_id = $1::int AND ss.player_id = ms.player_id
+      WHERE ms.status = 'approved' AND ms.applied_invoice_id IS NULL AND ms.settled_at IS NULL
+      GROUP BY ms.player_id, p.name
+      ORDER BY p.name`,
+    [seasonId],
+  )) as Array<{
+    player_id: number;
+    name: string;
+    credit: number;
+    scans: number;
+    sub_status: string;
+    last_period: string | null;
+  }>;
+  return rows.map((r) => ({
+    playerId: Number(r.player_id),
+    name: String(r.name),
+    creditMinor: Number(r.credit),
+    scans: Number(r.scans),
+    withdrawn: r.sub_status !== "active",
+    lastBilledPeriod: r.last_period == null ? null : String(r.last_period),
+  }));
+}
+
+/**
+ * Settle a player's unused credit from this season's matches: refunded to them
+ * outside the app, or moved into the group fund (as one fund adjustment). One
+ * statement, so the scans and the fund entry can never disagree. Returns the
+ * amount settled (0 if nothing was left, e.g. a bill just used it).
+ */
+export async function settleLeftoverCredit(
+  seasonId: number,
+  playerId: number,
+  as: ScanSettlement,
+  note: string,
+  actor: string,
+): Promise<number> {
+  const rows = (await sqlClient.query(
+    `WITH settled AS (
+       UPDATE multisport_scans ms
+          SET settled_at = CURRENT_TIMESTAMP, settled_as = $3::text
+         FROM matches m
+        WHERE m.id = ms.match_id AND m.season_id = $1::int AND ms.player_id = $2::int
+          AND ms.status = 'approved' AND ms.applied_invoice_id IS NULL AND ms.settled_at IS NULL
+        RETURNING ms.credit_minor
+     ),
+     total AS (
+       SELECT COALESCE(SUM(credit_minor), 0)::int AS amount FROM settled
+     ),
+     fund AS (
+       INSERT INTO fund_adjustments (season_id, amount_minor, note, created_by)
+       SELECT $1::int, amount, $4::text, $5::text FROM total
+        WHERE $3::text = 'fund' AND amount > 0
+       RETURNING id
+     )
+     SELECT amount FROM total`,
+    [seasonId, playerId, as, note, actor],
+  )) as Array<{ amount: number }>;
+  return Number(rows[0]?.amount ?? 0);
 }
