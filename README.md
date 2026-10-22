@@ -67,10 +67,9 @@ It is deliberately excluded from the build/unit gate.
 
 ### Release prerequisites
 
-- Migrations `0029`–`0032` are applied to Preview and production (2026-10-22). Any new
-  environment needs them before running this code.
-- Migrations `0033` (predictions) and `0034` (seat swap) are applied to **Preview only**;
-  apply them to production before shipping the release that contains them.
+- Migrations `0029`–`0034` are applied to Preview and production (2026-10-22). Any new
+  environment needs them before running this code. `0033` adds predictions and `0034` the
+  seat-swap tables.
   `0032` adds the per-match payment currency (`matches.payment_currency`, default `PLN`).
 - Verify Vercel's daily reminders cron and separate Preview push configuration.
   Lock notifications are daily, not exact-time, and are **off by default** (enable the
