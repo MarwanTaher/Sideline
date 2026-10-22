@@ -189,6 +189,7 @@ export default async function SeasonPage({
         isSubscriber && pid != null ? (
           <div className="mt-5">
             <PaymentsTab
+              seasonId={season.id}
               invoices={invoices}
               details={paymentDetails}
               playerName={session.user.name ?? "Player"}

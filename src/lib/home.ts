@@ -193,7 +193,8 @@ export async function getHomeAdminCounts(
     `SELECT
        (SELECT COUNT(*) FROM match_guests WHERE match_id = $1 AND status = 'pending') AS guests,
        (SELECT COUNT(*) FROM season_invoices
-         WHERE season_id = $2 AND paid_at IS NULL AND declared_paid_at IS NOT NULL) AS payments,
+         WHERE season_id = $2 AND paid_at IS NULL AND declared_paid_at IS NOT NULL
+           AND hidden_at IS NULL) AS payments,
        (SELECT COUNT(*) FROM multisport_scans WHERE status = 'pending') AS scans`,
     [matchId ?? -1, seasonId ?? -1],
   )) as Array<{ guests: number; payments: number; scans: number }>;

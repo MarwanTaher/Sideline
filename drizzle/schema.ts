@@ -696,6 +696,7 @@ export const seasonInvoices = pgTable("season_invoices", {
 	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
 	declaredPaidAt: timestamp("declared_paid_at", { withTimezone: true, mode: "string" }),
 	declaredNote: text("declared_note").default("").notNull(),
+	hiddenAt: timestamp("hidden_at", { withTimezone: true, mode: "string" }),
 }, (table) => [
 	unique("season_invoices_unique").on(table.seasonId, table.playerId, table.period),
 	index("season_invoices_period_idx").on(table.seasonId, table.period),
