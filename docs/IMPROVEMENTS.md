@@ -631,8 +631,6 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
     backgrounding. Pages declare `navigator.audioSession.type = "ambient"` where supported, so
     sounds mix with the user's music instead of pausing it and follow the iPhone silent switch.
     The iOS home-screen app keeps its own cookies and storage, separate from Safari.
-  - *On-device check:* Profile › Settings › **Sound check** plays the pop-up and IN/OUT sounds from a
-    tap and reports Played / blocked / couldn't load, plus device tips.
 
 ### S-1 24-hour photo stories — P2 · M
 

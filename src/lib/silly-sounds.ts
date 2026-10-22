@@ -260,11 +260,6 @@ function audioContext(): AudioContext | null {
   return ctx;
 }
 
-/** For the Profile sound check: whether synthesized sounds can play right now. */
-export function fartAudioState(): string {
-  return ctx?.state ?? "not started";
-}
-
 let fartVoice: { out: GainNode; nodes: AudioScheduledSourceNode[] } | null = null;
 
 /** Cut the previous fart so rapid taps never pile up into a drone. */
