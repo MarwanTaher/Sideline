@@ -39,6 +39,6 @@ export const config = {
   // assets. Cron requests carry no session cookie and authenticate themselves
   // with CRON_SECRET, so a redirect to /login would silently disable them.
   matcher: [
-    "/((?!api/auth|api/cron|_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    "/((?!api/auth|api/cron|_next/static|_next/image|favicon.ico|sw.js|manifest.webmanifest|robots.txt|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|mp3|m4a|ogg|wav)$).*)",
   ],
 };

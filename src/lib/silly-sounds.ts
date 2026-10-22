@@ -83,20 +83,23 @@ let fadeTimer: ReturnType<typeof setInterval> | null = null;
 export function stopMomentSound(): void {
   if (fadeTimer != null) clearInterval(fadeTimer);
   fadeTimer = null;
-  momentAudio?.pause();
+  if (momentAudio) releaseAudio(momentAudio);
   momentAudio = null;
 }
 
-/** False means the browser needs an explicit tap before it permits playback. */
-export async function playMomentSound(
+export type MomentPlayResult = "played" | "blocked" | "failed";
+
+/** "blocked" means the browser needs an explicit tap before it permits playback. */
+export async function playMomentSoundDetailed(
   tone: MomentTone,
   pick?: string,
   custom?: MomentSoundUrls,
-): Promise<boolean> {
+): Promise<MomentPlayResult> {
   stopMomentSound();
-  if (typeof window === "undefined") return true;
+  if (typeof window === "undefined") return "played";
   const src = resolveMomentSound(tone, pick, custom);
-  if (!src) return true;
+  if (!src) return "played";
+  prepareAudioSession();
   const audio = new Audio(src);
   momentAudio = audio;
   audio.volume = 0.6;
@@ -104,8 +107,8 @@ export async function playMomentSound(
   try {
     await audio.play();
     if (momentAudio !== audio) {
-      audio.pause();
-      return true;
+      releaseAudio(audio);
+      return "played";
     }
     fadeTimer = setInterval(() => {
       if (audio.ended || audio.currentTime >= MOMENT_MAX_S) {
@@ -115,25 +118,71 @@ export async function playMomentSound(
         audio.volume = Math.max(0, 0.6 * left);
       }
     }, 100);
-    return true;
+    return "played";
   } catch (error) {
-    if (momentAudio !== audio) return true;
+    if (momentAudio !== audio) return "played";
     stopMomentSound();
-    if (error instanceof DOMException && error.name === "NotAllowedError") return false;
+    if (error instanceof DOMException && error.name === "NotAllowedError") return "blocked";
     console.error("Could not play the moment recording.", error);
-    return false;
+    return "failed";
   }
 }
 
+/** False means the browser needs an explicit tap (or the file could not play). */
+export async function playMomentSound(
+  tone: MomentTone,
+  pick?: string,
+  custom?: MomentSoundUrls,
+): Promise<boolean> {
+  return (await playMomentSoundDetailed(tone, pick, custom)) === "played";
+}
+
+/**
+ * Ask the platform to mix our short sounds with whatever else is playing
+ * ("ambient") instead of treating them as music. On iOS this keeps the user's
+ * music playing and makes app sounds follow the silent switch; browsers without
+ * the Audio Session API ignore it. Set once, before the first sound.
+ */
+const preparedNavigators = new WeakSet<object>();
+export function prepareAudioSession(nav: Navigator | undefined = globalThis.navigator): void {
+  if (!nav || preparedNavigators.has(nav)) return;
+  preparedNavigators.add(nav);
+  const session = (nav as Navigator & { audioSession?: { type: string } }).audioSession;
+  if (!session) return;
+  try {
+    session.type = "ambient";
+  } catch (error) {
+    console.error("Could not set the audio session type.", error);
+  }
+}
+
+/** Free a media element's network/decoder resources (mobile browsers cap them). */
+function releaseAudio(audio: HTMLAudioElement): void {
+  audio.pause();
+  audio.removeAttribute("src");
+  audio.load();
+}
+
+export type TapSoundResult = "played" | "failed";
+
 /**
  * One voice for the tap-spam egg: every tap restarts the sound from the top
- * instead of stacking copies on top of each other.
+ * instead of stacking copies. Elements are kept only for the current sound
+ * list; removed sounds are released so a long-lived installed app never piles
+ * up media players.
  */
 export function createTapSoundPlayer(create: (src: string) => HTMLAudioElement = (src) => new Audio(src)) {
   const cache = new Map<string, HTMLAudioElement>();
   let current: HTMLAudioElement | null = null;
   return {
-    preload(urls: string[]): void {
+    /** Keep exactly these sounds loaded; release any others. */
+    setUrls(urls: string[]): void {
+      for (const [url, audio] of cache) {
+        if (urls.includes(url)) continue;
+        if (current === audio) current = null;
+        releaseAudio(audio);
+        cache.delete(url);
+      }
       for (const url of urls) {
         if (cache.has(url)) continue;
         const audio = create(url);
@@ -141,23 +190,40 @@ export function createTapSoundPlayer(create: (src: string) => HTMLAudioElement =
         cache.set(url, audio);
       }
     },
-    play(urls: string[], random: () => number = Math.random): void {
-      if (urls.length === 0) return;
-      this.preload(urls);
+    /** Resolves "failed" when the browser refused or the file could not load. */
+    play(urls: string[], random: () => number = Math.random): Promise<TapSoundResult> {
+      if (urls.length === 0) return Promise.resolve("failed");
+      this.setUrls(urls);
+      prepareAudioSession();
       const audio = cache.get(urls[Math.floor(random() * urls.length)])!;
       if (current && current !== audio) current.pause();
       current = audio;
       audio.currentTime = 0;
-      void audio.play().catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === "AbortError") return;
-        console.error("Could not play the tap sound.", error);
-      });
+      return audio.play().then(
+        () => "played" as const,
+        (error: unknown) => {
+          // A newer tap restarting the same sound aborts this one; that's fine.
+          if (error instanceof DOMException && error.name === "AbortError") return "played" as const;
+          console.error("Could not play the tap sound.", error);
+          return "failed" as const;
+        },
+      );
     },
     stop(): void {
       current?.pause();
       current = null;
     },
+    size(): number {
+      return cache.size;
+    },
   };
+}
+
+/** Shared by every IN/OUT control so navigating around never creates new players. */
+let sharedTapPlayer: ReturnType<typeof createTapSoundPlayer> | null = null;
+export function tapSoundPlayer(): ReturnType<typeof createTapSoundPlayer> {
+  sharedTapPlayer ??= createTapSoundPlayer();
+  return sharedTapPlayer;
 }
 
 type FartShape = {
@@ -182,13 +248,21 @@ function audioContext(): AudioContext | null {
     webkitAudioContext?: typeof AudioContext;
   }).webkitAudioContext;
   if (!Ctor) return null;
-  ctx ??= new Ctor();
-  if (ctx.state === "suspended") {
+  prepareAudioSession();
+  if (!ctx || ctx.state === "closed") ctx = new Ctor();
+  // "suspended" before the first tap; iOS also reports "interrupted" after the
+  // app was in the background. Both need a resume from within a user gesture.
+  if (ctx.state !== "running") {
     void ctx.resume().catch((error: unknown) => {
       console.error("Could not resume tap sound audio.", error);
     });
   }
   return ctx;
+}
+
+/** For the Profile sound check: whether synthesized sounds can play right now. */
+export function fartAudioState(): string {
+  return ctx?.state ?? "not started";
 }
 
 let fartVoice: { out: GainNode; nodes: AudioScheduledSourceNode[] } | null = null;

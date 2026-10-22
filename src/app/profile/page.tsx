@@ -25,6 +25,8 @@ import { getKudos } from "@/lib/kudos";
 import { getFunMessages } from "@/lib/moments";
 import { FunMessagesToggle } from "./fun-messages-toggle";
 import { SillySoundsToggle } from "./silly-sounds-toggle";
+import { SoundCheck } from "./sound-check";
+import { getMomentSoundConfig, momentSoundUrls } from "@/lib/moment-sound-settings";
 
 export const metadata = {
   title: "Profile · Sideline",
@@ -79,12 +81,15 @@ export default async function ProfilePage() {
     }),
   ]);
 
-  const [season, achievements, chemistry, kudos, funMessages] = await Promise.all([
+  const [season, achievements, chemistry, kudos, funMessages, momentSounds] = await Promise.all([
     getPlayerSeason(pid),
     getPlayerAchievementsLive(pid),
     getChemistry(pid, { minShared: 3 }),
     getKudos(pid, pid),
     getFunMessages(pid),
+    getMomentSoundConfig()
+      .then(momentSoundUrls)
+      .catch(() => ({ celebration: [], bummer: [] })),
   ]);
 
   const displayName = contact?.name ?? session.user.name ?? "Player";
@@ -221,6 +226,7 @@ export default async function ProfilePage() {
             <NotificationPreferences playerId={pid} />
             <FunMessagesToggle initial={funMessages} />
             <SillySoundsToggle />
+            <SoundCheck customSounds={momentSounds} />
           </div>
 
           <div className="my-5 h-px bg-black/5 dark:bg-white/10" />

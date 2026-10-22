@@ -12,7 +12,8 @@ export async function GET() {
     const cfg = await getTapSpamConfig();
     return NextResponse.json(
       { enabled: cfg.enabled, urls: cfg.sounds.map((s) => s.url) },
-      { headers: { "Cache-Control": "private, max-age=300" } },
+      // Never cache: an installed app must see admin changes immediately.
+      { headers: { "Cache-Control": "private, no-store" } },
     );
   } catch {
     return NextResponse.json({ enabled: true, urls: [] });
