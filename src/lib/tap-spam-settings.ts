@@ -7,7 +7,7 @@ const SOUNDS_KEY = "tap_spam_sounds";
 export const TAP_SOUND_LIMITS = {
   count: 3,
   bytes: 200 * 1024,
-  types: ["audio/mpeg", "audio/mp3", "audio/ogg", "audio/mp4", "audio/x-m4a", "audio/m4a", "audio/aac"],
+  types: ["audio/mpeg", "audio/mp3", "audio/ogg", "audio/mp4", "audio/x-m4a", "audio/m4a", "audio/aac", "audio/wav", "audio/x-wav"],
 } as const;
 
 export type TapSound = { url: string; name: string };

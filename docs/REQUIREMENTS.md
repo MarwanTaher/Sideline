@@ -192,7 +192,7 @@ Based on the group's written rules (season 08/11/2026 – 30/03/2027).
 | ID | Requirement | Pri | Status |
 |---|---|---|---|
 | FR-MOM-1 | Show private, once-only achievement and matchday moments, with editable admin copy and an end-to-end Play preview. | S | Done |
-| FR-MOM-2 | Celebrations and bummers use locally bundled CC0 recordings, not synthesized crowd voices or TV clips. Preserve device mute, stop playback on dismissal/change, and offer tap-to-play when autoplay is blocked. | S | Local / Preview verified |
+| FR-MOM-2 | Celebrations and bummers play the super-admin's uploaded sounds (up to 3 per group, picked at random), falling back to locally bundled CC0 recordings when none are uploaded; never synthesized crowd voices or TV clips. Preserve device mute, stop playback on dismissal/change, and offer tap-to-play when autoplay is blocked. | S | Local / Preview verified |
 | FR-MOM-3 | Offer at most one bummer per player per 14 days, only when opted in and no celebration was generated for that matchday. Never display it on public rankings. | S | Done |
 | FR-MOM-4 | A team losing more completed mini-matches than it won may trigger a losing-record bummer, with at least two rounds recorded. | C | Local / Preview verified |
 | FR-MOM-5 | Zero goals and zero assists may trigger a bummer for a player assigned MID/FWD on that matchday. Require recorded stats and a played round; do not infer the role from their preferred position or treat missing stats as zero contribution. | C | Local / Preview verified |
@@ -208,7 +208,7 @@ Based on the group's written rules (season 08/11/2026 – 30/03/2027).
 | FR-REL-5 | Send targeted payment reminders three days before and on the due date, excluding declared, paid and zero-balance invoices. Atomically claim each scheduled reminder to avoid duplicate sends. | S | Local / Preview verified |
 | FR-REL-6 | Notify confirmed and waitlisted players on the first daily cron after availability locks and before kickoff. Exact-time lock notifications are not guaranteed on Hobby. | S | Local / Preview verified |
 | FR-REL-7 | On matchday/voting close, send a digest with available MOTM, scorer and rating highlights plus a recap link. Do not equate aggregate goal totals with mini-match wins. | S | Local / Preview verified |
-| FR-REL-8 | Offer consistent match headers, actionable blocked/empty states, first-run guidance, labelled keyboard-accessible rating controls, reduced-motion support and larger touch targets. Ordinary admins can access Messages. | S | Local / Preview verified |
+| FR-REL-8 | Offer consistent match headers, actionable blocked/empty states, first-run guidance, labelled keyboard-accessible rating controls, reduced-motion support and larger touch targets. Messages remains a super-admin tab in Admin control. | S | Local / Preview verified |
 | FR-REL-9 | Reuse persisted score payloads only when complete and at the exact scoring-input revision/model. Mutations invalidate authoritatively; time-dependent scores recompute. No score-capture writes during GETs. | M | Local / Preview verified |
 | FR-REL-10 | Provide sanitized persisted server errors and permission-gated, formula-safe CSV exports for matches, scores, invoices and fund ledger. Never export authentication/push credentials. | S | Local / Preview verified |
 | FR-REL-11 | Configure and verify Neon recovery/pre-season snapshots independently of CSV exports. | S | Operational setup pending |

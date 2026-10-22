@@ -1,7 +1,15 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
-import { MOMENT_SOUNDS, playFart } from "@/lib/silly-sounds";
+import { useMemo, useRef, useState, useTransition } from "react";
+import {
+  MOMENT_SOUNDS,
+  momentSoundGroup,
+  playFart,
+  playMomentSound,
+  stopMomentSound,
+  type MomentSoundGroup,
+  type MomentSoundUrls,
+} from "@/lib/silly-sounds";
 import { MomentCard, MomentsOverlay } from "@/components/moments-overlay";
 import {
   COPY_LIMITS,
@@ -16,16 +24,23 @@ import {
   type MomentKind,
 } from "@/lib/moment-copy";
 import {
+  deleteMomentSoundAction,
   deleteTapSoundAction,
   saveMomentCopyAction,
   setTapSpamEnabledAction,
+  uploadMomentSoundAction,
   uploadTapSoundAction,
 } from "./messages-actions";
 
+type UploadedSound = { url: string; name: string };
+type MomentSoundConfig = Record<MomentSoundGroup, UploadedSound[]>;
+
+const AUDIO_ACCEPT = ".mp3,.ogg,.m4a,.wav,audio/mpeg,audio/ogg,audio/mp4,audio/x-m4a,audio/aac,audio/wav";
+
 const SOUND_LABEL: Record<string, string> = {
-  cheer: "🙌 Recorded crowd cheer",
-  applause: "👏 Recorded applause",
-  laugh: "😂 Recorded crowd laugh",
+  cheer: "🙌 Built-in crowd cheer",
+  applause: "👏 Built-in applause",
+  laugh: "😂 Built-in crowd laugh",
   silent: "No sound",
 };
 
@@ -45,28 +60,45 @@ export default function MessagesAdmin({
   overrides,
   name,
   tapSpam,
+  momentSounds,
 }: {
   overrides: MomentCopyOverrides;
   name: string;
-  tapSpam: { enabled: boolean; sounds: { url: string; name: string }[] };
+  tapSpam: { enabled: boolean; sounds: UploadedSound[] };
+  momentSounds: MomentSoundConfig;
 }) {
   const groups = [
     { key: "celebration", title: "Celebrations" },
     { key: "bummer", title: "Bummers" },
   ] as const;
+  const customUrls = useMemo<MomentSoundUrls>(
+    () => ({
+      celebration: momentSounds.celebration.map((s) => s.url),
+      bummer: momentSounds.bummer.map((s) => s.url),
+    }),
+    [momentSounds],
+  );
   return (
     <div className="mt-4 space-y-6">
       <p className="text-sm text-neutral-500">
         Write your own pop-up text. Add a few versions and one is picked at random. Types without custom
         text keep the built-in messages.
       </p>
+      <MomentSoundsAdmin sounds={momentSounds} />
       <TapSoundsAdmin enabled={tapSpam.enabled} sounds={tapSpam.sounds} />
       {groups.map((g) => (
         <section key={g.key}>
           <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">{g.title}</h2>
           <div className="divide-y divide-black/[0.06] overflow-hidden rounded-2xl border border-black/[0.06] bg-white shadow-sm dark:divide-white/10 dark:border-white/10 dark:bg-neutral-900">
             {MOMENT_KINDS.filter((k) => MOMENT_KIND_INFO[k].group === g.key).map((kind) => (
-              <KindEditor key={kind} kind={kind} saved={overrides[kind] ?? []} name={name} />
+              <KindEditor
+                key={kind}
+                kind={kind}
+                saved={overrides[kind] ?? []}
+                name={name}
+                uploaded={momentSounds}
+                customUrls={customUrls}
+              />
             ))}
           </div>
         </section>
@@ -75,7 +107,19 @@ export default function MessagesAdmin({
   );
 }
 
-function KindEditor({ kind, saved, name }: { kind: MomentKind; saved: CopyVariant[]; name: string }) {
+function KindEditor({
+  kind,
+  saved,
+  name,
+  uploaded,
+  customUrls,
+}: {
+  kind: MomentKind;
+  saved: CopyVariant[];
+  name: string;
+  uploaded: MomentSoundConfig;
+  customUrls: MomentSoundUrls;
+}) {
   const info = MOMENT_KIND_INFO[kind];
   const [variants, setVariants] = useState<CopyVariant[]>(saved);
   const [previewIdx, setPreviewIdx] = useState(0);
@@ -88,6 +132,13 @@ function KindEditor({ kind, saved, name }: { kind: MomentKind; saved: CopyVarian
 
   const update = (i: number, patch: Partial<CopyVariant>) =>
     setVariants((list) => list.map((v, j) => (j === i ? { ...v, ...patch } : v)));
+
+  // Uploaded sounds replace the built-in ones for their group.
+  const soundGroup = momentSoundGroup(def.tone);
+  const groupUploads = soundGroup ? uploaded[soundGroup] : [];
+  const soundOptions: { value: string; label: string }[] = groupUploads.length
+    ? groupUploads.map((s) => ({ value: s.url, label: `🎵 ${s.name}` }))
+    : MOMENT_SOUNDS[def.tone].map((s) => ({ value: s, label: SOUND_LABEL[s] ?? s }));
 
   const save = (next: CopyVariant[]) =>
     start(async () => {
@@ -196,7 +247,7 @@ function KindEditor({ kind, saved, name }: { kind: MomentKind; saved: CopyVarian
         <div className="relative flex justify-center rounded-2xl bg-neutral-900/80 py-2">
           <MomentCard view={preview} animate={false} />
           <div className="absolute bottom-3 right-3 flex items-center gap-1 rounded-full bg-white p-1 shadow-lg">
-            {MOMENT_SOUNDS[def.tone].length > 1 ? (
+            {soundOptions.length > 1 ? (
               <select
                 aria-label="Sound"
                 value={sound}
@@ -204,9 +255,9 @@ function KindEditor({ kind, saved, name }: { kind: MomentKind; saved: CopyVarian
                 className="rounded-full bg-transparent pl-2 text-xs text-neutral-700 outline-none"
               >
                 <option value="">🔀 Random sound</option>
-                {MOMENT_SOUNDS[def.tone].map((s) => (
-                  <option key={s} value={s}>
-                    {SOUND_LABEL[s] ?? s}
+                {soundOptions.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
                   </option>
                 ))}
               </select>
@@ -228,6 +279,7 @@ function KindEditor({ kind, saved, name }: { kind: MomentKind; saved: CopyVarian
             name={name}
             preview
             sound={sound || undefined}
+            customSounds={customUrls}
             onClose={() => setPlaying(0)}
           />
         ) : null}
@@ -257,6 +309,133 @@ function KindEditor({ kind, saved, name }: { kind: MomentKind; saved: CopyVarian
         </div>
       </div>
     </details>
+  );
+}
+
+function MomentSoundsAdmin({ sounds }: { sounds: MomentSoundConfig }) {
+  const groups: { key: MomentSoundGroup; title: string; tone: "epic" | "bummer"; fallback: string }[] = [
+    { key: "celebration", title: "Celebration sounds", tone: "epic", fallback: "built-in applause and cheering" },
+    { key: "bummer", title: "Bummer sounds", tone: "bummer", fallback: "built-in crowd laugh" },
+  ];
+  return (
+    <section>
+      <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-500">Pop-up sounds</h2>
+      <div className="space-y-4 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
+        <p className="text-xs text-neutral-500">
+          Upload your own sounds for the celebration and bummer pop-ups. One is picked at random each time; with none
+          uploaded the built-in recordings play. Sounds fade out after 8 s.
+        </p>
+        {groups.map((g) => (
+          <MomentSoundGroupAdmin key={g.key} group={g.key} title={g.title} tone={g.tone} fallback={g.fallback} sounds={sounds[g.key]} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MomentSoundGroupAdmin({
+  group,
+  title,
+  tone,
+  fallback,
+  sounds,
+}: {
+  group: MomentSoundGroup;
+  title: string;
+  tone: "epic" | "bummer";
+  fallback: string;
+  sounds: UploadedSound[];
+}) {
+  const [pending, start] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const run = (fn: () => Promise<{ ok: boolean; error?: string }>) =>
+    start(async () => {
+      const res = await fn();
+      setError(res.ok ? null : (res.error ?? "Error"));
+    });
+
+  const upload = (file: File | undefined) => {
+    if (!file) return;
+    const fd = new FormData();
+    fd.set("group", group);
+    fd.set("sound", file);
+    run(() => uploadMomentSoundAction(fd));
+    if (fileRef.current) fileRef.current.value = "";
+  };
+
+  const preview = (pick?: string) => {
+    void playMomentSound(tone, pick, { celebration: [], bummer: [], [group]: sounds.map((s) => s.url) });
+  };
+
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-medium">{title}</h3>
+      <ul className="space-y-1.5 text-sm">
+        {sounds.length === 0 ? (
+          <li className="flex items-center justify-between gap-2 rounded-lg bg-neutral-50 px-3 py-2 dark:bg-neutral-950">
+            <span className="text-neutral-500">Default: {fallback}</span>
+            <button
+              type="button"
+              onClick={() => preview()}
+              className="min-h-9 rounded-md px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/5"
+            >
+              ▶ Play
+            </button>
+          </li>
+        ) : (
+          sounds.map((s) => (
+            <li key={s.url} className="flex items-center gap-2 rounded-lg bg-neutral-50 px-3 py-2 dark:bg-neutral-950">
+              <span className="flex-1 truncate">{s.name}</span>
+              <button
+                type="button"
+                onClick={() => preview(s.url)}
+                className="min-h-9 rounded-md px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                ▶ Play
+              </button>
+              <button
+                type="button"
+                onClick={() => stopMomentSound()}
+                className="min-h-9 rounded-md px-2 py-1 text-xs hover:bg-black/5 dark:hover:bg-white/5"
+              >
+                ■ Stop
+              </button>
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => run(() => deleteMomentSoundAction(group, s.url))}
+                className="min-h-9 rounded-md px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50 dark:hover:bg-red-950/30"
+              >
+                Delete
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+      {sounds.length < 3 ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            ref={fileRef}
+            type="file"
+            accept={AUDIO_ACCEPT}
+            className="hidden"
+            onChange={(e) => upload(e.target.files?.[0])}
+          />
+          <button
+            type="button"
+            disabled={pending}
+            onClick={() => fileRef.current?.click()}
+            className="rounded-xl border border-black/10 px-3 py-2 text-sm font-medium transition hover:bg-neutral-50 disabled:opacity-50 dark:border-white/10 dark:hover:bg-neutral-800"
+          >
+            {pending ? "Working…" : "Upload a sound"}
+          </button>
+          <span className="text-xs text-neutral-500">MP3 / OGG / M4A / WAV, max 1 MB, up to 3.</span>
+        </div>
+      ) : null}
+      {error ? <p role="alert" className="text-xs text-red-600">{error}</p> : null}
+    </div>
   );
 }
 
@@ -351,7 +530,7 @@ function TapSoundsAdmin({ enabled, sounds }: { enabled: boolean; sounds: { url: 
             <input
               ref={fileRef}
               type="file"
-              accept=".mp3,.ogg,.m4a,audio/mpeg,audio/ogg,audio/mp4,audio/x-m4a,audio/aac"
+              accept={AUDIO_ACCEPT}
               className="hidden"
               onChange={(e) => upload(e.target.files?.[0])}
             />
@@ -363,7 +542,7 @@ function TapSoundsAdmin({ enabled, sounds }: { enabled: boolean; sounds: { url: 
             >
               {pending ? "Working…" : "Upload a sound"}
             </button>
-            <span className="text-xs text-neutral-500">MP3 / OGG / M4A, max 200 KB, up to 3. Custom sounds replace the default.</span>
+            <span className="text-xs text-neutral-500">MP3 / OGG / M4A / WAV, max 200 KB, up to 3. Custom sounds replace the default.</span>
           </div>
         ) : null}
         {error ? <p className="text-xs text-red-600">{error}</p> : null}

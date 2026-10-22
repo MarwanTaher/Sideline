@@ -27,7 +27,7 @@ Partly done: O-2 (phase CTA, no redirect), E-7, U-9.
 | **1** ✅ | Speed | P-1 cached scores · U-3 optimistic In/Out · P-4 skeletons · P-2 batched reads · P-5 cached read-mostly pages | 1–2 d |
 | **2** ✅ | Fair teams | F-1 skipped (positions rotate) · U-4 balance meter + recent form (no fixed-position coverage warnings) | 2 d |
 | **3** ✅ code | Money & season go-live | F-3 go-live checklist · C-6 atomic writes · C-4 time/money tests · F-5 payment reminders · U-7 QR + bulk confirm + who owes · C-7 season edge cases | 2–3 d |
-| **4** ✅ code | Matchday polish | F-6 daily lock push · F-2 results digest · O-4 blocked states · O-5 one header · U-6 empty states / welcome · U-5 accessibility · Messages for all admins | 2 d |
+| **4** ✅ code | Matchday polish | F-6 daily lock push · F-2 results digest · O-4 blocked states · O-5 one header · U-6 empty states / welcome · U-5 accessibility · Messages stays in Admin control | 2 d |
 | **5** ✅ code / ops pending | Maintainability | C-3 schema types · C-5 error log · P-7 revision-stamped snapshots · F-8 CSV exports; Neon backup scheduling remains external | 2 d |
 | Later | When needed | E-6 predictions · F-4 season waitlist/replacements · F-7 head-to-head · U-8 desktop · F-9 i18n · F-10 multi-group | — |
 
@@ -201,7 +201,8 @@ the server rejects (lock, cap → waitlist). This is the most-tapped control in 
   coverage warnings would imply a fixed role that the group does not use.
 - A live balance meter shows each team's average rating and the strongest-to-weakest gap; it
   updates as players are dragged.
-- Show each player's W/D/L form from their last 3 closed matchdays next to their rating.
+- Show each player's W/D/L form from their last 3 closed matchdays. **Revised (owner feedback):**
+  it has its own *Recent form (W/D/L)* display toggle, off by default and independent of ratings.
 
 ### U-5 Accessibility pass — P2 · S
 Navigation already sets `aria-current`. Remaining items: status relies on colour alone
@@ -309,8 +310,13 @@ player_moments(id, player_id, kind, match_id NULL, payload jsonb,
 locally bundled CC0 recordings of applause, cheering and a small crowd laughing. Informational
 moments stay silent. Source/license/checksum details are in `public/audio/LICENSES.txt`.
 Playback respects the device mute setting, stops when the card closes or changes, and fades
-out after at most 4.5 seconds. If autoplay is blocked, the card offers a "Tap to play sound"
-button. Admin Play previews use the same recordings.
+out after at most 8 seconds. If autoplay is blocked, the card offers a "Tap to play sound"
+button. Admin Play previews use the same sounds.
+
+**Own sounds (owner feedback):** Admin control › Messages › *Pop-up sounds* lets the super-admin
+upload up to 3 celebration and 3 bummer sounds (MP3/OGG/M4A/WAV, ≤ 1 MB each, stored in Vercel
+Blob, listed in `app_settings` `moment_sounds_celebration` / `moment_sounds_bummer`). One is picked
+at random per pop-up; a group with no uploads keeps the bundled recordings.
 
 | Trigger | Pop-up | Effect |
 |---|---|---|
@@ -586,9 +592,14 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
 - Exception to §9 "sounds on by default": this only fires on deliberate spam, never on normal use.
 - **Revised (owner feedback):** 3 taps within 1.5 s starts spam mode; from then on *every* tap plays
   the sound and vibrates with no delay, and the control shakes and puffs smoke until 1 s without a tap.
-- **Status:** built on `dev`. The settings load from `GET /api/tap-spam` on the first tap (not on
-  page load, and not via a server action, which would queue ahead of the IN/OUT save). Disabled
-  buttons use `pointer-events: none` so taps on them still reach the counter.
+- **Status:** built on `dev`. The settings load from `GET /api/tap-spam` when the IN/OUT control
+  mounts (not via a server action, which would queue ahead of the IN/OUT save), so the very first
+  spam tap already uses the custom sound; until the settings arrive the egg stays quiet rather than
+  guessing the default fart. Disabled buttons use `pointer-events: none` so taps on them still reach
+  the counter.
+- **Fixed (owner feedback):** sounds no longer stack when someone keeps spamming. One voice is
+  reused: each tap restarts the custom sound from the top (and cuts the previous synth fart), and
+  uploads accept WAV too.
 
 ### S-1 24-hour photo stories — P2 · M
 

@@ -12,7 +12,7 @@ import {
 } from "@/lib/moment-copy";
 import type { ReactNode } from "react";
 import { markMomentsSeenAction } from "@/app/moments-actions";
-import { playMomentSound, sillySoundsEnabled, stopMomentSound } from "@/lib/silly-sounds";
+import { playMomentSound, sillySoundsEnabled, stopMomentSound, type MomentSoundUrls } from "@/lib/silly-sounds";
 
 const TONE_STYLE: Record<MomentTone, { card: string; badge: string }> = {
   epic: {
@@ -46,6 +46,7 @@ export function MomentsOverlay({
   name,
   preview = false,
   sound,
+  customSounds,
   onClose,
 }: {
   moments: Moment[];
@@ -54,6 +55,8 @@ export function MomentsOverlay({
   preview?: boolean;
   /** Force one sound (admin preview); random per tone otherwise. */
   sound?: string;
+  /** Admin-uploaded sounds; these replace the built-in recordings per group. */
+  customSounds?: MomentSoundUrls;
   onClose?: () => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -84,7 +87,7 @@ export function MomentsOverlay({
       else if (tone === "good") navigator.vibrate?.(25);
     }
     if (preview || sillySoundsEnabled()) {
-      void playMomentSound(tone, sound).then((played) => {
+      void playMomentSound(tone, sound, customSounds).then((played) => {
         if (active) setSoundBlocked(!played);
       });
     }
@@ -92,7 +95,7 @@ export function MomentsOverlay({
       active = false;
       stopMomentSound();
     };
-  }, [tone, shownId, index, closed, preview, sound]);
+  }, [tone, shownId, index, closed, preview, sound, customSounds]);
 
   if (!current || !view || closed) return null;
 
@@ -158,7 +161,7 @@ export function MomentsOverlay({
             <button
               type="button"
               onClick={() => {
-                void playMomentSound(view.tone, sound).then((played) => setSoundBlocked(!played));
+                void playMomentSound(view.tone, sound, customSounds).then((played) => setSoundBlocked(!played));
               }}
               className="min-h-11 rounded-xl border border-black/10 px-4 py-2 text-sm dark:border-white/10"
             >

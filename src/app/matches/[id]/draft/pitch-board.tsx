@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useActionState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -26,6 +26,9 @@ import {
   resetDraftAction,
   type DraftActionState,
 } from "./actions";
+
+/** W/D/L chips have their own display toggle, independent of ratings. */
+const ShowFormContext = createContext(false);
 
 /* ---------------------------------------------------------------------------
  * Sideline "Lineup Builder" — a premium dark-mode pitch view of the draft.
@@ -113,6 +116,7 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
   const [showFormation, setShowFormation] = useState(true);
   const [flip, setFlip] = useState(false);
   const [showScores, setShowScores] = useState(true);
+  const [showForm, setShowForm] = useState(false);
   const [showPhotos, setShowPhotos] = useState(true);
   const [view, setView] = useState<"field" | "list">("field");
   const [teamNames, setTeamNames] = useState<Record<number, string>>(initialTeamNames ?? {});
@@ -242,194 +246,197 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
     null;
 
   return (
-    <div className="mt-6">
-      <DndContext
-        sensors={sensors}
-        collisionDetection={pointerWithin}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <BalanceMeter
-          teams={teamScores.map((team) => ({
-            teamNo: team.teamNo,
-            name: teamNames[team.teamNo] ?? `Team ${team.teamNo}`,
-            scores: team.scores,
-          }))}
-          spreadPct={balance.spreadPct}
-          scoreGap={scoreGap}
-          verdict={balance.verdict}
-        />
-        <div className="flex flex-col gap-6 lg:flex-row">
-          {/* -------- Settings rail -------- */}
-          <aside className="w-full shrink-0 lg:w-72">
-            <div className="rounded-2xl border border-white/10 bg-[#111315] p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500">
-                Display
-              </p>
-              <div className="mt-3 inline-flex w-full rounded-lg border border-white/10 p-0.5">
-                {(["field", "list"] as const).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => setView(v)}
-                    className={`flex-1 rounded-md px-3 py-1 text-xs font-semibold capitalize transition ${
-                      view === v
-                        ? "bg-white/10 text-neutral-100"
-                        : "text-neutral-400 hover:text-neutral-200"
-                    }`}
-                  >
-                    {v}
-                  </button>
-                ))}
-              </div>
-              <div className="mt-3 space-y-1">
-                <Toggle label="Display formation" checked={showFormation} onChange={setShowFormation} />
-                <Toggle label="Player ratings" checked={showScores} onChange={setShowScores} />
-                <Toggle label="Player photos" checked={showPhotos} onChange={setShowPhotos} />
-                <Toggle label="Flip players" checked={flip} onChange={setFlip} />
-              </div>
-
-              {canEdit ? (
-                <>
-                  <div className="my-4 h-px bg-white/10" />
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500">
-                    Draft
-                  </p>
-                  <div className="mt-3 space-y-3">
-                    <form action={autoFormAction} className="flex items-center gap-2">
-                      <input type="hidden" name="matchId" value={matchId} />
-                      <label className="flex items-center gap-2 text-sm text-neutral-400">
-                        Teams
-                        <select
-                          name="numTeams"
-                          value={teamCount}
-                          onChange={(e) => setTeamCount(Number(e.target.value))}
-                          className="rounded-lg border border-white/15 bg-[#0d0d0d] px-2 py-1 text-sm text-neutral-100"
-                        >
-                          {TEAM_COUNT_OPTIONS.map((n) => (
-                            <option key={n} value={n}>
-                              {n}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                      <button
-                        type="submit"
-                        disabled={busy}
-                        className="ml-auto rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-neutral-200 transition hover:border-white/30 hover:bg-white/5 disabled:opacity-50"
-                      >
-                        {autoPending ? "Balancing…" : "Auto-balance"}
-                      </button>
-                    </form>
-
-                    <form action={saveFormAction}>
-                      <input type="hidden" name="matchId" value={matchId} />
-                      <input type="hidden" name="payload" value={savePayload} />
-                      <button
-                        type="submit"
-                        disabled={busy || !dirty}
-                        className="w-full rounded-lg px-3 py-2 text-sm font-semibold text-white transition disabled:opacity-40"
-                        style={{ backgroundColor: BRAND }}
-                      >
-                        {savePending ? "Saving…" : dirty ? "Save lineup" : "Saved"}
-                      </button>
-                    </form>
-                  </div>
-                </>
-              ) : null}
-
-              {statusMsg ? (
-                <p
-                  className={`mt-3 text-xs ${statusMsg.ok ? "text-[color:var(--brand)]" : "text-red-400"}`}
-                  style={statusMsg.ok ? { color: BRAND } : undefined}
-                >
-                  {statusMsg.message}
-                </p>
-              ) : null}
-            </div>
-
-            {/* Bench / unassigned pool */}
-            <Bench players={bench} canEdit={canEdit} showScores={showScores} showPhotos={showPhotos} />
-          </aside>
-
-          {/* -------- Pitches -------- */}
-          <div className="min-w-0 flex-1">
-            {view === "list" ? (
-              <TeamList teamNos={teamNos} byTeam={byTeam} bench={bench} teamNames={teamNames} />
-            ) : (
-            <div
-              className={`grid gap-5 ${teamGridColumns(teamNos.length)}`}
-            >
-              {teamNos.map((n) => {
-                const byPos = byTeam.get(n)!;
-                const count =
-                  byPos.GK.length + byPos.DEF.length + byPos.MID.length + byPos.FWD.length;
-                const avg =
-                  count > 0
-                    ? (
-                        (byPos.GK.concat(byPos.DEF, byPos.MID, byPos.FWD).reduce(
-                          (s, p) => s + p.score,
-                          0,
-                        )) /
-                        count
-                      ).toFixed(1)
-                    : "0.0";
-                return (
-                  <Pitch
-                    key={n}
-                    teamNo={n}
-                    teamName={teamNames[n] ?? `Team ${n}`}
-                    onRename={renameTeam}
-                    byPos={byPos}
-                    count={count}
-                    avg={avg}
-                    formation={formationString(byPos)}
-                    showFormation={showFormation}
-                    showScores={showScores}
-                    showPhotos={showPhotos}
-                    flip={flip}
-                    interactive={canEdit}
-                  />
-                );
-              })}
-            </div>
-            )}
-          </div>
-        </div>
-
-        <DragOverlay dropAnimation={null}>
-          {activePlayer ? (
-            <PlayerNode player={activePlayer} position={activePos} showScores={showScores} showPhotos={showPhotos} dragging />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
-
-      {canEdit ? (
-        <form
-          action={resetFormAction}
-          className="mt-8 flex flex-wrap items-center gap-3 rounded-2xl border border-red-900/40 bg-red-950/10 p-4"
+    <ShowFormContext.Provider value={showForm}>
+      <div className="mt-6">
+        <DndContext
+          sensors={sensors}
+          collisionDetection={pointerWithin}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
         >
-          <input type="hidden" name="matchId" value={matchId} />
-          <span className="text-sm text-neutral-400">
-            Reset clears the draft <strong className="text-neutral-200">and</strong> all votes, stats
-            and payments for this match.
-          </span>
-          <input
-            type="text"
-            name="confirm"
-            placeholder="Type RESET"
-            className="rounded-lg border border-white/15 bg-[#0d0d0d] px-2 py-1 text-sm text-neutral-100"
+          <BalanceMeter
+            teams={teamScores.map((team) => ({
+              teamNo: team.teamNo,
+              name: teamNames[team.teamNo] ?? `Team ${team.teamNo}`,
+              scores: team.scores,
+            }))}
+            spreadPct={balance.spreadPct}
+            scoreGap={scoreGap}
+            verdict={balance.verdict}
           />
-          <button
-            type="submit"
-            disabled={busy}
-            className="rounded-lg border border-red-600 px-3 py-1.5 text-sm font-semibold text-red-300 transition hover:bg-red-950/40 disabled:opacity-50"
+          <div className="flex flex-col gap-6 lg:flex-row">
+            {/* -------- Settings rail -------- */}
+            <aside className="w-full shrink-0 lg:w-72">
+              <div className="rounded-2xl border border-white/10 bg-[#111315] p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500">
+                  Display
+                </p>
+                <div className="mt-3 inline-flex w-full rounded-lg border border-white/10 p-0.5">
+                  {(["field", "list"] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setView(v)}
+                      className={`flex-1 rounded-md px-3 py-1 text-xs font-semibold capitalize transition ${
+                        view === v
+                          ? "bg-white/10 text-neutral-100"
+                          : "text-neutral-400 hover:text-neutral-200"
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 space-y-1">
+                  <Toggle label="Display formation" checked={showFormation} onChange={setShowFormation} />
+                  <Toggle label="Player ratings" checked={showScores} onChange={setShowScores} />
+                  <Toggle label="Recent form (W/D/L)" checked={showForm} onChange={setShowForm} />
+                  <Toggle label="Player photos" checked={showPhotos} onChange={setShowPhotos} />
+                  <Toggle label="Flip players" checked={flip} onChange={setFlip} />
+                </div>
+
+                {canEdit ? (
+                  <>
+                    <div className="my-4 h-px bg-white/10" />
+                    <p className="text-[11px] font-semibold uppercase tracking-widest text-neutral-500">
+                      Draft
+                    </p>
+                    <div className="mt-3 space-y-3">
+                      <form action={autoFormAction} className="flex items-center gap-2">
+                        <input type="hidden" name="matchId" value={matchId} />
+                        <label className="flex items-center gap-2 text-sm text-neutral-400">
+                          Teams
+                          <select
+                            name="numTeams"
+                            value={teamCount}
+                            onChange={(e) => setTeamCount(Number(e.target.value))}
+                            className="rounded-lg border border-white/15 bg-[#0d0d0d] px-2 py-1 text-sm text-neutral-100"
+                          >
+                            {TEAM_COUNT_OPTIONS.map((n) => (
+                              <option key={n} value={n}>
+                                {n}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          type="submit"
+                          disabled={busy}
+                          className="ml-auto rounded-lg border border-white/15 px-3 py-1.5 text-xs font-semibold text-neutral-200 transition hover:border-white/30 hover:bg-white/5 disabled:opacity-50"
+                        >
+                          {autoPending ? "Balancing…" : "Auto-balance"}
+                        </button>
+                      </form>
+
+                      <form action={saveFormAction}>
+                        <input type="hidden" name="matchId" value={matchId} />
+                        <input type="hidden" name="payload" value={savePayload} />
+                        <button
+                          type="submit"
+                          disabled={busy || !dirty}
+                          className="w-full rounded-lg px-3 py-2 text-sm font-semibold text-white transition disabled:opacity-40"
+                          style={{ backgroundColor: BRAND }}
+                        >
+                          {savePending ? "Saving…" : dirty ? "Save lineup" : "Saved"}
+                        </button>
+                      </form>
+                    </div>
+                  </>
+                ) : null}
+
+                {statusMsg ? (
+                  <p
+                    className={`mt-3 text-xs ${statusMsg.ok ? "text-[color:var(--brand)]" : "text-red-400"}`}
+                    style={statusMsg.ok ? { color: BRAND } : undefined}
+                  >
+                    {statusMsg.message}
+                  </p>
+                ) : null}
+              </div>
+
+              {/* Bench / unassigned pool */}
+              <Bench players={bench} canEdit={canEdit} showScores={showScores} showPhotos={showPhotos} />
+            </aside>
+
+            {/* -------- Pitches -------- */}
+            <div className="min-w-0 flex-1">
+              {view === "list" ? (
+                <TeamList teamNos={teamNos} byTeam={byTeam} bench={bench} teamNames={teamNames} />
+              ) : (
+              <div
+                className={`grid gap-5 ${teamGridColumns(teamNos.length)}`}
+              >
+                {teamNos.map((n) => {
+                  const byPos = byTeam.get(n)!;
+                  const count =
+                    byPos.GK.length + byPos.DEF.length + byPos.MID.length + byPos.FWD.length;
+                  const avg =
+                    count > 0
+                      ? (
+                          (byPos.GK.concat(byPos.DEF, byPos.MID, byPos.FWD).reduce(
+                            (s, p) => s + p.score,
+                            0,
+                          )) /
+                          count
+                        ).toFixed(1)
+                      : "0.0";
+                  return (
+                    <Pitch
+                      key={n}
+                      teamNo={n}
+                      teamName={teamNames[n] ?? `Team ${n}`}
+                      onRename={renameTeam}
+                      byPos={byPos}
+                      count={count}
+                      avg={avg}
+                      formation={formationString(byPos)}
+                      showFormation={showFormation}
+                      showScores={showScores}
+                      showPhotos={showPhotos}
+                      flip={flip}
+                      interactive={canEdit}
+                    />
+                  );
+                })}
+              </div>
+              )}
+            </div>
+          </div>
+
+          <DragOverlay dropAnimation={null}>
+            {activePlayer ? (
+              <PlayerNode player={activePlayer} position={activePos} showScores={showScores} showPhotos={showPhotos} dragging />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+
+        {canEdit ? (
+          <form
+            action={resetFormAction}
+            className="mt-8 flex flex-wrap items-center gap-3 rounded-2xl border border-red-900/40 bg-red-950/10 p-4"
           >
-            {resetPending ? "Resetting…" : "Reset draft"}
-          </button>
-        </form>
-      ) : null}
-    </div>
+            <input type="hidden" name="matchId" value={matchId} />
+            <span className="text-sm text-neutral-400">
+              Reset clears the draft <strong className="text-neutral-200">and</strong> all votes, stats
+              and payments for this match.
+            </span>
+            <input
+              type="text"
+              name="confirm"
+              placeholder="Type RESET"
+              className="rounded-lg border border-white/15 bg-[#0d0d0d] px-2 py-1 text-sm text-neutral-100"
+            />
+            <button
+              type="submit"
+              disabled={busy}
+              className="rounded-lg border border-red-600 px-3 py-1.5 text-sm font-semibold text-red-300 transition hover:bg-red-950/40 disabled:opacity-50"
+            >
+              {resetPending ? "Resetting…" : "Reset draft"}
+            </button>
+          </form>
+        ) : null}
+      </div>
+    </ShowFormContext.Provider>
   );
 }
 
@@ -791,6 +798,7 @@ function PlayerNode({
   dragging?: boolean;
 }) {
   void position;
+  const showForm = useContext(ShowFormContext);
   const photo = showPhotos ? player.photoUrl : null;
   return (
     <div className={`flex w-16 flex-col items-center gap-1 ${dragging ? "scale-105" : ""}`}>
@@ -819,14 +827,16 @@ function PlayerNode({
           ) : null}
         </div>
       </div>
-      {showScores ? (
+      {showScores || (showForm && (player.recentForm?.length ?? 0) > 0) ? (
         <div className="flex items-center gap-1">
-          <span
-            className="rounded px-1.5 text-[9px] font-bold leading-tight text-white"
-            style={{ backgroundColor: BRAND }}
-          >
-            {player.score.toFixed(0)}
-          </span>
+          {showScores ? (
+            <span
+              className="rounded px-1.5 text-[9px] font-bold leading-tight text-white"
+              style={{ backgroundColor: BRAND }}
+            >
+              {player.score.toFixed(0)}
+            </span>
+          ) : null}
           <RecentForm form={player.recentForm ?? []} />
         </div>
       ) : null}
@@ -838,7 +848,8 @@ function PlayerNode({
 }
 
 function RecentForm({ form }: { form: Array<"W" | "D" | "L"> }) {
-  if (form.length === 0) return null;
+  const visible = useContext(ShowFormContext);
+  if (!visible || form.length === 0) return null;
   const colors = {
     W: "bg-emerald-500/20 text-emerald-300",
     D: "bg-amber-500/20 text-amber-300",

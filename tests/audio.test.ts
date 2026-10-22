@@ -1,6 +1,62 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { playMomentSound, stopMomentSound } from "../src/lib/silly-sounds";
+import {
+  createTapSoundPlayer,
+  playMomentSound,
+  resolveMomentSound,
+  stopMomentSound,
+} from "../src/lib/silly-sounds";
+
+test("uploaded sounds replace the built-in recordings for their group only", () => {
+  const custom = { celebration: ["https://blob/c1.mp3", "https://blob/c2.mp3"], bummer: [] };
+  assert.equal(resolveMomentSound("epic", undefined, custom, () => 0.99), "https://blob/c2.mp3");
+  assert.equal(resolveMomentSound("good", undefined, custom, () => 0), "https://blob/c1.mp3");
+  assert.equal(resolveMomentSound("bummer", undefined, custom, () => 0), "/audio/laugh.mp3");
+  assert.equal(resolveMomentSound("epic", "https://blob/c1.mp3", custom), "https://blob/c1.mp3");
+  assert.equal(resolveMomentSound("epic", "cheer", custom), "/audio/cheer.mp3");
+  assert.equal(resolveMomentSound("epic", undefined, undefined, () => 0), "/audio/cheer.mp3");
+  assert.equal(resolveMomentSound("bummer", "https://not-uploaded/x.mp3", custom), "/audio/laugh.mp3");
+  assert.equal(resolveMomentSound("info", undefined, custom), null);
+});
+
+test("tap spam reuses one voice: each tap restarts instead of overlapping", () => {
+  const made: TapAudio[] = [];
+  class TapAudio {
+    preload = "";
+    currentTime = 0;
+    paused = true;
+    plays = 0;
+    constructor(readonly src: string) {
+      made.push(this);
+    }
+    play() {
+      this.paused = false;
+      this.plays += 1;
+      return Promise.resolve();
+    }
+    pause() {
+      this.paused = true;
+    }
+  }
+  const player = createTapSoundPlayer((src) => new TapAudio(src) as unknown as HTMLAudioElement);
+  player.preload(["a.mp3", "b.mp3"]);
+  assert.equal(made.length, 2);
+  assert.ok(made.every((a) => a.preload === "auto"));
+
+  for (let i = 0; i < 5; i++) {
+    made[0].currentTime = 0.4;
+    player.play(["a.mp3", "b.mp3"], () => 0);
+  }
+  assert.equal(made.length, 2, "rapid taps must not create extra audio elements");
+  assert.equal(made[0].plays, 5);
+  assert.equal(made[0].currentTime, 0, "each tap restarts from the top");
+
+  player.play(["a.mp3", "b.mp3"], () => 0.9);
+  assert.equal(made[0].paused, true, "switching sounds stops the previous one");
+  assert.equal(made[1].paused, false);
+  player.stop();
+  assert.equal(made[1].paused, true);
+});
 
 test("recorded audio handles autoplay, replacement and dismissal", async () => {
   const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, "window");
@@ -47,6 +103,13 @@ test("recorded audio handles autoplay, replacement and dismissal", async () => {
     const count = instances.length;
     assert.equal(await playMomentSound("info"), true);
     assert.equal(instances.length, count, "info must not create an audio request");
+
+    playback = () => Promise.resolve();
+    assert.equal(
+      await playMomentSound("bummer", undefined, { celebration: [], bummer: ["https://blob/boo.mp3"] }),
+      true,
+    );
+    assert.equal(instances.at(-1)?.src, "https://blob/boo.mp3");
   } finally {
     stopMomentSound();
     if (windowDescriptor) Object.defineProperty(globalThis, "window", windowDescriptor);

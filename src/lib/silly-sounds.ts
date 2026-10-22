@@ -29,6 +29,10 @@ export function createTapCounter(cfg: { taps: number; windowMs: number; calmMs: 
 }
 
 export type MomentTone = "epic" | "good" | "info" | "bummer";
+export type MomentSoundGroup = "celebration" | "bummer";
+/** Admin-uploaded recordings; an empty group falls back to the bundled ones. */
+export type MomentSoundUrls = Record<MomentSoundGroup, string[]>;
+
 export const MOMENT_SOUNDS = {
   epic: ["cheer", "applause"],
   good: ["applause", "cheer"],
@@ -42,6 +46,37 @@ export const MOMENT_SOUND_FILES: Record<string, string> = {
   laugh: "/audio/laugh.mp3",
 };
 
+/** Custom clips may be longer than the bundled ones; both fade out at the cap. */
+const MOMENT_FADE_START_S = 7.5;
+const MOMENT_MAX_S = 8;
+
+export function momentSoundGroup(tone: MomentTone): MomentSoundGroup | null {
+  if (tone === "epic" || tone === "good") return "celebration";
+  if (tone === "bummer") return "bummer";
+  return null;
+}
+
+/**
+ * Which file to play. `pick` is a bundled sound name or one of the uploaded
+ * URLs (admin preview); otherwise uploaded sounds win over the bundled ones.
+ */
+export function resolveMomentSound(
+  tone: MomentTone,
+  pick?: string,
+  custom?: MomentSoundUrls,
+  random: () => number = Math.random,
+): string | null {
+  const group = momentSoundGroup(tone);
+  if (!group) return null;
+  const uploaded = custom?.[group] ?? [];
+  if (pick && uploaded.includes(pick)) return pick;
+  const bundled: readonly string[] = MOMENT_SOUNDS[tone];
+  if (pick && bundled.includes(pick)) return MOMENT_SOUND_FILES[pick] ?? null;
+  if (uploaded.length > 0) return uploaded[Math.floor(random() * uploaded.length)];
+  const name = bundled[Math.floor(random() * bundled.length)];
+  return MOMENT_SOUND_FILES[name] ?? null;
+}
+
 let momentAudio: HTMLAudioElement | null = null;
 let fadeTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -53,15 +88,16 @@ export function stopMomentSound(): void {
 }
 
 /** False means the browser needs an explicit tap before it permits playback. */
-export async function playMomentSound(tone: MomentTone, pick?: string): Promise<boolean> {
+export async function playMomentSound(
+  tone: MomentTone,
+  pick?: string,
+  custom?: MomentSoundUrls,
+): Promise<boolean> {
   stopMomentSound();
   if (typeof window === "undefined") return true;
-  const options: readonly string[] = MOMENT_SOUNDS[tone];
-  const name = pick && options.includes(pick)
-    ? pick
-    : options[Math.floor(Math.random() * options.length)];
-  if (name === "silent") return true;
-  const audio = new Audio(MOMENT_SOUND_FILES[name]);
+  const src = resolveMomentSound(tone, pick, custom);
+  if (!src) return true;
+  const audio = new Audio(src);
   momentAudio = audio;
   audio.volume = 0.6;
   audio.preload = "none";
@@ -72,10 +108,11 @@ export async function playMomentSound(tone: MomentTone, pick?: string): Promise<
       return true;
     }
     fadeTimer = setInterval(() => {
-      if (audio.ended || audio.currentTime >= 4.5) {
+      if (audio.ended || audio.currentTime >= MOMENT_MAX_S) {
         stopMomentSound();
-      } else if (audio.currentTime > 4) {
-        audio.volume = Math.max(0, 0.6 * ((4.5 - audio.currentTime) / 0.5));
+      } else if (audio.currentTime > MOMENT_FADE_START_S) {
+        const left = (MOMENT_MAX_S - audio.currentTime) / (MOMENT_MAX_S - MOMENT_FADE_START_S);
+        audio.volume = Math.max(0, 0.6 * left);
       }
     }, 100);
     return true;
@@ -86,6 +123,41 @@ export async function playMomentSound(tone: MomentTone, pick?: string): Promise<
     console.error("Could not play the moment recording.", error);
     return false;
   }
+}
+
+/**
+ * One voice for the tap-spam egg: every tap restarts the sound from the top
+ * instead of stacking copies on top of each other.
+ */
+export function createTapSoundPlayer(create: (src: string) => HTMLAudioElement = (src) => new Audio(src)) {
+  const cache = new Map<string, HTMLAudioElement>();
+  let current: HTMLAudioElement | null = null;
+  return {
+    preload(urls: string[]): void {
+      for (const url of urls) {
+        if (cache.has(url)) continue;
+        const audio = create(url);
+        audio.preload = "auto";
+        cache.set(url, audio);
+      }
+    },
+    play(urls: string[], random: () => number = Math.random): void {
+      if (urls.length === 0) return;
+      this.preload(urls);
+      const audio = cache.get(urls[Math.floor(random() * urls.length)])!;
+      if (current && current !== audio) current.pause();
+      current = audio;
+      audio.currentTime = 0;
+      void audio.play().catch((error: unknown) => {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        console.error("Could not play the tap sound.", error);
+      });
+    },
+    stop(): void {
+      current?.pause();
+      current = null;
+    },
+  };
 }
 
 type FartShape = {
@@ -119,9 +191,26 @@ function audioContext(): AudioContext | null {
   return ctx;
 }
 
+let fartVoice: { out: GainNode; nodes: AudioScheduledSourceNode[] } | null = null;
+
+/** Cut the previous fart so rapid taps never pile up into a drone. */
+function stopFart(): void {
+  if (!fartVoice) return;
+  for (const node of fartVoice.nodes) {
+    try {
+      node.stop();
+    } catch {
+      // Already stopped.
+    }
+  }
+  fartVoice.out.disconnect();
+  fartVoice = null;
+}
+
 export function playFart(index = Math.floor(Math.random() * FARTS.length)): void {
   const ac = audioContext();
   if (!ac) return;
+  stopFart();
   const s = FARTS[index % FARTS.length];
   const t = ac.currentTime;
   const out = ac.createGain();
@@ -165,4 +254,5 @@ export function playFart(index = Math.floor(Math.random() * FARTS.length)): void
     node.start(t);
     node.stop(t + s.dur + 0.05);
   }
+  fartVoice = { out, nodes: [osc, lfo, noise] };
 }

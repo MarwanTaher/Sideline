@@ -432,7 +432,7 @@ flowchart LR
   STORE --> GATE[Authenticated player's unseen moments]
   GATE --> CARD[MomentsOverlay]
   PREVIEW[Admin Play preview<br/>no writes] --> CARD
-  CARD --> SOUND[Locally bundled CC0 MP3]
+  CARD --> SOUND[Uploaded sound from Vercel Blob<br/>or locally bundled CC0 MP3]
   SOUND --> AUTOPLAY{Playback allowed?}
   AUTOPLAY -- no --> TAP[Tap to play sound]
   CARD --> STOP[Dismiss/change: stop audio]
@@ -444,10 +444,13 @@ because players rotate. Loss-record checks compare mini-match wins and losses, n
 `moment-copy.ts` contains default copy, admin-editable kind metadata and preview payloads.
 All bummer kinds share the opt-out and cooldown.
 
-`silly-sounds.ts` plays recorded applause/cheers/laughter from `public/audio/`; source pages,
-CC0 licenses and SHA-256 checksums are recorded in `public/audio/LICENSES.txt`. Informational
-moments are silent. Audio is requested only on playback, uses no external hosts, and is capped
-at 4.5 seconds. The separate tap-spam easter egg remains synthesized. The overlay traps keyboard
+`silly-sounds.ts` plays the super-admin's uploaded celebration/bummer sounds (Vercel Blob URLs
+listed in `app_settings`, passed to the overlay by `MomentsGate`); a group without uploads falls
+back to the recorded applause/cheers/laughter in `public/audio/`, whose source pages, CC0 licenses
+and SHA-256 checksums are recorded in `public/audio/LICENSES.txt`. Informational moments are
+silent. Audio is requested only on playback and is capped at 8 seconds. The separate tap-spam
+easter egg reuses a single voice per tap (custom upload or synthesized fart) so rapid taps never
+overlap. The overlay traps keyboard
 focus, supports Escape and respects reduced-motion preferences for haptics/animations.
 
 ### 7.9 Revision-stamped scores and operational safeguards

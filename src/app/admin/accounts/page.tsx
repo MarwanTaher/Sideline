@@ -33,6 +33,7 @@ import FundAdmin from "./fund-admin";
 import MessagesAdmin from "./messages-admin";
 import { getMomentCopy } from "@/lib/moment-copy-settings";
 import { getTapSpamConfig } from "@/lib/tap-spam-settings";
+import { getMomentSoundConfig } from "@/lib/moment-sound-settings";
 import AdminTabsMobile from "./admin-tabs-mobile";
 import { SubNav } from "@/components/ui/sub-nav";
 
@@ -58,11 +59,14 @@ export default async function AccountsPage({
       : "admins";
 
   // Only the active tab's data is loaded; this page was fetching everything.
-  const [playerAdmins, tabLocks, momentCopy, tapSpam] = await Promise.all([
+  const [playerAdmins, tabLocks, momentCopy, tapSpam, momentSounds] = await Promise.all([
     activeTab === "admins" ? getPlayerAdminStatuses() : Promise.resolve([]),
     activeTab === "admins" ? getTabLocksByAdmin() : Promise.resolve(new Map()),
     activeTab === "messages" ? getMomentCopy() : Promise.resolve({}),
     activeTab === "messages" ? getTapSpamConfig() : Promise.resolve({ enabled: true, sounds: [] }),
+    activeTab === "messages"
+      ? getMomentSoundConfig()
+      : Promise.resolve({ celebration: [], bummer: [] }),
   ]);
 
   const needsSeason = activeTab === "seasons" || activeTab === "billing";
@@ -153,6 +157,7 @@ export default async function AccountsPage({
           { href: "/admin/accounts", label: "Admins" },
           { href: "/admin/accounts?tab=seasons", label: "Seasons" },
           { href: "/admin/accounts?tab=billing", label: "Billing" },
+          { href: "/admin/accounts?tab=messages", label: "Messages" },
           { href: "/admin/accounts?tab=other", label: "Other" },
         ]}
       />
@@ -217,7 +222,12 @@ export default async function AccountsPage({
       ) : null}
 
       {activeTab === "messages" ? (
-        <MessagesAdmin overrides={momentCopy} name={session.user.name ?? ""} tapSpam={tapSpam} />
+        <MessagesAdmin
+          overrides={momentCopy}
+          name={session.user.name ?? ""}
+          tapSpam={tapSpam}
+          momentSounds={momentSounds}
+        />
       ) : null}
 
       {activeTab === "other" ? (
