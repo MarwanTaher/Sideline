@@ -8,6 +8,7 @@ import { StoryViewer } from "@/components/story-viewer";
 export function StoryDeck({ children, closeHref }: { children: ReactNode; closeHref: string }) {
   const cards = Children.toArray(children);
   const router = useRouter();
-  const close = useCallback(() => router.push(closeHref), [router, closeHref]);
+  // Replace, so the browser's Back button doesn't reopen the recap after closing it.
+  const close = useCallback(() => router.replace(closeHref), [router, closeHref]);
   return <StoryViewer count={cards.length} render={(i) => cards[i]} onClose={close} closeLabel="Close recap" />;
 }

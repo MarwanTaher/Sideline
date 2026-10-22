@@ -141,6 +141,7 @@ reflect the deployed baseline. **Local / Preview verified** items still need rel
 | ID | Requirement | Pri | Status |
 |---|---|---|---|
 | FR-PAY-1 | Admin tracks per-match payments per player (paid / unpaid). | S | Done |
+| FR-PAY-3 | Admin picks the currency per match (new matches inherit the last one). Players see one amount, Copy buttons for recipient, account, amount and reference, and a pay button that turns into a disabled "✓ Paid" once settled. | S | Local / Preview verified |
 | FR-PAY-2 | Guest/session charges per match. | S | Done |
 
 ### 4.9 Winter season subscription (draft feature, hidden from players by default)
@@ -229,7 +230,7 @@ Based on the group's written rules (season 08/11/2026 – 30/03/2027).
 | NFR-8 | Availability | Serverless (Vercel) + managed Postgres (Neon); no self-hosted infrastructure. Must fit Vercel Hobby limits (1 cron/day). |
 | NFR-9 | Maintainability | TypeScript strict; domain logic in `src/lib/*` (server-only), UI in `src/app/*`; golden tests guard scoring/awards. |
 | NFR-10 | Privacy | Group-private by default; only `/share/match/[id]` is public. Season feature hidden until released. |
-| NFR-11 | Localisation | UI English; currency PLN; dates/time Europe/Warsaw. |
+| NFR-11 | Localisation | UI English; season billing in PLN; match payments in an admin-chosen currency; dates/time Europe/Warsaw. |
 
 ## 6. Key business rules (quick reference)
 

@@ -33,7 +33,7 @@ Partly done: O-2 (phase CTA, no redirect), E-7, U-9.
 
 ### Phase 3–5 delivery notes
 
-- Migrations **0029–0031 were applied to the explicitly approved Preview database only**.
+- Migrations **0029–0032 were applied to the explicitly approved Preview database only**.
   Production still needs those migrations before this code is deployed.
 - Match creation and subscriber auto-IN are atomic. Invoice creation and MultiSport allocation
   use transactions and row locks: simultaneous invoice periods cannot spend one scan twice.
@@ -219,6 +219,16 @@ ranked") and a 3-step welcome (install app → enable notifications → set pref
   amount, reference), so paying is scan-and-confirm in the banking app.
 - Admin **bulk confirm** for declared payments.
 - A "who still owes" list for admins with a one-tap reminder push.
+- **Match payments redesign (owner feedback):** the player view shows the amount once (a single
+  *To pay* / *All paid* status card) instead of repeating it as "What you owe", "You owe" and
+  "Your share". Recipient, phone/account, exact amount and a ready-made reference (`Match N ·
+  player name`) each have a Copy button (with a "Couldn't copy" fallback). The pay-link button
+  shows the outstanding amount and becomes a greyed, disabled **✓ Paid** once everything is
+  marked paid; transfer details then fold away. Each item (you, each guest) has *I've paid* or a
+  quiet *Undo*. Admins pick the match **currency** (PLN, EUR, USD, GBP, EGP …) in Payment details;
+  it is stored per match (`matches.payment_currency`, migration 0032) and new matches inherit the
+  last one used. Season billing stays PLN (grosz + Polish bank QR); its pay link likewise greys out
+  when nothing is outstanding, and each bill gets a Copy for its amount.
 
 ### U-8 Desktop layout — P3 · M
 Mobile bottom bars are the primary navigation; on desktop, the section tabs could become a left
@@ -639,7 +649,7 @@ Match page → Teams → Field, all 8 parts, each with a global admin switch (Li
 | Formation | Players placed on real lines (two staggered rows when crowded), "2-2-1" label, no empty slots. |
 | Balance | Admin-only strength bars from player scores with a Balanced / Close / Uneven verdict. |
 | Live | ⚽ / 🅰 counts from the live goal log (falls back to approved stats) and 👑 once closed. |
-| Player card | Tap → bottom sheet: position, this match's goals/assists/MOTM, last-5 form, profile link. |
+| Player card | Tap → bottom sheet: position, this match's goals/assists/MOTM, last-5 form, profile link. Also in the Lineup Builder (field, bench and list), with the player's rating; a drag never opens it. |
 | Share | `GET /api/matches/[id]/lineup-image` PNG (members + admins), shared via the share sheet or downloaded. |
 
 ## 9. Things reviewed and deliberately not recommended

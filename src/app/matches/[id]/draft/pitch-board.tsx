@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState, useActionState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import {
@@ -19,7 +19,8 @@ import type { Position } from "@/lib/positions";
 import type { DraftPlayer } from "@/lib/draft";
 import { Avatar } from "@/components/ui/avatar";
 import { MAX_TEAMS, TEAM_COUNT_OPTIONS, teamGridColumns } from "@/lib/team-constants";
-import { balanceSummary } from "@/lib/field-view";
+import { balanceSummary, KITS } from "@/lib/field-view";
+import { PlayerSheet } from "../field-view";
 import {
   autoBalanceAction,
   saveDraftAction,
@@ -29,6 +30,8 @@ import {
 
 /** W/D/L chips have their own display toggle, independent of ratings. */
 const ShowFormContext = createContext(false);
+/** Tapping a player (without dragging) opens their player card. */
+const OpenCardContext = createContext<(player: DraftPlayer) => void>(() => {});
 
 /* ---------------------------------------------------------------------------
  * Sideline "Lineup Builder" — a premium dark-mode pitch view of the draft.
@@ -120,6 +123,13 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
   const [showPhotos, setShowPhotos] = useState(true);
   const [view, setView] = useState<"field" | "list">("field");
   const [teamNames, setTeamNames] = useState<Record<number, string>>(initialTeamNames ?? {});
+  const [cardPlayer, setCardPlayer] = useState<DraftPlayer | null>(null);
+  // A drag that ends over the same player can still fire a click; ignore it.
+  const lastDragEnd = useRef(0);
+  const openCard = useCallback((player: DraftPlayer) => {
+    if (Date.now() - lastDragEnd.current < 300) return;
+    setCardPlayer(player);
+  }, []);
 
   function renameTeam(teamNo: number, name: string) {
     setTeamNames((prev) => ({ ...prev, [teamNo]: name }));
@@ -211,6 +221,7 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
 
   function handleDragEnd(e: DragEndEvent) {
     setActiveId(null);
+    lastDragEnd.current = Date.now();
     const playerId = Number(e.active.id);
     const over = e.over?.id;
     if (over == null) return;
@@ -247,12 +258,17 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
 
   return (
     <ShowFormContext.Provider value={showForm}>
+    <OpenCardContext.Provider value={openCard}>
       <div className="mt-6">
         <DndContext
           sensors={sensors}
           collisionDetection={pointerWithin}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
+          onDragCancel={() => {
+            setActiveId(null);
+            lastDragEnd.current = Date.now();
+          }}
         >
           <BalanceMeter
             teams={teamScores.map((team) => ({
@@ -436,6 +452,23 @@ export function PitchBoard({ matchId, numTeams, players, canEdit, teamNames: ini
           </form>
         ) : null}
       </div>
+    {cardPlayer ? (
+        <PlayerSheet
+          player={{
+            playerId: cardPlayer.playerId,
+            name: cardPlayer.name,
+            position: assign[cardPlayer.playerId]?.position ?? cardPlayer.positionPlayed ?? cardPlayer.preferredPosition,
+            photoUrl: cardPlayer.photoUrl,
+            isGuest: cardPlayer.isGuest,
+            hostName: cardPlayer.hostName,
+          }}
+          kit={KITS.green}
+          live={null}
+          rating={cardPlayer.score}
+          onClose={() => setCardPlayer(null)}
+        />
+    ) : null}
+    </OpenCardContext.Provider>
     </ShowFormContext.Provider>
   );
 }
@@ -557,6 +590,7 @@ function TeamListCard({
   count: number;
   avg: number | null;
 }) {
+  const openCard = useContext(OpenCardContext);
   return (
     <div
       className="overflow-hidden rounded-2xl border"
@@ -575,32 +609,38 @@ function TeamListCard({
       ) : (
         <ol className="divide-y divide-white/5">
           {rows.map(({ p, pos }, i) => (
-            <li key={p.playerId} className="flex items-center gap-2 px-3 py-2 text-sm">
-              <span className="w-4 text-center text-xs text-neutral-600">{i + 1}</span>
-              <Avatar name={p.name} photoUrl={p.photoUrl} size="xs" />
-              <span
-                className="w-9 rounded px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase text-neutral-300"
-                style={{ backgroundColor: `${BRAND}22` }}
+            <li key={p.playerId}>
+              <button
+                type="button"
+                onClick={() => openCard(p)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition hover:bg-white/5"
               >
-                {pos}
-              </span>
-              {p.isGuest ? (
-                <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-300">
-                  Guest
+                <span className="w-4 text-center text-xs text-neutral-600">{i + 1}</span>
+                <Avatar name={p.name} photoUrl={p.photoUrl} size="xs" />
+                <span
+                  className="w-9 rounded px-1.5 py-0.5 text-center text-[10px] font-semibold uppercase text-neutral-300"
+                  style={{ backgroundColor: `${BRAND}22` }}
+              >
+                  {pos}
                 </span>
-              ) : null}
-              <span className="flex-1 truncate font-medium text-neutral-100">
-                {p.name}
-                {p.isGuest && p.hostName ? (
-                  <span className="font-normal text-neutral-500"> · {p.hostName}</span>
+                {p.isGuest ? (
+                  <span className="rounded bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-indigo-300">
+                    Guest
+                  </span>
                 ) : null}
-              </span>
-              <span className="flex shrink-0 flex-col items-end gap-1">
-                <span className="tabular-nums text-xs text-neutral-400">
-                  {p.score.toFixed(1)}
+                <span className="flex-1 truncate font-medium text-neutral-100">
+                  {p.name}
+                  {p.isGuest && p.hostName ? (
+                    <span className="font-normal text-neutral-500"> · {p.hostName}</span>
+                  ) : null}
                 </span>
-                <RecentForm form={p.recentForm ?? []} />
-              </span>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <span className="tabular-nums text-xs text-neutral-400">
+                    {p.score.toFixed(1)}
+                  </span>
+                  <RecentForm form={p.recentForm ?? []} />
+                </span>
+              </button>
             </li>
           ))}
         </ol>
@@ -772,11 +812,22 @@ function DraggableNode({
     id: player.playerId,
     disabled: !canEdit,
   });
+  const openCard = useContext(OpenCardContext);
   return (
     <div
       ref={setNodeRef}
       {...(canEdit ? { ...attributes, ...listeners } : {})}
-      className={`touch-none ${canEdit ? "cursor-grab active:cursor-grabbing" : ""}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`${player.name}: open player card${canEdit ? " (drag to move)" : ""}`}
+      onClick={() => openCard(player)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          openCard(player);
+        }
+      }}
+      className={`touch-none ${canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
       style={{ opacity: isDragging ? 0.3 : 1 }}
     >
       <PlayerNode player={player} position={position} showScores={showScores} showPhotos={showPhotos} />

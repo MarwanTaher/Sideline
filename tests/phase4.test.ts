@@ -2,6 +2,15 @@ import assert from "node:assert/strict";
 import { isAvailabilityLockPushDue } from "../src/lib/reminder-scheduling";
 import { AVAILABILITY_LOCK_MS } from "../src/lib/match-schedule";
 import { digestPushBody } from "../src/lib/digest-push";
+import { formatAmount, isPaymentCurrency, normCurrency } from "../src/lib/currency";
+
+assert.equal(formatAmount(45, "PLN"), "45 PLN");
+assert.equal(formatAmount(12.5, "EUR"), "12.50 EUR");
+assert.equal(normCurrency("EGP"), "EGP");
+assert.equal(normCurrency(null), "PLN");
+assert.equal(normCurrency("XYZ"), "PLN");
+assert.equal(isPaymentCurrency("PLN; DROP"), false);
+console.log("Match payment currency tests passed.");
 
 const now = Date.parse("2026-10-22T12:00:00Z");
 

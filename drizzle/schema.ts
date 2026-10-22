@@ -31,6 +31,7 @@ export const matches = pgTable("matches", {
 	kickoffAt: timestamp("kickoff_at", { withTimezone: true, mode: "string" }).notNull(),
 	extended: boolean().default(false).notNull(),
 	teamColors: text("team_colors"),
+	paymentCurrency: text("payment_currency").default("PLN").notNull(),
 }, (table) => [
 	index("idx_matches_status_played_on").using("btree", table.status.asc().nullsLast().op("text_ops"), table.playedOn.asc().nullsLast().op("text_ops")),
 	check("matches_num_teams_check", sql`num_teams >= 2 AND num_teams <= 5`),

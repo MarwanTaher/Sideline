@@ -272,7 +272,7 @@ export default async function Home() {
             ) : null}
             {lastMatchday && lastMatchday.rounds > 0 ? (
               <Link
-                href={`/matches/${lastMatchday.matchId}/recap`}
+                href={`/matches/${lastMatchday.matchId}/recap?back=/`}
                 className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 ▶ Watch your recap

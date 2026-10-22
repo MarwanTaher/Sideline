@@ -34,6 +34,25 @@ function buzz(e: React.MouseEvent) {
   }
 }
 
+/**
+ * Squash-and-spring on every press, including the already-selected (disabled)
+ * button, so the control always feels pushed. Web Animations restart cleanly on
+ * rapid taps without re-rendering, which would swallow the form submit.
+ */
+function bounce(el: Element | null) {
+  if (!(el instanceof HTMLElement) || typeof el.animate !== "function") return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  el.animate(
+    [
+      { transform: "scale(1)" },
+      { transform: "scale(0.9)", offset: 0.3 },
+      { transform: "scale(1.05)", offset: 0.65 },
+      { transform: "scale(1)" },
+    ],
+    { duration: 320, easing: "ease-out" },
+  );
+}
+
 export function AvailabilityControls({
   matchId,
   currentStatus,
@@ -79,7 +98,11 @@ export function AvailabilityControls({
     const selected = shownStatus === value;
     const isIn = value === "in";
     return (
-      <form action={formAction} className="flex-1">
+      <form
+        action={formAction}
+        className="flex-1"
+        onPointerDown={(e) => bounce(e.currentTarget.querySelector("button"))}
+      >
         <input type="hidden" name="matchId" value={matchId} />
         <input type="hidden" name="status" value={value} />
         <button
@@ -87,7 +110,7 @@ export function AvailabilityControls({
           disabled={disabled || selected}
           aria-pressed={selected}
           aria-describedby={disabled && (closed || locked) ? "availability-blocked-note" : undefined}
-          className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-base font-bold transition active:scale-[0.97] disabled:pointer-events-none ${
+          className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-base font-bold transition-colors disabled:pointer-events-none ${
             selected
               ? isIn
                 ? "bg-emerald-600 text-white shadow-sm"

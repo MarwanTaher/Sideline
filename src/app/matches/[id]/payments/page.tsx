@@ -29,6 +29,7 @@ import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
 import { getMatchPhase } from "@/lib/match-phase";
 import { MatchPageHeader } from "../match-page-header";
 import { MessageAdminLink } from "@/components/message-admin-link";
+import { DEFAULT_CURRENCY } from "@/lib/currency";
 
 export const metadata = {
   title: "Payments · Sideline",
@@ -135,6 +136,7 @@ async function AdminSection({ matchId }: { matchId: number }) {
     paymentNote: "",
     payLink: "",
     paymentsActive: false,
+    currency: DEFAULT_CURRENCY,
   };
 
   return (

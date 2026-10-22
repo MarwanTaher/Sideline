@@ -1,5 +1,6 @@
 import { sqlClient } from "@/lib/db";
 import { fmtDate } from "@/lib/matches";
+import { normCurrency, type PaymentCurrency } from "@/lib/currency";
 
 export interface PaymentMeta {
   id: number;
@@ -11,6 +12,7 @@ export interface PaymentMeta {
   paymentNote: string;
   payLink: string;
   paymentsActive: boolean;
+  currency: PaymentCurrency;
 }
 
 export interface PaymentRow {
@@ -41,6 +43,7 @@ interface MetaRow {
   payment_note: string;
   pay_link: string;
   payments_active: number;
+  payment_currency: string | null;
 }
 
 export async function getPaymentMeta(matchId: number): Promise<PaymentMeta | null> {
@@ -52,7 +55,8 @@ export async function getPaymentMeta(matchId: number): Promise<PaymentMeta | nul
             COALESCE(payment_method, '') AS payment_method,
             COALESCE(payment_note, '') AS payment_note,
             COALESCE(pay_link, '') AS pay_link,
-            COALESCE(payments_active, 0) AS payments_active
+            COALESCE(payments_active, 0) AS payments_active,
+            payment_currency
      FROM matches WHERE id = $1`,
     [matchId],
   )) as unknown as MetaRow[];
@@ -68,6 +72,7 @@ export async function getPaymentMeta(matchId: number): Promise<PaymentMeta | nul
     paymentNote: r.payment_note,
     payLink: r.pay_link,
     paymentsActive: Number(r.payments_active) === 1,
+    currency: normCurrency(r.payment_currency),
   };
 }
 
@@ -188,10 +193,17 @@ export async function savePaymentTotal(matchId: number, total: number): Promise<
 
 export async function savePaymentDetails(
   matchId: number,
-  details: { name: string; mobile: string; method: string; note: string; payLink: string },
+  details: {
+    name: string;
+    mobile: string;
+    method: string;
+    note: string;
+    payLink: string;
+    currency: PaymentCurrency;
+  },
 ): Promise<void> {
   await sqlClient.query(
-    `UPDATE matches SET payment_name = $1, payment_mobile = $2, payment_method = $3, payment_note = $4, pay_link = $5 WHERE id = $6`,
+    `UPDATE matches SET payment_name = $1, payment_mobile = $2, payment_method = $3, payment_note = $4, pay_link = $5, payment_currency = $7 WHERE id = $6`,
     [
       details.name.trim(),
       details.mobile.trim(),
@@ -199,6 +211,7 @@ export async function savePaymentDetails(
       details.note.trim(),
       details.payLink.trim(),
       matchId,
+      details.currency,
     ],
   );
 }
@@ -276,6 +289,9 @@ export interface PlayerPaymentMatch {
   payLink: string;
   totalPayment: number;
   share: number;
+  currency: PaymentCurrency;
+  /** The viewer's name, for a transfer reference the admin can match. */
+  playerName: string;
   inRoster: boolean;
   paid: boolean;
   guests: PlayerGuestPayment[];
@@ -290,12 +306,18 @@ async function buildPlayerPaymentMatch(
   matchId: number,
   playerId: number,
 ): Promise<PlayerPaymentMatch | null> {
-  const [meta, rows] = await Promise.all([getPaymentMeta(matchId), getPaymentRows(matchId)]);
+  const [meta, rows, guestRaw, nameRaw] = await Promise.all([
+    getPaymentMeta(matchId),
+    getPaymentRows(matchId),
+    sqlClient.query(
+      `SELECT id, name, host_player_id, paid FROM match_guests WHERE match_id = $1 AND status = 'approved'`,
+      [matchId],
+    ),
+    sqlClient.query(`SELECT name FROM players WHERE id = $1`, [playerId]),
+  ]);
   if (!meta) return null;
-  const guestRows = (await sqlClient.query(
-    `SELECT id, name, host_player_id, paid FROM match_guests WHERE match_id = $1 AND status = 'approved'`,
-    [matchId],
-  )) as unknown as { id: number; name: string; host_player_id: number; paid: number }[];
+  const guestRows = guestRaw as unknown as { id: number; name: string; host_player_id: number; paid: number }[];
+  const nameRows = nameRaw as unknown as { name: string }[];
   const summary = computeSummary(
     rows,
     meta.totalPayment,
@@ -313,6 +335,8 @@ async function buildPlayerPaymentMatch(
     payLink: meta.payLink,
     totalPayment: meta.totalPayment,
     share: summary.sharePerPlayer,
+    currency: meta.currency,
+    playerName: String(nameRows[0]?.name ?? ""),
     inRoster: Boolean(mine),
     paid: mine?.paid ?? false,
     guests: myGuests.map((g) => ({ id: g.id, name: g.name, paid: g.paid === 1 })),

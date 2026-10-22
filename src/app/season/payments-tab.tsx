@@ -74,7 +74,7 @@ export default function PaymentsTab({
         )}
       </section>
 
-      <TransferDetails details={details} />
+      <TransferDetails details={details} outstandingMinor={outstanding} />
     </div>
   );
 }
@@ -137,6 +137,9 @@ function InvoiceCard({
       {!confirmed ? (
         <div className="mt-3 border-t border-black/5 pt-3 dark:border-white/5">
           <CopyRow label="Reference to write" value={reference} />
+          <div className="mt-2">
+            <CopyRow label="Amount" value={formatMinor(invoice.totalMinor)} copyValue={(invoice.totalMinor / 100).toFixed(2)} />
+          </div>
           {!declared && invoice.totalMinor > 0 ? (
             <PaymentQr key={qr.ok ? qr.payload : qr.reason} result={qr} />
           ) : null}
@@ -160,7 +163,13 @@ function InvoiceCard({
   );
 }
 
-function TransferDetails({ details }: { details: SeasonPaymentDetails }) {
+function TransferDetails({
+  details,
+  outstandingMinor,
+}: {
+  details: SeasonPaymentDetails;
+  outstandingMinor: number;
+}) {
   const hasAny =
     details.paymentName || details.paymentAccount || details.paymentMethod || details.payLink;
 
@@ -193,14 +202,24 @@ function TransferDetails({ details }: { details: SeasonPaymentDetails }) {
             </p>
           ) : null}
           {details.payLink ? (
-            <a
-              href={details.payLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
-            >
-              Pay by link
-            </a>
+            outstandingMinor > 0 ? (
+              <a
+                href={details.payLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex rounded-xl bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500"
+              >
+                Pay {formatMinor(outstandingMinor)} ↗
+              </a>
+            ) : (
+              <button
+                type="button"
+                disabled
+                className="inline-flex cursor-not-allowed rounded-xl bg-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+              >
+                ✓ Nothing to pay
+              </button>
+            )
           ) : null}
         </div>
       )}
@@ -208,7 +227,7 @@ function TransferDetails({ details }: { details: SeasonPaymentDetails }) {
   );
 }
 
-function CopyRow({ label, value }: { label: string; value: string }) {
+function CopyRow({ label, value, copyValue }: { label: string; value: string; copyValue?: string }) {
   const [copied, setCopied] = useState(false);
 
   return (
@@ -220,7 +239,7 @@ function CopyRow({ label, value }: { label: string; value: string }) {
       <button
         type="button"
         onClick={() => {
-          navigator.clipboard?.writeText(value).then(
+          navigator.clipboard?.writeText(copyValue ?? value).then(
             () => {
               setCopied(true);
               setTimeout(() => setCopied(false), 1500);

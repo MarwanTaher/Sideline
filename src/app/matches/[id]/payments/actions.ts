@@ -14,6 +14,7 @@ import {
   playerHostsGuest,
 } from "@/lib/payments";
 import { setGuestPaid } from "@/lib/guests";
+import { DEFAULT_CURRENCY, isPaymentCurrency } from "@/lib/currency";
 
 export interface PaymentActionState {
   ok: boolean;
@@ -63,12 +64,17 @@ export async function saveDetailsAction(
   try {
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const currency = String(formData.get("currency") ?? DEFAULT_CURRENCY);
+    if (!isPaymentCurrency(currency)) {
+      return { ok: false, message: "Pick a currency from the list." };
+    }
     await savePaymentDetails(matchId, {
       name: String(formData.get("name") ?? ""),
       mobile: String(formData.get("mobile") ?? ""),
       method: String(formData.get("method") ?? ""),
       note: String(formData.get("note") ?? ""),
       payLink: String(formData.get("payLink") ?? ""),
+      currency,
     });
     revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: "Payment details saved." };

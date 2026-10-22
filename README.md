@@ -39,7 +39,7 @@ CC0 sources and file checksums are listed in [LICENSES.txt](./public/audio/LICEN
 
 ### Preview integration tests
 
-Apply migrations `0029`–`0031` to the approved Preview branch first. Point the local
+Apply migrations `0029`–`0032` to the approved Preview branch first. Point the local
 `.env.local` at **Preview, never production**, and ensure Preview has no registered
 push devices. The following PowerShell opt-ins must identify that same approved host:
 
@@ -56,8 +56,9 @@ It is deliberately excluded from the build/unit gate.
 
 ### Release prerequisites
 
-- Apply migrations `0029`–`0031` to the deployment's database before enabling this batch.
+- Apply migrations `0029`–`0032` to the deployment's database before enabling this batch.
   They have been exercised on Preview; that does not apply them to production.
+  `0032` adds the per-match payment currency (`matches.payment_currency`, default `PLN`).
 - Verify Vercel's daily reminders cron and separate Preview push configuration.
   Lock notifications are daily, not exact-time.
 - Configure and verify Neon recovery/pre-season snapshots separately. The Diagnostics

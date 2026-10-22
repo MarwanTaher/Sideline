@@ -168,9 +168,10 @@ export async function createMatch(input: CreateMatchInput): Promise<number> {
          INSERT INTO matches
            (played_on, match_time, kickoff_at, num_teams, team_size, total_payment,
             stats_scoring_enabled, status, location_name, location_lat, location_lng,
-            venue, season_id)
+            venue, season_id, payment_currency)
          VALUES ($1, $2, ${KICKOFF_FROM_LOCAL}, $3, 0, 0, $4, 'open',
-                 $5, $6, $7, $8, $9)
+                 $5, $6, $7, $8, $9,
+                 COALESCE((SELECT payment_currency FROM matches ORDER BY id DESC LIMIT 1), 'PLN'))
          RETURNING id
        ),
        auto_in AS (

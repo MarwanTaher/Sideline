@@ -405,15 +405,18 @@ const FORM_CLS: Record<string, string> = {
   L: "bg-red-500 text-white",
 };
 
-function PlayerSheet({
+export function PlayerSheet({
   player,
   kit,
   live,
+  rating,
   onClose,
 }: {
   player: MatchTeamPlayer;
   kit: Kit;
   live: FieldLive | null;
+  /** Shown to admins in the lineup builder. */
+  rating?: number;
   onClose: () => void;
 }) {
   const [form, setForm] = useState<string[] | null>(null);
@@ -455,6 +458,7 @@ function PlayerSheet({
                 {normLine(player.position)}
               </span>
               {player.isGuest ? <span>Guest{player.hostName ? ` of ${player.hostName}` : ""}</span> : null}
+              {rating != null ? <span className="font-semibold tabular-nums">Rating {rating.toFixed(1)}</span> : null}
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="text-xl text-neutral-400">
