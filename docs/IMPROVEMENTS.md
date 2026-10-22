@@ -219,13 +219,15 @@ ranked") and a 3-step welcome (install app → enable notifications → set pref
   amount, reference), so paying is scan-and-confirm in the banking app.
 - Admin **bulk confirm** for declared payments.
 - A "who still owes" list for admins with a one-tap reminder push.
-- **Match payments redesign (owner feedback):** the player view shows the amount once (a single
-  *To pay* / *All paid* status card) instead of repeating it as "What you owe", "You owe" and
-  "Your share". Recipient, phone/account, exact amount and a ready-made reference (`Match N ·
-  player name`) each have a Copy button (with a "Couldn't copy" fallback). The pay-link button
-  shows the outstanding amount and becomes a greyed, disabled **✓ Paid** once everything is
-  marked paid; transfer details then fold away. Each item (you, each guest) has *I've paid* or a
-  quiet *Undo*. Admins pick the match **currency** (PLN, EUR, USD, GBP, EGP …) in Payment details;
+- **Match payments redesign (owner feedback, revised):** the player view shows the amount exactly
+  once, in a single *To pay* / *Settled* card with its own Copy button; guests appear only as a
+  one-line breakdown (`You + Ali, Sara · 15 EUR each`). Recipient, phone/account and a ready-made
+  reference (`Match N · player name`) each have a Copy button (with a "Couldn't copy" fallback).
+  There is **one** *I've paid* button that settles the player and all their guests atomically
+  (`setPlayerAndGuestsPaid`), next to an *Open payment link* button that carries no amount. Once
+  settled, both are replaced by a single greyed, disabled **✓ Paid** with a quiet *Undo*, and the
+  transfer details fold away. Admins pick the match **currency** (PLN, EUR, USD, GBP, EGP …) in
+  Payment details;
   it is stored per match (`matches.payment_currency`, migration 0032) and new matches inherit the
   last one used. Season billing stays PLN (grosz + Polish bank QR); its pay link likewise greys out
   when nothing is outstanding, and each bill gets a Copy for its amount.

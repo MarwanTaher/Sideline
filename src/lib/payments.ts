@@ -227,6 +227,33 @@ export async function setPaid(matchId: number, playerId: number, paid: boolean):
   );
 }
 
+/**
+ * Player self-service in one step: mark their own share (if rostered) and every
+ * approved guest they host as paid or unpaid, atomically.
+ */
+export async function setPlayerAndGuestsPaid(
+  matchId: number,
+  playerId: number,
+  paid: boolean,
+): Promise<void> {
+  await sqlClient.transaction([
+    sqlClient.query(
+      `INSERT INTO payments(match_id, player_id, paid, updated_at)
+       SELECT $1::int, $2::int, $3::int, CURRENT_TIMESTAMP
+        WHERE EXISTS (SELECT 1 FROM match_players WHERE match_id = $1::int AND player_id = $2::int)
+       ON CONFLICT(match_id, player_id) DO UPDATE SET
+         paid = EXCLUDED.paid,
+         updated_at = CURRENT_TIMESTAMP`,
+      [matchId, playerId, paid ? 1 : 0],
+    ),
+    sqlClient.query(
+      `UPDATE match_guests SET paid = $3::int
+        WHERE match_id = $1::int AND host_player_id = $2::int AND status = 'approved'`,
+      [matchId, playerId, paid ? 1 : 0],
+    ),
+  ]);
+}
+
 export async function resetAllUnpaid(matchId: number): Promise<void> {
   await sqlClient.query(
     `UPDATE payments SET paid = 0, updated_at = CURRENT_TIMESTAMP WHERE match_id = $1`,
