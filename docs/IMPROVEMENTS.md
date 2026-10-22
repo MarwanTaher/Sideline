@@ -33,8 +33,9 @@ Partly done: O-2 (phase CTA, no redirect), E-7, U-9.
 
 ### Phase 3–5 delivery notes
 
-- Migrations **0029–0032 were applied to the explicitly approved Preview database only**.
-  Production still needs those migrations before this code is deployed.
+- Migrations **0029–0032 are applied to Preview and, since 2026-10-22, to production** (verified:
+  columns, `app_errors`, score-cache state + 7 revision triggers, `payment_currency`; row counts
+  unchanged). The production database is ready; the code still ships separately.
 - Match creation and subscriber auto-IN are atomic. Invoice creation and MultiSport allocation
   use transactions and row locks: simultaneous invoice periods cannot spend one scan twice.
   Invoice deletion releases its credits. The Preview fixture suite exercises these paths.

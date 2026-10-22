@@ -56,8 +56,8 @@ It is deliberately excluded from the build/unit gate.
 
 ### Release prerequisites
 
-- Apply migrations `0029`–`0032` to the deployment's database before enabling this batch.
-  They have been exercised on Preview; that does not apply them to production.
+- Migrations `0029`–`0032` are applied to Preview and production (2026-10-22). Any new
+  environment needs them before running this code.
   `0032` adds the per-match payment currency (`matches.payment_currency`, default `PLN`).
 - Verify Vercel's daily reminders cron and separate Preview push configuration.
   Lock notifications are daily, not exact-time.
