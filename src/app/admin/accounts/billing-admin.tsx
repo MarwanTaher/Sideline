@@ -16,6 +16,7 @@ import {
   setInvoicePaidAction,
   setPlayingDaysAction,
   deleteInvoiceAction,
+  setInvoiceHiddenAction,
   reviewScanAction,
   saveRatesAction,
   savePaymentDetailsAction,
@@ -483,18 +484,25 @@ function InvoiceRow({
   const [paidState, paidAction, paidPending] = useActionState(setInvoicePaidAction, INITIAL);
   const [daysState, daysAction, daysPending] = useActionState(setPlayingDaysAction, INITIAL);
   const [delState, delAction, delPending] = useActionState(deleteInvoiceAction, INITIAL);
+  const [hideState, hideAction, hidePending] = useActionState(setInvoiceHiddenAction, INITIAL);
   const [editing, setEditing] = useState(false);
+  const hidden = invoice.hiddenAt != null;
 
   useEffect(() => {
-    if (paidState.ok || daysState.ok || delState.ok) router.refresh();
-  }, [paidState, daysState, delState, router]);
+    if (paidState.ok || daysState.ok || delState.ok || hideState.ok) router.refresh();
+  }, [paidState, daysState, delState, hideState, router]);
 
   return (
-    <li className="py-2.5 text-sm">
+    <li className={`py-2.5 text-sm ${hidden ? "opacity-60" : ""}`}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="min-w-0">
           <p className="font-medium">
             {invoice.name}
+            {hidden ? (
+              <span className="ml-2 rounded bg-neutral-200 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                hidden from player
+              </span>
+            ) : null}
             {invoice.paidAt ? (
               <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300">
                 paid
@@ -544,9 +552,10 @@ function InvoiceRow({
           <button
             type="button"
             onClick={() => setEditing((v) => !v)}
+            aria-expanded={editing}
             className="text-xs text-neutral-500 underline underline-offset-2"
           >
-            Adjust
+            Manage
           </button>
         </div>
       </div>
@@ -570,16 +579,35 @@ function InvoiceRow({
               Recalculate
             </Button>
           </form>
-          <form action={delAction}>
+          <form action={hideAction}>
+            <input type="hidden" name="invoiceId" value={invoice.id} />
+            <input type="hidden" name="hidden" value={hidden ? "false" : "true"} />
+            <Button type="submit" variant="secondary" pending={hidePending} pendingLabel="…">
+              {hidden ? "Show to player" : "Hide from player"}
+            </Button>
+          </form>
+          <form
+            action={delAction}
+            onSubmit={(e) => {
+              if (!window.confirm(`Delete ${invoice.name}'s ${invoice.period} invoice? This can't be undone.`)) {
+                e.preventDefault();
+              }
+            }}
+          >
             <input type="hidden" name="invoiceId" value={invoice.id} />
             <Button type="submit" variant="danger" pending={delPending} pendingLabel="…">
               Delete
             </Button>
           </form>
+          <p className="w-full text-xs text-neutral-500">
+            Hidden invoices disappear from the player&apos;s Payments and Home, get no
+            reminders and drop out of &ldquo;Who still owes&rdquo;.
+          </p>
         </div>
       ) : null}
 
       <FeedbackMessage ok={daysState.ok} message={daysState.message} className="mt-1" />
+      <FeedbackMessage ok={hideState.ok} message={hideState.message} className="mt-1" />
       <FeedbackMessage ok={delState.ok} message={delState.message} className="mt-1" />
     </li>
   );

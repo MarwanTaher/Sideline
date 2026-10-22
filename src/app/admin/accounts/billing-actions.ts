@@ -9,7 +9,8 @@ import {
   setInvoicePlayingDays,
   updateSeasonRates,
   updatePaymentDetails,
-  declareInvoicePaid,
+  declareAllInvoicesPaid,
+  setInvoiceHidden,
   confirmDeclaredInvoices,
 } from "@/lib/season-billing";
 import { reviewScan, reportScan, withdrawScan } from "@/lib/multisport";
@@ -114,8 +115,8 @@ export async function savePaymentDetailsAction(
   return { ok: true, message: "Transfer details saved." };
 }
 
-/** Player-facing: claim a bill has been paid, pending admin confirmation. */
-export async function declarePaidAction(
+/** Player-facing: "pay together" — mark every open bill as sent, or undo it. */
+export async function declareAllPaidAction(
   _prev: BillingActionState,
   formData: FormData,
 ): Promise<BillingActionState> {
@@ -123,12 +124,14 @@ export async function declarePaidAction(
   const playerId = session?.user?.playerId;
   if (playerId == null) return { ok: false, message: "Only player accounts can do this." };
 
-  const invoiceId = Number(formData.get("invoiceId"));
-  if (!Number.isInteger(invoiceId)) return { ok: false, message: "Invalid bill." };
+  const seasonId = Number(formData.get("seasonId"));
+  if (!Number.isInteger(seasonId) || seasonId <= 0) {
+    return { ok: false, message: "Invalid season." };
+  }
 
   const declared = formData.get("declared") !== "false";
-  await declareInvoicePaid(
-    invoiceId,
+  const changed = await declareAllInvoicesPaid(
+    seasonId,
     Number(playerId),
     declared,
     String(formData.get("note") ?? "").slice(0, 200),
@@ -136,11 +139,36 @@ export async function declarePaidAction(
 
   revalidatePath("/season");
   revalidatePath("/admin/accounts");
+  revalidatePath("/");
+  if (changed === 0) {
+    return { ok: false, message: "Nothing to update — refresh the page." };
+  }
   return {
     ok: true,
     message: declared
       ? "Marked as sent — an admin will confirm when it arrives."
-      : "Withdrawn.",
+      : "Undone. The bill is open again.",
+  };
+}
+
+/** Admin: hide an invoice from the player, or show it again. */
+export async function setInvoiceHiddenAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, message: denied };
+
+  const invoiceId = Number(formData.get("invoiceId"));
+  if (!Number.isInteger(invoiceId)) return { ok: false, message: "Invalid invoice." };
+  const hidden = formData.get("hidden") === "true";
+
+  await setInvoiceHidden(invoiceId, hidden);
+  revalidateBilling();
+  revalidatePath("/");
+  return {
+    ok: true,
+    message: hidden ? "Hidden from the player." : "Visible to the player again.",
   };
 }
 

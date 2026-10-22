@@ -44,6 +44,8 @@ export type Invoice = {
   createdAt: string | null;
   declaredNote: string;
   note: string;
+  /** Hidden by an admin: not shown to the player, reminded or chased. */
+  hiddenAt: string | null;
 };
 
 type InvoiceRow = {
@@ -64,6 +66,7 @@ type InvoiceRow = {
   created_at: string | Date | null;
   declared_note: string;
   note: string;
+  hidden_at?: string | Date | null;
 };
 
 function toIso(v: string | Date | null): string | null {
@@ -102,6 +105,7 @@ function toInvoice(r: InvoiceRow): Invoice {
     createdAt: toIso(r.created_at),
     declaredNote: String(r.declared_note ?? ""),
     note: String(r.note ?? ""),
+    hiddenAt: toIso(r.hidden_at ?? null),
   };
 }
 
@@ -197,7 +201,7 @@ export async function listOutstandingInvoices(seasonId: number): Promise<Invoice
     `SELECT si.*, ${DUE_AT}, p.name
        FROM season_invoices si
        JOIN players p ON p.id = si.player_id
-      WHERE si.season_id = $1 AND si.paid_at IS NULL
+      WHERE si.season_id = $1 AND si.paid_at IS NULL AND si.hidden_at IS NULL
         AND si.credit_minor < CEIL(si.gross_minor::numeric / 100) * 100
       ORDER BY si.due_date ASC, p.name ASC`,
     [seasonId],
@@ -222,6 +226,7 @@ export async function listWithdrawnWithOpenInvoices(
          ON ss.season_id = si.season_id AND ss.player_id = si.player_id
        JOIN players p ON p.id = si.player_id
       WHERE si.season_id = $1 AND ss.status = 'withdrawn' AND si.paid_at IS NULL
+        AND si.hidden_at IS NULL
         AND si.credit_minor < CEIL(si.gross_minor::numeric / 100) * 100
       ORDER BY si.due_date ASC, p.name ASC`,
     [seasonId],
@@ -335,7 +340,7 @@ export async function listPlayerInvoices(
     `SELECT si.*, ${DUE_AT}, p.name
        FROM season_invoices si
        JOIN players p ON p.id = si.player_id
-      WHERE si.season_id = $1 AND si.player_id = $2
+      WHERE si.season_id = $1 AND si.player_id = $2 AND si.hidden_at IS NULL
       ORDER BY si.period DESC`,
     [seasonId, playerId],
   )) as InvoiceRow[];
@@ -401,6 +406,46 @@ export async function declareInvoicePaid(
             declared_note = $1
       WHERE id = $2 AND player_id = $3 AND paid_at IS NULL`,
     [declared ? note.trim() : "", invoiceId, playerId],
+  );
+}
+
+/**
+ * "Pay together": declare (or withdraw) every open visible bill of the player
+ * in one go. Declaring skips bills already declared so their timestamps stay.
+ * Returns how many bills changed.
+ */
+export async function declareAllInvoicesPaid(
+  seasonId: number,
+  playerId: number,
+  declared: boolean,
+  note: string,
+): Promise<number> {
+  const rows = (await (declared
+    ? sqlClient.query(
+        `UPDATE season_invoices
+            SET declared_paid_at = CURRENT_TIMESTAMP, declared_note = $3
+          WHERE season_id = $1 AND player_id = $2
+            AND paid_at IS NULL AND hidden_at IS NULL AND declared_paid_at IS NULL
+            AND credit_minor < CEIL(gross_minor::numeric / 100) * 100
+          RETURNING id`,
+        [seasonId, playerId, note.trim()],
+      )
+    : sqlClient.query(
+        `UPDATE season_invoices
+            SET declared_paid_at = NULL, declared_note = ''
+          WHERE season_id = $1 AND player_id = $2
+            AND paid_at IS NULL AND hidden_at IS NULL AND declared_paid_at IS NOT NULL
+          RETURNING id`,
+        [seasonId, playerId],
+      ))) as Array<{ id: number }>;
+  return rows.length;
+}
+
+/** Hide an invoice from the player (or show it again). */
+export async function setInvoiceHidden(invoiceId: number, hidden: boolean): Promise<void> {
+  await sqlClient.query(
+    `UPDATE season_invoices SET hidden_at = ${hidden ? "CURRENT_TIMESTAMP" : "NULL"} WHERE id = $1`,
+    [invoiceId],
   );
 }
 

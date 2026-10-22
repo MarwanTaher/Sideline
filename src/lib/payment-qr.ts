@@ -11,7 +11,7 @@ export function paymentQrPayload(
 ): PaymentQrResult {
   const nrb = (account ?? "").replace(/\s/g, "").toUpperCase().replace(/^PL/, "");
   if (!/^\d{26}$/.test(nrb)) {
-    return { ok: false, reason: "QR needs a Polish bank account. Use the transfer details below." };
+    return { ok: false, reason: "No QR: the account isn't a Polish bank account. Use the details above." };
   }
   // IBAN mod-97, with PL encoded as 2521 and the check digits moved to the end.
   let remainder = 0;

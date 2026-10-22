@@ -13,6 +13,7 @@ import {
   getSubscriberIdsForMatch,
 } from "@/lib/season-subscriptions";
 import { listPlayerInvoices } from "@/lib/season-billing";
+import { monthLabel, summarizePlayerInvoices } from "@/lib/season-payment-summary";
 import { formatMinor } from "@/lib/format-money";
 import { getPlayerRank } from "@/lib/leaderboard";
 import { CountUp } from "@/components/count-up";
@@ -104,13 +105,14 @@ export default async function Home() {
       tone: "emerald",
     });
   }
-  const unpaid = invoices.find((i) => !i.paidAt && !i.declaredPaidAt && i.totalMinor > 0);
-  if (unpaid) {
+  const seasonDue = summarizePlayerInvoices(invoices);
+  if (seasonDue.toSend.length > 0) {
+    const first = seasonDue.toSend[0];
     todos.push({
       key: "invoice",
       href: "/season?tab=payments",
-      title: `Season payment · ${formatMinor(unpaid.totalMinor)}`,
-      sub: `For ${unpaid.period}, due ${fmtDate(unpaid.dueDate)}.`,
+      title: `Season payment · ${formatMinor(seasonDue.toSendMinor)}`,
+      sub: `For ${seasonDue.toSend.map((i) => monthLabel(i.period)).join(", ")}, due ${fmtDate(first.dueDate)}.`,
       tone: "amber",
     });
   }

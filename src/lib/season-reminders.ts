@@ -41,6 +41,7 @@ export async function sendSeasonPaymentReminders(
       WHERE si.due_date = ANY($1::text[])
         AND si.paid_at IS NULL
         AND si.declared_paid_at IS NULL
+        AND si.hidden_at IS NULL
         AND si.credit_minor < CEIL(si.gross_minor::numeric / 100) * 100
       ORDER BY si.due_date, p.name`,
     [[dates.threeDays, dates.today]],
@@ -100,6 +101,7 @@ export async function sendSeasonInvoiceReminder(invoiceId: number): Promise<bool
        FROM season_invoices si
        JOIN players p ON p.id = si.player_id
       WHERE si.id = $1 AND si.paid_at IS NULL AND si.declared_paid_at IS NULL
+        AND si.hidden_at IS NULL
         AND si.credit_minor < CEIL(si.gross_minor::numeric / 100) * 100`,
     [invoiceId],
   )) as Array<ReminderInvoiceRow>;

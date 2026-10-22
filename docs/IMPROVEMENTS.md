@@ -63,6 +63,13 @@ Partly done: O-2 (phase CTA, no redirect), E-7, U-9.
 - **Lint:** `npm run lint` reports no errors; effects that only synchronised state were replaced
   by render-time resets, `useSyncExternalStore` for device preferences (`src/lib/local-store.ts`)
   and pathname-scoped open state for menus.
+- **Season payments redesign (follow-up):** Season › Payments mirrors the match Payments page:
+  one "To pay" card totalling every open month, one transfer block (Recipient / Account /
+  Reference, each with Copy), the QR for the total, and a single "I've sent it" that declares all
+  open months together (greyed "✓ Sent" with Undo, or "✓ Paid"). Settled months sit behind a
+  "Show previous bills" toggle. Admin › Billing › Manage can hide an invoice from the player
+  (migration 0035) or delete it after a confirmation; hidden invoices get no reminders and drop
+  out of "Who still owes".
 
 ### Phase 3–5 delivery notes
 
