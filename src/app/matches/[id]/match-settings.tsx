@@ -13,6 +13,7 @@ import type { MatchAdmin, MatchdayStatus } from "@/lib/match-admin";
 import { LocationPicker } from "../location-picker";
 import { TEAM_COUNT_OPTIONS } from "@/lib/team-constants";
 import { useEffect } from "react";
+import Link from "next/link";
 
 const INITIAL: MatchActionState = { ok: false, message: "" };
 
@@ -42,6 +43,14 @@ function StatusBanner({ state }: { state: MatchActionState }) {
       }`}
     >
       {state.message}
+      {state.recoveryHref && state.recoveryLabel ? (
+        <Link
+          href={state.recoveryHref}
+          className="ml-1 inline-flex min-h-11 items-center font-semibold underline underline-offset-2"
+        >
+          {state.recoveryLabel}
+        </Link>
+      ) : null}
     </p>
   );
 }
@@ -80,7 +89,7 @@ export function MatchSettings({ match }: { match: MatchAdmin }) {
               <button
                 type="submit"
                 disabled={mdPending || match.matchdayStatus === opt.key}
-                className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-100 ${
+                className={`min-h-11 rounded-lg border px-3 py-1.5 text-sm font-medium transition disabled:opacity-100 ${
                   match.matchdayStatus === opt.key
                     ? "border-neutral-900 bg-neutral-900 text-white dark:border-white dark:bg-white dark:text-neutral-900"
                     : "border-black/15 hover:bg-neutral-50 disabled:opacity-40 dark:border-white/15 dark:hover:bg-neutral-800"

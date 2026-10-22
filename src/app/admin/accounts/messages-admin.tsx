@@ -23,12 +23,10 @@ import {
 } from "./messages-actions";
 
 const SOUND_LABEL: Record<string, string> = {
-  fanfare: "🎺 Fanfare",
-  cheer: "🙌 Crowd cheer",
-  chime: "🔔 Chime",
-  applause: "👏 Applause",
-  trombone: "🎷 Sad trombone",
-  laugh: "😂 Studio laugh",
+  cheer: "🙌 Recorded crowd cheer",
+  applause: "👏 Recorded applause",
+  laugh: "😂 Recorded crowd laugh",
+  silent: "No sound",
 };
 
 const sampleMoment = (kind: MomentKind): Moment => ({

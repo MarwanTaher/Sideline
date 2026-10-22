@@ -16,10 +16,13 @@ import {
 import { searchPlaces, type PlaceResult } from "@/lib/geo";
 import { getActiveSubscriptionSeason } from "@/lib/season-subscriptions";
 import { revalidateScores } from "@/lib/scores-cache";
+import { logAppError } from "@/lib/error-log";
 
 export interface MatchActionState {
   ok: boolean;
   message: string;
+  recoveryHref?: string;
+  recoveryLabel?: string;
 }
 
 /** Server-side authorization gate — never trust the client. */
@@ -48,6 +51,12 @@ const statusSchema = z.enum(["open", "closed"]);
 function errorMessage(err: unknown): string {
   if (err instanceof z.ZodError) return err.issues.map((i) => i.message).join(" ");
   return err instanceof Error ? err.message : "Something went wrong.";
+}
+
+async function logUnexpectedActionError(err: unknown, source: string): Promise<void> {
+  if (err instanceof z.ZodError) return;
+  if (err instanceof Error && err.message === "Not authorized") return;
+  await logAppError(err, source);
 }
 
 /** Pull an optional field location (name + coordinates) out of the form. */
@@ -109,6 +118,7 @@ export async function createMatchAction(
     });
     revalidatePath("/matches");
   } catch (err) {
+    await logUnexpectedActionError(err, "matches.create");
     return { ok: false, message: errorMessage(err) };
   }
   // Redirect must be called outside the try/catch (it throws by design).
@@ -146,6 +156,7 @@ export async function updateMatchSettingsAction(
     revalidatePath("/matches");
     return { ok: true, message: "Match settings saved." };
   } catch (err) {
+    await logUnexpectedActionError(err, "matches.settings");
     return { ok: false, message: errorMessage(err) };
   }
 }
@@ -165,6 +176,16 @@ export async function setMatchdayStatusAction(
     revalidatePath("/matches");
     return { ok: true, message: `Matchday set to ${status}.` };
   } catch (err) {
+    const activeMatch = errorMessage(err).match(/^Match (\d+) is already active\./);
+    if (activeMatch) {
+      return {
+        ok: false,
+        message: `A different matchday is active (match #${activeMatch[1]}). Close it before starting this one.`,
+        recoveryHref: `/matches/${activeMatch[1]}`,
+        recoveryLabel: "Open the active match",
+      };
+    }
+    await logUnexpectedActionError(err, "matches.matchday-status");
     return { ok: false, message: errorMessage(err) };
   }
 }
@@ -186,6 +207,7 @@ export async function setMatchStatusAction(
       message: status === "open" ? "Submissions opened." : "Submissions closed.",
     };
   } catch (err) {
+    await logUnexpectedActionError(err, "matches.submission-status");
     return { ok: false, message: errorMessage(err) };
   }
 }
@@ -208,6 +230,7 @@ export async function deleteMatchAction(
     revalidatePath("/matches");
     deleted = true;
   } catch (err) {
+    await logUnexpectedActionError(err, "matches.delete");
     return { ok: false, message: errorMessage(err) };
   }
   if (deleted) redirect("/matches");

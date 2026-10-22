@@ -8,6 +8,7 @@ import type { AdminTabKey } from "@/lib/admin-tabs";
 import { listSeasons } from "@/lib/seasons";
 import {
   getActiveSubscriptionSeason,
+  listSeasonWaitlist,
   listSubscribers,
 } from "@/lib/season-subscriptions";
 import { getActivePlayers } from "@/lib/awards";
@@ -18,6 +19,9 @@ import {
   getRoundingLedger,
   getSeasonRates,
   getPaymentDetails,
+  getSeasonGoLiveChecklist,
+  listOutstandingInvoices,
+  listWithdrawnWithOpenInvoices,
 } from "@/lib/season-billing";
 import { listPendingScans } from "@/lib/multisport";
 import { getFundBalance, listAdjustments } from "@/lib/season-fund";
@@ -64,7 +68,7 @@ export default async function AccountsPage({
   const needsSeason = activeTab === "seasons" || activeTab === "billing";
   const subscriptionSeason = needsSeason ? await getActiveSubscriptionSeason() : null;
 
-  const [seasons, subscribers, activePlayers] = await Promise.all([
+  const [seasons, subscribers, activePlayers, seasonWaitlist, goLiveChecklist] = await Promise.all([
     activeTab === "seasons" ? listSeasons() : Promise.resolve([]),
     activeTab === "seasons" && subscriptionSeason
       ? listSubscribers(subscriptionSeason.id)
@@ -72,6 +76,12 @@ export default async function AccountsPage({
     activeTab === "seasons" && subscriptionSeason
       ? getActivePlayers()
       : Promise.resolve([]),
+    activeTab === "seasons" && subscriptionSeason
+      ? listSeasonWaitlist(subscriptionSeason.id)
+      : Promise.resolve([]),
+    activeTab === "seasons" && subscriptionSeason
+      ? getSeasonGoLiveChecklist(subscriptionSeason.id)
+      : Promise.resolve(null),
   ]);
 
   const subscribed = new Set(subscribers.map((s) => s.playerId));
@@ -88,7 +98,18 @@ export default async function AccountsPage({
             periodParam && /^\d{4}-\d{2}$/.test(periodParam)
               ? periodParam
               : (periods[0] ?? new Date().toISOString().slice(0, 7));
-          const [invoices, summary, pendingScans, rounding, fund, adjustments, rates, paymentDetails] =
+          const [
+            invoices,
+            summary,
+            pendingScans,
+            rounding,
+            fund,
+            adjustments,
+            rates,
+            paymentDetails,
+            outstandingInvoices,
+            withdrawnWarnings,
+          ] =
             await Promise.all([
               listInvoices(subscriptionSeason.id, period),
               getBillingSummary(subscriptionSeason.id, period),
@@ -98,6 +119,8 @@ export default async function AccountsPage({
               listAdjustments(subscriptionSeason.id),
               getSeasonRates(subscriptionSeason.id),
               getPaymentDetails(subscriptionSeason.id),
+              listOutstandingInvoices(subscriptionSeason.id),
+              listWithdrawnWithOpenInvoices(subscriptionSeason.id),
             ]);
           return {
             periods,
@@ -110,6 +133,8 @@ export default async function AccountsPage({
             adjustments,
             rates,
             paymentDetails,
+            outstandingInvoices,
+            withdrawnWarnings,
           };
         })()
       : null;
@@ -128,7 +153,6 @@ export default async function AccountsPage({
           { href: "/admin/accounts", label: "Admins" },
           { href: "/admin/accounts?tab=seasons", label: "Seasons" },
           { href: "/admin/accounts?tab=billing", label: "Billing" },
-          { href: "/admin/accounts?tab=messages", label: "Messages" },
           { href: "/admin/accounts?tab=other", label: "Other" },
         ]}
       />
@@ -154,6 +178,8 @@ export default async function AccountsPage({
               season={subscriptionSeason}
               subscribers={subscribers}
               candidates={candidates}
+              waitlist={seasonWaitlist}
+              goLiveChecklist={goLiveChecklist}
             />
           ) : null}
         </>
@@ -172,6 +198,8 @@ export default async function AccountsPage({
               rates={billing.rates!}
               paymentDetails={billing.paymentDetails}
               pendingScans={billing.pendingScans}
+              outstandingInvoices={billing.outstandingInvoices}
+              withdrawnWarnings={billing.withdrawnWarnings}
             />
             <FundAdmin
               seasonId={subscriptionSeason.id}

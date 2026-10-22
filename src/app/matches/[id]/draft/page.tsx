@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
@@ -9,6 +8,11 @@ import { PublishTeams } from "./publish-teams";
 import { getTeamsPublishedAt } from "@/lib/moments";
 import { getFieldFeatures } from "@/lib/field-view-settings";
 import { FieldSettings } from "./field-settings";
+import { getAvailabilityMatch } from "@/lib/availability";
+import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
+import { getMatchPhase } from "@/lib/match-phase";
+import { matchLabelWithTime } from "@/lib/format";
+import { MatchPageHeader } from "../match-page-header";
 
 export const metadata = {
   title: "Draft · Sideline",
@@ -39,25 +43,32 @@ export default async function DraftPage({
     redirect(`/matches/${matchId}`);
   }
 
-  const [state, publishedAt, fieldFeatures] = await Promise.all([
+  const [state, publishedAt, fieldFeatures, availability, lockEnabled] = await Promise.all([
     getDraftState(matchId),
     getTeamsPublishedAt(matchId),
     getFieldFeatures(),
+    getAvailabilityMatch(matchId),
+    isAvailabilityLockEnabled(),
   ]);
-  if (!state) notFound();
+  if (!state || !availability) notFound();
+  const phase = getMatchPhase({
+    matchdayStatus: state.matchdayStatus,
+    availabilityOpen: availability.availabilityOpen,
+    kickoffAt: availability.kickoffAt,
+    lockEnabled,
+    hasRoster: state.players.some((p) => p.teamNo != null),
+  });
 
   return (
     <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-10">
-      <Link
-        href={`/matches/${matchId}`}
-        className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
-      >
-        ← Back to match
-      </Link>
-
+      <MatchPageHeader
+        matchId={matchId}
+        dateLabel={matchLabelWithTime(availability.playedOn, availability.matchTime)}
+        title="Lineup builder"
+        phase={phase}
+      />
       <MatchNav matchId={matchId} isAdmin={true} />
 
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight">Lineup builder</h1>
       <p className="mt-1 text-sm text-neutral-500">
         {canEdit
           ? "Drag players onto the pitch to set their team and position, or auto-balance by score."

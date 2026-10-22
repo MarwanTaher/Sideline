@@ -1,12 +1,16 @@
 import "server-only";
 import { sqlClient } from "./db";
 import { getLeaderboard } from "./leaderboard";
+import { getPlayerScores, getScoringPolicy } from "./scoring";
+import { SCORE_CACHE_MODEL_VERSION } from "./score-cache";
 
 /**
  * Score snapshots power leaderboard "movement" (#4) and rating-change
  * notifications (#3). We persist the full computed leaderboard into
  * `legacy_score_snapshots` once per matchday close — deliberately NOT on every
  * settings tweak — so "since last match" reflects actual play, not admin noise.
+ * The revision-stamped payload is also the authoritative hot-read score cache
+ * while no scoring input has changed since close.
  *
  * A snapshot is keyed `match_<id>`. Each player's rank/ranked flag is stored in
  * `payload_json` alongside the final/peer/stat values.
@@ -37,39 +41,97 @@ export function snapshotKeyForMatch(matchId: number): string {
 }
 
 /**
- * Compute the current leaderboard and persist it under `snapshotKey`. Safe to
- * re-run: rows are upserted on (player_id, snapshot_key).
+ * Compute scores from current inputs, then publish a complete revision-stamped
+ * snapshot only if the inputs stayed unchanged during the computation.
  */
-export async function captureScoreSnapshot(snapshotKey: string): Promise<void> {
-  const lb = await getLeaderboard();
+export async function captureScoreSnapshot(snapshotKey: string): Promise<boolean> {
+  const beforeRows = (await sqlClient.query(
+    "SELECT revision::text AS revision FROM score_cache_state WHERE id = 1",
+  )) as Array<{ revision: string }>;
+  const revision = beforeRows[0]?.revision;
+  if (!revision) throw new Error("Score cache revision is not initialized; deploy migration 0031.");
 
-  await Promise.all(
-    lb.rows.map((row, idx) => {
-      const rank = idx + 1;
-      const payload = JSON.stringify({ rank, ranked: row.ranked });
-      return sqlClient.query(
-        `INSERT INTO legacy_score_snapshots
-           (snapshot_key, player_id, final, peer, stat, has_stats, payload_json, model_version)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, 'leaderboard_v1')
-         ON CONFLICT (player_id, snapshot_key)
-         DO UPDATE SET final = EXCLUDED.final,
-                       peer = EXCLUDED.peer,
-                       stat = EXCLUDED.stat,
-                       has_stats = EXCLUDED.has_stats,
-                       payload_json = EXCLUDED.payload_json,
-                       captured_at = CURRENT_TIMESTAMP`,
-        [
-          snapshotKey,
-          row.id,
-          row.final,
-          row.peer,
-          row.stat,
-          row.stat != null ? 1 : 0,
-          payload,
-        ],
-      );
-    }),
-  );
+  const policy = await getScoringPolicy();
+  const scores = await getPlayerScores();
+  const leaderboard = await getLeaderboard({ scorePayload: scores });
+  const afterRows = (await sqlClient.query(
+    "SELECT revision::text AS revision FROM score_cache_state WHERE id = 1",
+  )) as Array<{ revision: string }>;
+  if (afterRows[0]?.revision !== revision) return false;
+
+  const snapshotModelVersion =
+    policy.recency_decay > 0
+      ? `${SCORE_CACHE_MODEL_VERSION}-time-dependent`
+      : SCORE_CACHE_MODEL_VERSION;
+  const existing = (await sqlClient.query(
+    `SELECT revision::text AS revision, model_version
+       FROM score_cache_snapshots
+      WHERE snapshot_key = $1
+      LIMIT 1`,
+    [snapshotKey],
+  )) as Array<{ revision: string; model_version: string }>;
+  if (
+    existing[0]?.revision === revision &&
+    existing[0]?.model_version === snapshotModelVersion
+  ) return true;
+
+  const values: unknown[] = [];
+  const tuples = leaderboard.rows.map((row, idx) => {
+    const score = scores[row.id];
+    if (!score) throw new Error(`Score payload missing for active player ${row.id}.`);
+    const payload = JSON.stringify({
+      ...score,
+      rank: idx + 1,
+      ranked: row.ranked,
+    });
+    const offset = idx * 9;
+    values.push(
+      snapshotKey,
+      row.id,
+      row.final,
+      row.peer,
+      row.stat,
+      score.has_stats ? 1 : 0,
+      payload,
+      revision,
+      "leaderboard_v2",
+    );
+    return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9})`;
+  });
+  const writes = [
+    sqlClient.query("DELETE FROM legacy_score_snapshots WHERE snapshot_key = $1", [snapshotKey]),
+  ];
+  if (tuples.length > 0) {
+    writes.push(sqlClient.query(
+      `INSERT INTO legacy_score_snapshots
+         (snapshot_key, player_id, final, peer, stat, has_stats, payload_json, revision, model_version)
+       VALUES ${tuples.join(",")}
+       ON CONFLICT (player_id, snapshot_key)
+       DO UPDATE SET final = EXCLUDED.final,
+                     peer = EXCLUDED.peer,
+                     stat = EXCLUDED.stat,
+                     has_stats = EXCLUDED.has_stats,
+                     payload_json = EXCLUDED.payload_json,
+                     revision = EXCLUDED.revision,
+                     model_version = EXCLUDED.model_version,
+                     captured_at = CURRENT_TIMESTAMP`,
+      values,
+    ));
+  }
+
+  writes.push(sqlClient.query(
+    `INSERT INTO score_cache_snapshots
+       (snapshot_key, revision, player_count, model_version)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (snapshot_key)
+     DO UPDATE SET revision = EXCLUDED.revision,
+                   player_count = EXCLUDED.player_count,
+                   model_version = EXCLUDED.model_version,
+                   captured_at = CURRENT_TIMESTAMP`,
+    [snapshotKey, revision, leaderboard.rows.length, snapshotModelVersion],
+  ));
+  await sqlClient.transaction(writes);
+  return true;
 }
 
 /** The two most recent snapshot keys, newest first (used for diffing). */

@@ -7,6 +7,10 @@ import { getPlayerStatsState, getMatchRosterStats } from "@/lib/stats";
 import { StatsForm } from "./stats-form";
 import { AdminStatsEditor } from "./admin-stats-editor";
 import { MatchNav } from "../match-nav";
+import { getAvailabilityMatch } from "@/lib/availability";
+import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
+import { getMatchPhase } from "@/lib/match-phase";
+import { MatchPageHeader } from "../match-page-header";
 
 export const metadata = {
   title: "Submit stats · Sideline",
@@ -28,6 +32,18 @@ export default async function MatchStatsPage({
 
   const match = await getMatchDetail(matchId);
   if (!match) notFound();
+  const [availability, lockEnabled] = await Promise.all([
+    getAvailabilityMatch(matchId),
+    isAvailabilityLockEnabled(),
+  ]);
+  if (!availability) notFound();
+  const phase = getMatchPhase({
+    matchdayStatus: match.matchdayStatus,
+    availabilityOpen: availability.availabilityOpen,
+    kickoffAt: availability.kickoffAt,
+    lockEnabled,
+    hasRoster: match.teams.some((team) => team.players.length > 0),
+  });
 
   const playerId = session.user.playerId;
   const isAdmin = await isAdminView(
@@ -45,19 +61,14 @@ export default async function MatchStatsPage({
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10">
-      <Link
-        href={`/matches/${matchId}`}
-        className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
-      >
-        ← Back to match
-      </Link>
-
+      <MatchPageHeader
+        matchId={matchId}
+        dateLabel={`${fmtDate(match.playedOn)} at ${fmtMatchTime(match.matchTime)}`}
+        title="Submit stats"
+        phase={phase}
+      />
       <MatchNav matchId={matchId} isAdmin={isAdmin} />
-
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight">Submit stats</h1>
-      <p className="mt-1 text-sm text-neutral-500">
-        {fmtDate(match.playedOn)} at {fmtMatchTime(match.matchTime)} · matchday {match.matchdayStatus}
-      </p>
+      <p className="text-sm text-neutral-500">Matchday {match.matchdayStatus}</p>
 
       {isAdmin ? (
         <div className="mt-6">

@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { SILLY_SOUNDS_KEY, playFart, sillySoundsEnabled } from "@/lib/silly-sounds";
+import { SILLY_SOUNDS_KEY, playMomentSound, sillySoundsEnabled, stopMomentSound } from "@/lib/silly-sounds";
 
 const listeners = new Set<() => void>();
 const subscribe = (cb: () => void) => {
@@ -13,7 +13,7 @@ const subscribe = (cb: () => void) => {
   };
 };
 
-/** Per-device mute for the tap-spam sound egg (stored in localStorage). */
+/** Per-device mute for moment recordings and the tap-spam egg. */
 export function SillySoundsToggle() {
   const on = useSyncExternalStore(subscribe, sillySoundsEnabled, () => true);
 
@@ -24,7 +24,8 @@ export function SillySoundsToggle() {
       return;
     }
     listeners.forEach((l) => l());
-    if (!on) playFart(0);
+    if (!on) void playMomentSound("good", "applause");
+    else stopMomentSound();
   };
 
   return (
@@ -32,12 +33,13 @@ export function SillySoundsToggle() {
       <span>
         <span className="block text-sm font-medium">Silly sounds</span>
         <span className="block text-xs text-neutral-500">
-          Pop-up fanfares and a surprise if you spam IN / OUT. This phone only.
+          Recorded applause, cheers and laughter, plus the IN / OUT surprise. This phone only.
         </span>
       </span>
       <button
         type="button"
         role="switch"
+        aria-label="Silly sounds"
         aria-checked={on}
         onClick={toggle}
         className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition ${

@@ -35,6 +35,7 @@ import InstallPrompt from "@/components/install-prompt";
 import { AvailabilityControls } from "./matches/[id]/availability/availability-controls";
 import { StoriesRow } from "@/components/stories-row";
 import { getPlayerPhoto, listActiveStories } from "@/lib/stories";
+import { WelcomeGuide } from "@/components/welcome-guide";
 
 export const dynamic = "force-dynamic";
 
@@ -151,6 +152,7 @@ export default async function Home() {
           match={match ? { id: match.id, label: matchLabel(match.playedOn) } : null}
         />
       ) : null}
+      {playerId != null ? <WelcomeGuide /> : null}
       <section className="relative overflow-hidden rounded-3xl px-5 py-4 text-white shadow-sm">
         <Image
           src="/home-hero.jpg"

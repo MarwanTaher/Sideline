@@ -1,4 +1,5 @@
-import { sqlClient } from "@/lib/db";
+import { desc } from "drizzle-orm";
+import { db, schema, sqlClient } from "@/lib/db";
 
 export interface PerMatchDiag {
   matchId: number;
@@ -26,6 +27,14 @@ export interface Diagnostics {
   engineGoalsTotal: number;
   engineAssistsTotal: number;
   warnings: string[];
+  errorLogAvailable: boolean;
+  latestErrors: Array<{
+    id: number;
+    occurredAt: string;
+    source: string;
+    errorName: string;
+    message: string;
+  }>;
 }
 
 async function scalar(sql: string): Promise<number> {
@@ -34,6 +43,24 @@ async function scalar(sql: string): Promise<number> {
 }
 
 export async function getDiagnostics(): Promise<Diagnostics> {
+  let errorLogAvailable = true;
+  let latestErrors: Diagnostics["latestErrors"] = [];
+  try {
+    latestErrors = await db
+      .select({
+        id: schema.appErrors.id,
+        occurredAt: schema.appErrors.occurredAt,
+        source: schema.appErrors.source,
+        errorName: schema.appErrors.errorName,
+        message: schema.appErrors.message,
+      })
+      .from(schema.appErrors)
+      .orderBy(desc(schema.appErrors.occurredAt))
+      .limit(50);
+  } catch {
+    errorLogAvailable = false;
+  }
+
   const totalVotes = await scalar("SELECT COUNT(*) AS n FROM votes");
   const validVotes = await scalar(
     `SELECT COUNT(*) AS n FROM votes
@@ -166,5 +193,7 @@ export async function getDiagnostics(): Promise<Diagnostics> {
     engineGoalsTotal,
     engineAssistsTotal,
     warnings,
+    errorLogAvailable,
+    latestErrors,
   };
 }

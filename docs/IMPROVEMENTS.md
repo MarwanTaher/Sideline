@@ -17,18 +17,43 @@ go-live → polish → maintainability. Items keep their ids; details are in the
 
 **Already built (on `dev`):** C-9, H-1 (incl. U-1), O-1 (incl. U-2), O-3, AV-1…AV-6, E-1…E-5,
 M-1, T-1, S-1, FV-2, P-6, Phase 0 (C-1, C-2, C-8, P-3) and Phase 1 (P-1, U-3, P-4; P-2 on Home and
-match page; P-5 for awards and badges — players/stats pages stay live because they are admin tools). Partly done: O-2 (phase CTA, no redirect), E-7, U-9, C-4 (DB-free unit
-tests exist; time/money rules not yet covered).
+match page; P-5 for awards and badges — players/stats pages stay live because they are admin tools).
+**Implemented locally, not deployed:** Phases 3–5 below, including time/money tests.
+Partly done: O-2 (phase CTA, no redirect), E-7, U-9.
 
 | Phase | Theme | Items | Effort |
 |---|---|---|---|
 | **0** ✅ | Release safety | C-2 preview DB · C-8 secrets + `.env.example` · C-1 `kickoff_at NOT NULL` · P-3 function region · ship `dev` → `main` | ½–1 d |
 | **1** ✅ | Speed | P-1 cached scores · U-3 optimistic In/Out · P-4 skeletons · P-2 batched reads · P-5 cached read-mostly pages | 1–2 d |
 | **2** ✅ | Fair teams | F-1 skipped (positions rotate) · U-4 balance meter + recent form (no fixed-position coverage warnings) | 2 d |
-| **3** | Money & season go-live | F-3 go-live checklist · C-6 atomic writes · C-4 time/money tests · F-5 payment reminders · U-7 QR + bulk confirm + who owes · C-7 season edge cases | 2–3 d |
-| **4** | Matchday polish | F-6 lock-time push · F-2 results push · O-4 blocked states · O-5 one header · U-6 empty states / welcome · U-5 accessibility · Messages tab for all admins | 2 d |
-| **5** | Maintainability | C-3 schema types · C-5 error log · P-7 score snapshots · F-8 export & backup | 2 d |
+| **3** ✅ code | Money & season go-live | F-3 go-live checklist · C-6 atomic writes · C-4 time/money tests · F-5 payment reminders · U-7 QR + bulk confirm + who owes · C-7 season edge cases | 2–3 d |
+| **4** ✅ code | Matchday polish | F-6 daily lock push · F-2 results digest · O-4 blocked states · O-5 one header · U-6 empty states / welcome · U-5 accessibility · Messages for all admins | 2 d |
+| **5** ✅ code / ops pending | Maintainability | C-3 schema types · C-5 error log · P-7 revision-stamped snapshots · F-8 CSV exports; Neon backup scheduling remains external | 2 d |
 | Later | When needed | E-6 predictions · F-4 season waitlist/replacements · F-7 head-to-head · U-8 desktop · F-9 i18n · F-10 multi-group | — |
+
+### Phase 3–5 delivery notes
+
+- Migrations **0029–0031 were applied to the explicitly approved Preview database only**.
+  Production still needs those migrations before this code is deployed.
+- Match creation and subscriber auto-IN are atomic. Invoice creation and MultiSport allocation
+  use transactions and row locks: simultaneous invoice periods cannot spend one scan twice.
+  Invoice deletion releases its credits. The Preview fixture suite exercises these paths.
+- Season release is gated by the checklist; rate/terms edits invalidate the relevant confirmation.
+  Concurrent reserve-list joins are atomic. A free-seat offer is a notification, not a reservation;
+  the larger replacement board in F-4 remains deferred.
+- Payment QR images are generated **locally**, on demand, with a checked Polish account, exact
+  grosz amount and unchanged reference. Unsupported or overlong fields explicitly fall back to
+  copying the full transfer details; no third-party QR service receives banking information.
+- Lock pushes run on the **first daily cron after the lock and before kickoff**. They can be up to
+  about 24 hours late; exact-time delivery needs different scheduling. Claims are atomic and
+  at-most-once. Result pushes contain MOTM/top-scorer/rating highlights when voting closes;
+  mini-match winners are not inferred from aggregate player goals.
+- Score reads accept a persisted payload only at the exact database revision and scoring-model
+  version. Triggers cover every scoring-input table and scoring settings; otherwise readers
+  compute current scores. Time-decayed scores bypass persistent reuse. GETs never capture scores.
+- Diagnostics offers formula-safe, access-controlled CSVs and a sanitized server-error log.
+  CSVs are curated exports, **not a database backup**. Configure and verify the Neon recovery/
+  pre-season snapshot schedule separately; this operational part of F-8 is not complete.
 
 ---
 
@@ -61,9 +86,9 @@ migrations as the source of truth.
 ### C-4 Unit tests for time and money rules — P1 · M
 **Evidence.** The only automated tests are golden scoring/awards tests that need the live DB.
 The lock, due-date, rounding and seat rules were verified manually and the lock still regressed.
-**Fix.** Add `vitest` with DB-free tests for pure functions: `kickoffInstant` (incl. NULL
+**Implemented.** Existing `tsx`/Node test tooling covers pure functions: `kickoffInstant` (incl. NULL
 fallback and DST changes on the last Sundays of March and October), lock decision, `roundUpToPln`,
-invoice gross maths, snake draft. Run in CI before `next build`.
+invoice gross maths, snake draft. `npm run build` runs the database-free gate before `next build`.
 
 ### C-5 Error monitoring — P2 · S
 **Evidence.** `error.tsx`/`global-error.tsx` exist, but failures are only visible in Vercel logs,
@@ -146,8 +171,10 @@ Weather (Open-Meteo) and geocoding (Nominatim) should use `fetch(…, { next: { 
 or a small DB cache. This speeds up match pages and respects Nominatim's usage policy.
 
 ### P-7 Persist score snapshots after each matchday — P3 · M
-`score-snapshots.ts` exists. Writing a snapshot row per player on matchday close would make
-leaderboard, rank movement and trends cheap reads and remove the full recompute from the hot path.
+**Implemented locally.** Matchday close atomically writes per-player payloads plus a manifest.
+Database triggers advance an authoritative scoring-input revision. Hot reads use a complete
+snapshot only at the exact revision/model; edits immediately select revision-keyed computation
+instead. Existing historical snapshots still power movements and trends. No GET writes.
 
 ---
 
@@ -187,7 +214,7 @@ New players land on empty ranks/profile. Add friendly empty states ("Play 3 matc
 ranked") and a 3-step welcome (install app → enable notifications → set preferred position).
 
 ### U-7 Payments made easier — P2 · M
-- Polish bank **transfer QR code** on the season payment card (standard ZBP QR with IBAN,
+- Polish bank **transfer QR code** on the season payment card (ZBP QR with validated Polish NRB,
   amount, reference), so paying is scan-and-confirm in the banking app.
 - Admin **bulk confirm** for declared payments.
 - A "who still owes" list for admins with a one-tap reminder push.
@@ -278,6 +305,13 @@ player_moments(id, player_id, kind, match_id NULL, payload jsonb,
 
 ### E-2 Celebrations (positive moments) — P1 · S each, on top of E-1
 
+**Audio follow-up:** synthetic fanfares, applause, cheers and laughter have been replaced by
+locally bundled CC0 recordings of applause, cheering and a small crowd laughing. Informational
+moments stay silent. Source/license/checksum details are in `public/audio/LICENSES.txt`.
+Playback respects the device mute setting, stops when the card closes or changes, and fades
+out after at most 4.5 seconds. If autoplay is blocked, the card offers a "Tap to play sound"
+button. Admin Play previews use the same recordings.
+
 | Trigger | Pop-up | Effect |
 |---|---|---|
 | Man of the match | "🏆 Man of the Match! 9 of 14 votes went to you." | Gold confetti, trophy bounce, share button |
@@ -299,6 +333,8 @@ in Profile ("Show cheeky messages").
 | Trigger | Example message |
 |---|---|
 | Lost every round | "0 wins today. Even Barça have those days. Your form over 5 matches is still ▲." |
+| More mini-match losses than wins (at least 2 rounds) | "1W 1D 3L. Your team collected more plot twists than wins." |
+| Matchday MID/FWD, no goals **and** no assists | "The scoresheet missed your name today. Must be saving the highlight reel for next week." |
 | Rating dropped ≥ 0.5 | "Rating dipped 6.8 → 6.2. One good Sunday fixes it — 3 players climbed 1+ point last month." |
 | Forward, no goals in 3 matches | "The goal is still there, we checked. 📏 Your assists are up though: 3 this month." |
 | Missed voting | "Your teammates rated you — you didn't return the favour 😢 Vote closes in 6 h." |
@@ -307,6 +343,12 @@ in Profile ("Show cheeky messages").
 
 Tone guide: self-deprecating football humour, never about skill ("you're bad"), never
 public, never on a rank page.
+
+The two additional matchday bummers are implemented with editable variants and live previews.
+The no-contribution rule requires recorded stats, at least one played round, and an assigned
+MID/FWD position on that matchday; a preferred position alone does not qualify. A goal or an
+assist suppresses that rule. Positive moments take precedence, and all bummers share the existing
+opt-out and one-per-14-days limit.
 
 ### E-4 Personal matchday recap ("story" cards) — P2 · M
 After voting closes, a swipeable 4–5 card story (like Instagram stories): *Your day* (W/D/L,

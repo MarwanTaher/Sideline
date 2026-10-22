@@ -2,6 +2,9 @@
  * DB-free unit tests for pure helpers. Run: npm run test:unit
  */
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { matchdayBummer, type MatchdayBummerFacts } from "../src/lib/bummer-rules";
 import { getMatchPhase, phaseAction, type MatchPhaseInput } from "../src/lib/match-phase";
 import {
   sortMoments,
@@ -13,7 +16,7 @@ import {
   sanitizeMomentCopy,
   type Moment,
 } from "../src/lib/moment-copy";
-import { createTapCounter } from "../src/lib/silly-sounds";
+import { createTapCounter, MOMENT_SOUNDS, MOMENT_SOUND_FILES } from "../src/lib/silly-sounds";
 import {
   layoutFormation,
   formationLabel,
@@ -119,6 +122,86 @@ test("every kind renders", () => {
   for (const k of Object.keys(MOMENT_PRIORITY) as Moment["kind"][]) {
     const v = momentView(mk(1, k));
     assert.ok(v.title && v.emoji, k);
+  }
+});
+console.log("matchday bummers");
+const bummerFacts: MatchdayBummerFacts = {
+  funMessages: true,
+  celebrated: false,
+  onCooldown: false,
+  rounds: 4,
+  wins: 1,
+  losses: 2,
+  goals: 1,
+  assists: 0,
+  ownGoals: 0,
+  positionPlayed: "MID",
+  statsRecorded: true,
+  appearances: 5,
+  lastThreeGoals: 1,
+};
+test("losing-record bummer uses losses strictly greater than wins", () => {
+  assert.equal(matchdayBummer(bummerFacts), "bummer_losing_record");
+  assert.equal(matchdayBummer({ ...bummerFacts, losses: 1 }), null);
+  assert.equal(matchdayBummer({ ...bummerFacts, losses: 0 }), null);
+});
+test("no contribution includes matchday MID and FWD only", () => {
+  for (const positionPlayed of ["MID", "FWD"]) {
+    assert.equal(
+      matchdayBummer({ ...bummerFacts, wins: 2, losses: 2, goals: 0, positionPlayed }),
+      "bummer_no_contribution",
+    );
+  }
+  for (const positionPlayed of ["DEF", "GK", ""]) {
+    assert.equal(
+      matchdayBummer({ ...bummerFacts, wins: 2, losses: 2, goals: 0, positionPlayed }),
+      null,
+    );
+  }
+});
+test("an assist, a goal, missing stats or unplayed match suppresses contribution bummer", () => {
+  const facts = { ...bummerFacts, wins: 2, losses: 2, goals: 0 };
+  assert.equal(matchdayBummer({ ...facts, assists: 1 }), null);
+  assert.equal(matchdayBummer({ ...facts, goals: 1 }), null);
+  assert.equal(matchdayBummer({ ...facts, statsRecorded: false }), null);
+  assert.equal(matchdayBummer({ ...facts, rounds: 0 }), null);
+});
+test("all bummers respect opt-out, celebrations and cooldown", () => {
+  assert.equal(matchdayBummer({ ...bummerFacts, funMessages: false }), null);
+  assert.equal(matchdayBummer({ ...bummerFacts, celebrated: true }), null);
+  assert.equal(matchdayBummer({ ...bummerFacts, onCooldown: true }), null);
+});
+test("existing winless, own goal, rating drop and drought remain available", () => {
+  assert.equal(matchdayBummer({ ...bummerFacts, wins: 0 }), "bummer_winless");
+  assert.equal(matchdayBummer({ ...bummerFacts, ownGoals: 1 }), "bummer_own_goal");
+  assert.equal(matchdayBummer({ ...bummerFacts, ratingDelta: -0.5 }), "bummer_rating_drop");
+  assert.equal(matchdayBummer({
+    ...bummerFacts, wins: 2, losses: 1, goals: 0, assists: 1,
+    positionPlayed: "FWD", lastThreeGoals: 0,
+  }), "bummer_scoreless");
+});
+test("new bummers have editable previews, placeholders and a positive footnote", () => {
+  const moment = mk(3, "bummer_losing_record", { w: 1, d: 1, l: 3 });
+  const view = momentView(moment, {
+    overrides: { bummer_losing_record: [{ title: "{name}: {w}W {d}D {l}L", body: "Comeback next week." }] },
+    name: "Sam Player",
+  });
+  assert.equal(view.title, "Sam: 1W 1D 3L");
+  assert.ok(view.footnote);
+  assert.equal(MOMENT_KIND_INFO.bummer_no_contribution.group, "bummer");
+  assert.ok(momentView(mk(3, "bummer_no_contribution")).footnote);
+});
+console.log("recorded moment audio");
+test("moment tones use only bundled recordings; info remains quiet", () => {
+  assert.deepEqual(MOMENT_SOUNDS.info, ["silent"]);
+  const licenses = readFileSync(new URL("../public/audio/LICENSES.txt", import.meta.url), "utf8");
+  for (const options of Object.values(MOMENT_SOUNDS)) {
+    for (const sound of options) {
+      if (sound === "silent") continue;
+      const bytes = readFileSync(new URL(`../public${MOMENT_SOUND_FILES[sound]}`, import.meta.url));
+      assert.ok(bytes.length > 1000 && bytes.length < 250_000);
+      assert.match(licenses, new RegExp(createHash("sha256").update(bytes).digest("hex")));
+    }
   }
 });
 console.log("editable messages");

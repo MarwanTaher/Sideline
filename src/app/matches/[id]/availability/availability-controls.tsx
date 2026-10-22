@@ -9,6 +9,7 @@ import { FeedbackMessage } from "@/components/ui/banner";
 import { CheckIcon, XIcon } from "@/components/ui/icons";
 import { useTapSpam } from "@/components/use-tap-spam";
 import { TapSmoke } from "@/components/tap-smoke";
+import { MessageAdminLink } from "@/components/message-admin-link";
 
 const INITIAL: AvailabilityActionState = { ok: false, message: "" };
 
@@ -67,7 +68,7 @@ export function AvailabilityControls({
   const note = closed
     ? "Sign-up is closed."
     : locked
-      ? "🔒 Locked within 24h of kickoff. Ask an admin to change it."
+      ? "Locked within 24 hours of kickoff."
       : msToLock != null && msToLock > 0 && msToLock <= LOCK_WARNING_MS
         ? `⏳ Changes close in ${formatDuration(msToLock)}.`
         : isSubscriber && shownStatus !== "out"
@@ -85,6 +86,7 @@ export function AvailabilityControls({
           type="submit"
           disabled={disabled || selected}
           aria-pressed={selected}
+          aria-describedby={disabled && (closed || locked) ? "availability-blocked-note" : undefined}
           className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-base font-bold transition active:scale-[0.97] disabled:pointer-events-none ${
             selected
               ? isIn
@@ -123,7 +125,20 @@ export function AvailabilityControls({
         {btn("out")}
         <TapSmoke puffs={puffs} smoking={smoking} />
       </div>
-      {note ? <p className="mt-2 px-1 text-xs text-neutral-500">{note}</p> : null}
+      {note ? (
+        <p
+          id={closed || locked ? "availability-blocked-note" : undefined}
+          className="mt-2 px-1 text-xs text-neutral-600 dark:text-neutral-300"
+        >
+          {closed ? "Sign-up is closed." : note}
+          {closed || locked ? (
+            <MessageAdminLink
+              matchId={matchId}
+              reason={closed ? "I need help with the closed sign-up." : "I need to change my availability after the lock."}
+            />
+          ) : null}
+        </p>
+      ) : null}
       {!state.ok && state.message ? (
         <FeedbackMessage ok={false} message={state.message} className="mt-2" />
       ) : null}

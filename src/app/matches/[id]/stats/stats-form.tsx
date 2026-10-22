@@ -7,6 +7,7 @@ import type { PlayerStatDefault } from "@/lib/stats";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FeedbackMessage } from "@/components/ui/banner";
+import { MessageAdminLink } from "@/components/message-admin-link";
 
 const INITIAL: StatsSubmitState = { ok: false, message: "" };
 
@@ -108,6 +109,10 @@ export function StatsForm({ matchId, open, current }: StatsFormProps) {
       ) : (
         <p className="rounded-lg bg-neutral-100 px-3 py-2 text-sm text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
           Stat submissions are closed for this match.
+          <MessageAdminLink
+            matchId={matchId}
+            reason="I need help correcting my match stats."
+          />
         </p>
       )}
     </div>

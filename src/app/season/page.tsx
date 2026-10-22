@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import {
   getActiveSubscriptionSeason,
+  getSeasonWaitlistPosition,
   listSubscribers,
   getSubscription,
 } from "@/lib/season-subscriptions";
@@ -16,7 +17,11 @@ import { getFundBalance } from "@/lib/season-fund";
 import { formatMinor } from "@/lib/format-money";
 import { SubNav } from "@/components/ui/sub-nav";
 import { sqlClient } from "@/lib/db";
-import { AcceptTerms, WithdrawButton } from "./subscription-controls";
+import {
+  AcceptTerms,
+  SeasonWaitlistButton,
+  WithdrawButton,
+} from "./subscription-controls";
 import { MultisportReporter } from "./billing-panels";
 import PaymentsTab from "./payments-tab";
 import SeasonTabsMobile from "./season-tabs-mobile";
@@ -76,7 +81,16 @@ export default async function SeasonPage({
 
   // Each tab fetches only what it renders. Loading every tab's data on every
   // tab made switching feel like a page load.
-  const [subscribers, invoices, paymentDetails, uncredited, scans, playedRows, fund] =
+  const [
+    subscribers,
+    invoices,
+    paymentDetails,
+    uncredited,
+    scans,
+    playedRows,
+    fund,
+    waitlistPosition,
+  ] =
     await Promise.all([
       activeTab === "overview" ? listSubscribers(season.id) : Promise.resolve([]),
       activeTab === "payments" && forMe
@@ -118,6 +132,9 @@ export default async function SeasonPage({
             adjustmentsMinor: 0,
             balanceMinor: 0,
           }),
+      activeTab === "overview" && pid != null
+        ? getSeasonWaitlistPosition(season.id, pid)
+        : Promise.resolve(null),
     ]);
 
   const spotsLeft = Math.max(0, season.subscriberCap - subscribers.length);
@@ -257,11 +274,19 @@ export default async function SeasonPage({
                   <WithdrawButton seasonId={season.id} />
                 </div>
               ) : (
-                <AcceptTerms
-                  seasonId={season.id}
-                  spotsLeft={spotsLeft}
-                  signupOpen={season.signupOpen}
-                />
+                <>
+                  <AcceptTerms
+                    seasonId={season.id}
+                    spotsLeft={spotsLeft}
+                    signupOpen={season.signupOpen}
+                  />
+                  {spotsLeft <= 0 || !season.signupOpen ? (
+                    <SeasonWaitlistButton
+                      seasonId={season.id}
+                      position={waitlistPosition}
+                    />
+                  ) : null}
+                </>
               )}
             </div>
           </section>

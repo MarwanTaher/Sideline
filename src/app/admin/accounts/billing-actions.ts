@@ -10,10 +10,12 @@ import {
   updateSeasonRates,
   updatePaymentDetails,
   declareInvoicePaid,
+  confirmDeclaredInvoices,
 } from "@/lib/season-billing";
 import { reviewScan, reportScan, withdrawScan } from "@/lib/multisport";
 import { getSubscriptionSeason } from "@/lib/season-subscriptions";
 import { sqlClient } from "@/lib/db";
+import { sendSeasonInvoiceReminder } from "@/lib/season-reminders";
 
 export type BillingActionState = { ok: boolean; message: string };
 
@@ -186,6 +188,51 @@ export async function setInvoicePaidAction(
   await setInvoicePaid(invoiceId, paid);
   revalidateBilling();
   return { ok: true, message: paid ? "Marked paid." : "Marked unpaid." };
+}
+
+export async function confirmDeclaredInvoicesAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, message: denied };
+
+  const seasonId = Number(formData.get("seasonId"));
+  const period = String(formData.get("period") ?? "");
+  if (!Number.isInteger(seasonId) || seasonId <= 0 || !/^\d{4}-\d{2}$/.test(period)) {
+    return { ok: false, message: "Invalid season or billing period." };
+  }
+
+  const confirmed = await confirmDeclaredInvoices(seasonId, period);
+  revalidateBilling();
+  return {
+    ok: true,
+    message: confirmed
+      ? `${confirmed} declared payment(s) confirmed for ${period}.`
+      : `No declared payments were waiting for confirmation in ${period}.`,
+  };
+}
+
+export async function sendInvoiceReminderAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, message: denied };
+
+  const invoiceId = Number(formData.get("invoiceId"));
+  if (!Number.isInteger(invoiceId) || invoiceId <= 0) {
+    return { ok: false, message: "Invalid invoice." };
+  }
+
+  const sent = await sendSeasonInvoiceReminder(invoiceId);
+  if (!sent) {
+    return {
+      ok: false,
+      message: "This invoice is paid, already declared, or no longer exists.",
+    };
+  }
+  return { ok: true, message: "Reminder sent." };
 }
 
 export async function setPlayingDaysAction(

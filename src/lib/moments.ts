@@ -3,6 +3,7 @@ import { sqlClient } from "./db";
 import { getMotmWinner } from "./motm";
 import { getRecentForm } from "./home";
 import type { RatingChange } from "./score-snapshots";
+import { matchdayBummer } from "./bummer-rules";
 import {
   MAX_MOMENTS_PER_OPEN,
   sortMoments,
@@ -98,6 +99,8 @@ export type RosterRow = {
   name: string;
   team_no: number;
   pos: string;
+  position_played: string;
+  stats_recorded: boolean;
   fun_messages: boolean;
   goals: number;
   assists: number;
@@ -139,6 +142,8 @@ export async function getMatchRosterFacts(matchId: number): Promise<RosterRow[]>
      )
      SELECT mp.player_id, p.name, mp.team_no,
             UPPER(COALESCE(NULLIF(mp.position_played, ''), p.preferred_position)) AS pos,
+            UPPER(COALESCE(mp.position_played, '')) AS position_played,
+            (s.player_id IS NOT NULL) AS stats_recorded,
             COALESCE(p.fun_messages, true) AS fun_messages,
             COALESCE(s.goals, 0) AS goals, COALESCE(s.assists, 0) AS assists,
             COALESCE(t.w, 0) AS w, COALESCE(t.l, 0) AS l, COALESCE(t.d, 0) AS d,
@@ -169,6 +174,8 @@ export async function getMatchRosterFacts(matchId: number): Promise<RosterRow[]>
     name: String(r.name),
     team_no: Number(r.team_no),
     pos: String(r.pos ?? ""),
+    position_played: String(r.position_played ?? ""),
+    stats_recorded: r.stats_recorded === true,
     fun_messages: r.fun_messages !== false,
     goals: Number(r.goals),
     assists: Number(r.assists),
@@ -282,14 +289,31 @@ export async function generateMatchMoments(
             ? "Silver lining: your team still kept a clean sheet."
             : "Silver lining: you showed up. That's half the game.";
     const c = changeBy.get(r.player_id);
-    if (r.rounds >= 2 && r.w === 0 && r.l >= 2) {
-      add(r.player_id, "bummer_winless", { l: r.l, silverLining });
-    } else if (r.own_goals > 0) {
-      add(r.player_id, "bummer_own_goal", { count: r.own_goals, silverLining });
-    } else if (c && c.deltaFinal <= -0.5) {
-      add(r.player_id, "bummer_rating_drop", { newFinal: c.newFinal, silverLining });
-    } else if (r.pos === "FWD" && r.apps >= 3 && r.last3_goals === 0) {
-      add(r.player_id, "bummer_scoreless", { silverLining });
+    const kind = matchdayBummer({
+      funMessages: r.fun_messages,
+      celebrated: celebrated.has(r.player_id),
+      onCooldown: bummerCooldown.has(r.player_id),
+      rounds: r.rounds,
+      wins: r.w,
+      losses: r.l,
+      goals: r.goals,
+      assists: r.assists,
+      ownGoals: r.own_goals,
+      positionPlayed: r.position_played,
+      statsRecorded: r.stats_recorded,
+      appearances: r.apps,
+      lastThreeGoals: r.last3_goals,
+      ratingDelta: c?.deltaFinal,
+    });
+    if (kind) {
+      add(r.player_id, kind, {
+        w: r.w,
+        d: r.d,
+        l: r.l,
+        count: r.own_goals,
+        newFinal: c?.newFinal,
+        silverLining,
+      });
     }
   }
 

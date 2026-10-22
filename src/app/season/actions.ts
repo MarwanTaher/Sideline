@@ -2,8 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { logAppError } from "@/lib/error-log";
 import {
   getSubscriptionSeason,
+  joinSeasonWaitlist,
+  offerNextSeasonWaitlistPlayer,
+  removeSeasonWaitlistPlayer,
   subscribePlayer,
   withdrawPlayer,
 } from "@/lib/season-subscriptions";
@@ -78,4 +82,36 @@ export async function withdrawAction(
     message:
       "Your place has been released. You remain responsible for any amount already due — settle it with the admins.",
   };
+}
+
+export async function seasonWaitlistAction(
+  _prev: SubscriptionActionState,
+  formData: FormData,
+): Promise<SubscriptionActionState> {
+  const session = await auth();
+  const playerId = session?.user?.playerId;
+  if (playerId == null) return { ok: false, message: "Only player accounts can join the reserve list." };
+
+  const seasonId = Number(formData.get("seasonId"));
+  if (!Number.isInteger(seasonId) || seasonId <= 0) {
+    return { ok: false, message: "Invalid season." };
+  }
+
+  try {
+    if (formData.get("intent") === "leave") {
+      await removeSeasonWaitlistPlayer(seasonId, Number(playerId));
+      await offerNextSeasonWaitlistPlayer(seasonId);
+      revalidateAll();
+      return { ok: true, message: "You left the season reserve list." };
+    }
+    const position = await joinSeasonWaitlist(seasonId, Number(playerId));
+    revalidateAll();
+    return { ok: true, message: `You are #${position} on the season reserve list.` };
+  } catch (err) {
+    await logAppError(err, "season.waitlist");
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Could not update the reserve list.",
+    };
+  }
 }

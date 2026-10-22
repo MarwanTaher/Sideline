@@ -45,6 +45,7 @@ export default async function SiteHeader() {
           href: t.href,
           label: t.label,
         })),
+        { href: "/admin/messages", label: "Messages" },
         ...(isSuper ? [{ href: "/admin/accounts", label: "Admin control" }] : []),
       ]
     : [];

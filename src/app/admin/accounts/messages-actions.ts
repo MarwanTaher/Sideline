@@ -3,41 +3,50 @@
 import { put, del } from "@vercel/blob";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { isAdminView } from "@/lib/view-mode";
+import { logAppError } from "@/lib/error-log";
 import { MOMENT_KINDS, type MomentKind } from "@/lib/moment-copy";
 import { setMomentCopyForKind } from "@/lib/moment-copy-settings";
 import { TAP_SOUND_LIMITS, getTapSounds, setTapSounds, setTapSpamEnabled } from "@/lib/tap-spam-settings";
 
 export type MessagesActionState = { ok: boolean; error?: string };
 
-async function isSuper(): Promise<boolean> {
+async function isAdmin(): Promise<boolean> {
   const session = await auth();
-  return session?.user?.role === "super";
+  const role = session?.user?.role;
+  return (
+    (role === "admin" || role === "super") &&
+    (await isAdminView(role === "admin" || role === "super"))
+  );
 }
 
 /** Save (or with an empty list, reset) the custom variants for one moment kind. */
 export async function saveMomentCopyAction(kind: string, variants: unknown): Promise<MessagesActionState> {
-  if (!(await isSuper())) return { ok: false, error: "Not allowed." };
+  if (!(await isAdmin())) return { ok: false, error: "Not allowed." };
   if (!MOMENT_KINDS.includes(kind as MomentKind)) return { ok: false, error: "Unknown message type." };
   try {
     await setMomentCopyForKind(kind as MomentKind, variants);
-  } catch {
+  } catch (error) {
+    await logAppError(error, "admin.messages.save-copy");
     return { ok: false, error: "Could not save. Try again." };
   }
   revalidatePath("/admin/accounts");
+  revalidatePath("/admin/messages");
   return { ok: true };
 }
 
 // ── T-1 tap-spam sounds ────────────────────────────────────────────────────
 
 export async function setTapSpamEnabledAction(enabled: boolean): Promise<MessagesActionState> {
-  if (!(await isSuper())) return { ok: false, error: "Not allowed." };
+  if (!(await isAdmin())) return { ok: false, error: "Not allowed." };
   await setTapSpamEnabled(enabled);
   revalidatePath("/admin/accounts");
+  revalidatePath("/admin/messages");
   return { ok: true };
 }
 
 export async function uploadTapSoundAction(formData: FormData): Promise<MessagesActionState> {
-  if (!(await isSuper())) return { ok: false, error: "Not allowed." };
+  if (!(await isAdmin())) return { ok: false, error: "Not allowed." };
   if (!process.env.BLOB_READ_WRITE_TOKEN) return { ok: false, error: "File storage is not configured." };
   const file = formData.get("sound");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "No file selected." };
@@ -56,19 +65,22 @@ export async function uploadTapSoundAction(formData: FormData): Promise<Messages
     });
     const name = file.name.replace(/\.[^.]+$/, "").slice(0, 40) || "sound";
     await setTapSounds([...sounds, { url: blob.url, name }]);
-  } catch {
+  } catch (error) {
+    await logAppError(error, "admin.messages.upload-sound");
     return { ok: false, error: "Upload failed. Try again." };
   }
   revalidatePath("/admin/accounts");
+  revalidatePath("/admin/messages");
   return { ok: true };
 }
 
 export async function deleteTapSoundAction(url: string): Promise<MessagesActionState> {
-  if (!(await isSuper())) return { ok: false, error: "Not allowed." };
+  if (!(await isAdmin())) return { ok: false, error: "Not allowed." };
   const sounds = await getTapSounds();
   if (!sounds.some((s) => s.url === url)) return { ok: false, error: "Sound not found." };
   await setTapSounds(sounds.filter((s) => s.url !== url));
   if (process.env.BLOB_READ_WRITE_TOKEN) await del(url).catch(() => {});
   revalidatePath("/admin/accounts");
+  revalidatePath("/admin/messages");
   return { ok: true };
 }

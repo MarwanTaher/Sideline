@@ -11,6 +11,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { FeedbackMessage } from "@/components/ui/banner";
 import DueCountdown from "./due-countdown";
+import PaymentQr from "./payment-qr";
+import { paymentQrPayload } from "@/lib/payment-qr";
 
 const INITIAL: BillingActionState = { ok: false, message: "" };
 
@@ -65,7 +67,7 @@ export default function PaymentsTab({
             ) : null}
             <ul className="mt-3 space-y-2.5">
               {invoices.map((inv) => (
-                <InvoiceCard key={inv.id} invoice={inv} playerName={playerName} />
+                <InvoiceCard key={inv.id} invoice={inv} playerName={playerName} details={details} />
               ))}
             </ul>
           </>
@@ -80,9 +82,11 @@ export default function PaymentsTab({
 function InvoiceCard({
   invoice,
   playerName,
+  details,
 }: {
   invoice: Invoice;
   playerName: string;
+  details: SeasonPaymentDetails;
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(declarePaidAction, INITIAL);
@@ -94,6 +98,7 @@ function InvoiceCard({
   const reference = transferReference(playerName, invoice.period);
   const confirmed = invoice.paidAt != null;
   const declared = invoice.declaredPaidAt != null;
+  const qr = paymentQrPayload(details.paymentAccount, details.paymentName, reference, invoice.totalMinor);
 
   return (
     <li className="rounded-xl border border-black/10 p-3 dark:border-white/10">
@@ -132,6 +137,9 @@ function InvoiceCard({
       {!confirmed ? (
         <div className="mt-3 border-t border-black/5 pt-3 dark:border-white/5">
           <CopyRow label="Reference to write" value={reference} />
+          {!declared && invoice.totalMinor > 0 ? (
+            <PaymentQr key={qr.ok ? qr.payload : qr.reason} result={qr} />
+          ) : null}
           <form action={formAction} className="mt-2">
             <input type="hidden" name="invoiceId" value={invoice.id} />
             <input type="hidden" name="declared" value={declared ? "false" : "true"} />

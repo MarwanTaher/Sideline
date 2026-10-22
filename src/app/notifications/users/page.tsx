@@ -102,8 +102,9 @@ export default async function PerUserNotificationsPage() {
                     <button
                       type="submit"
                       title={t.description}
+                      aria-pressed={enabled}
                       className={
-                        "inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition " +
+                        "inline-flex min-h-11 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs font-medium transition " +
                         (enabled
                           ? "border-emerald-500/40 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-300"
                           : "border-black/10 text-neutral-400 hover:bg-neutral-50 dark:border-white/15 dark:hover:bg-neutral-800")
@@ -116,7 +117,8 @@ export default async function PerUserNotificationsPage() {
                           (enabled ? "bg-emerald-500" : "bg-neutral-400")
                         }
                       />
-                      {t.label}
+                      <span>{t.label}</span>
+                      <span className="font-semibold">{enabled ? "On" : "Off"}</span>
                     </button>
                   </form>
                 );
@@ -137,7 +139,8 @@ export default async function PerUserNotificationsPage() {
                       <input type="hidden" name="endpoint" value={d.endpoint} />
                       <button
                         type="submit"
-                        className="rounded-md border border-black/10 px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:border-white/15 dark:text-red-400 dark:hover:bg-red-950/30"
+                        aria-label={`Remove ${deviceLabel(d.userAgent)} for ${p.name}`}
+                        className="min-h-11 min-w-11 rounded-md border border-black/10 px-2 py-1 text-xs font-medium text-red-600 transition hover:bg-red-50 dark:border-white/15 dark:text-red-400 dark:hover:bg-red-950/30"
                       >
                         Remove
                       </button>
