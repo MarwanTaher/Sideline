@@ -441,12 +441,35 @@ export async function declareAllInvoicesPaid(
   return rows.length;
 }
 
-/** Hide an invoice from the player (or show it again). */
+/**
+ * Hide an invoice from the player (or show it again). Hiding an unpaid bill
+ * gives its MultiSport credit back so it comes off a later bill; showing it
+ * again re-applies whatever credit is still waiting. A paid bill keeps its
+ * credit — the player already paid the reduced amount.
+ */
 export async function setInvoiceHidden(invoiceId: number, hidden: boolean): Promise<void> {
-  await sqlClient.query(
-    `UPDATE season_invoices SET hidden_at = ${hidden ? "CURRENT_TIMESTAMP" : "NULL"} WHERE id = $1`,
-    [invoiceId],
-  );
+  if (hidden) {
+    await sqlClient.transaction([
+      sqlClient.query(
+        `UPDATE multisport_scans SET applied_invoice_id = NULL
+          WHERE applied_invoice_id = $1::int
+            AND EXISTS (SELECT 1 FROM season_invoices WHERE id = $1::int AND paid_at IS NULL)`,
+        [invoiceId],
+      ),
+      sqlClient.query(
+        `UPDATE season_invoices
+            SET hidden_at = CURRENT_TIMESTAMP,
+                credit_minor = CASE WHEN paid_at IS NULL THEN 0 ELSE credit_minor END
+          WHERE id = $1::int`,
+        [invoiceId],
+      ),
+    ]);
+    return;
+  }
+  await sqlClient.transaction([
+    sqlClient.query(`UPDATE season_invoices SET hidden_at = NULL WHERE id = $1::int`, [invoiceId]),
+    ...reallocateCreditQueries(invoiceId),
+  ]);
 }
 
 /** Periods that already have invoices, newest first. */
@@ -513,16 +536,27 @@ export async function generateInvoices(
 
   const writes = subscribers.map((subscriber) =>
     sqlClient.query(
+      // Credits are used in scan order only while they fit the bill; the rest
+      // stays approved and comes off a later bill instead of being lost.
+      // Locked before ranking (FOR UPDATE cannot sit next to a window function).
       `WITH available_credit AS MATERIALIZED (
          SELECT id, credit_minor
            FROM multisport_scans
-          WHERE player_id = $2 AND status = 'approved' AND applied_invoice_id IS NULL
+          WHERE player_id = $2 AND status = 'approved'
+            AND applied_invoice_id IS NULL AND settled_at IS NULL
           ORDER BY id
           FOR UPDATE
        ),
+       fitting_credit AS (
+         SELECT id, credit_minor
+           FROM (SELECT id, credit_minor,
+                        SUM(credit_minor) OVER (ORDER BY id) AS running
+                   FROM available_credit) ranked
+          WHERE running <= $9::int
+       ),
        credit AS (
          SELECT COALESCE(SUM(credit_minor), 0)::int AS amount
-           FROM available_credit
+           FROM fitting_credit
        ),
        inserted AS (
          INSERT INTO season_invoices
@@ -535,7 +569,7 @@ export async function generateInvoices(
        applied AS (
          UPDATE multisport_scans
             SET applied_invoice_id = (SELECT id FROM inserted)
-          WHERE id IN (SELECT id FROM available_credit)
+          WHERE id IN (SELECT id FROM fitting_credit)
             AND EXISTS (SELECT 1 FROM inserted)
          RETURNING id
        )
@@ -549,6 +583,7 @@ export async function generateInvoices(
         splitBetween,
         gross,
         dueDate,
+        roundUpToPlnMinor(gross),
       ],
     ),
   );
@@ -588,13 +623,74 @@ export async function setInvoicePlayingDays(
   invoiceId: number,
   playingDays: number,
 ): Promise<void> {
-  await sqlClient.query(
-    `UPDATE season_invoices
-        SET playing_days = $1,
-            gross_minor = ROUND(($1::numeric * day_rate_minor) / GREATEST(split_between, 1))
-      WHERE id = $2`,
-    [playingDays, invoiceId],
-  );
+  await sqlClient.transaction([
+    sqlClient.query(
+      `UPDATE season_invoices
+          SET playing_days = $1::int,
+              gross_minor = ROUND(($1::int::numeric * day_rate_minor) / GREATEST(split_between, 1))
+        WHERE id = $2::int`,
+      [playingDays, invoiceId],
+    ),
+    ...reallocateCreditQueries(invoiceId),
+  ]);
+}
+
+/**
+ * Re-fit MultiSport credit to an unpaid, visible bill after its amount changed:
+ * credit that no longer fits goes back for a later bill, and waiting credit
+ * that now fits is used. Paid bills are a closed record and are left alone.
+ */
+function reallocateCreditQueries(invoiceId: number) {
+  return [
+    sqlClient.query(
+      `WITH inv AS (
+         SELECT CEIL(gross_minor::numeric / 100) * 100 AS charged
+           FROM season_invoices WHERE id = $1::int AND paid_at IS NULL
+       ),
+       ranked AS (
+         SELECT id, SUM(credit_minor) OVER (ORDER BY id) AS running
+           FROM multisport_scans WHERE applied_invoice_id = $1::int
+       )
+       UPDATE multisport_scans SET applied_invoice_id = NULL
+        WHERE id IN (SELECT r.id FROM ranked r, inv WHERE r.running > inv.charged)`,
+      [invoiceId],
+    ),
+    sqlClient.query(
+      `WITH inv AS (
+         SELECT id, player_id, CEIL(gross_minor::numeric / 100) * 100 AS charged
+           FROM season_invoices
+          WHERE id = $1::int AND paid_at IS NULL AND hidden_at IS NULL
+       ),
+       used AS (
+         SELECT COALESCE(SUM(credit_minor), 0) AS amount
+           FROM multisport_scans WHERE applied_invoice_id = $1::int
+       ),
+       available AS MATERIALIZED (
+         SELECT ms.id, ms.credit_minor
+           FROM multisport_scans ms
+           JOIN inv ON inv.player_id = ms.player_id
+          WHERE ms.status = 'approved' AND ms.applied_invoice_id IS NULL
+            AND ms.settled_at IS NULL
+          ORDER BY ms.id
+          FOR UPDATE OF ms
+       ),
+       ranked AS (
+         SELECT id, SUM(credit_minor) OVER (ORDER BY id) AS running FROM available
+       )
+       UPDATE multisport_scans SET applied_invoice_id = $1::int
+        WHERE id IN (
+          SELECT r.id FROM ranked r, inv, used WHERE used.amount + r.running <= inv.charged
+        )`,
+      [invoiceId],
+    ),
+    sqlClient.query(
+      `UPDATE season_invoices
+          SET credit_minor = (SELECT COALESCE(SUM(credit_minor), 0)::int
+                                FROM multisport_scans WHERE applied_invoice_id = $1::int)
+        WHERE id = $1::int AND paid_at IS NULL`,
+      [invoiceId],
+    ),
+  ];
 }
 
 export async function deleteInvoice(invoiceId: number): Promise<void> {

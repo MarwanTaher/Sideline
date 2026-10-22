@@ -712,10 +712,13 @@ export const multisportScans = pgTable("multisport_scans", {
 	reviewedAt: timestamp("reviewed_at", { withTimezone: true, mode: "string" }),
 	reviewedBy: text("reviewed_by").default("").notNull(),
 	appliedInvoiceId: integer("applied_invoice_id").references(() => seasonInvoices.id, { onDelete: "set null" }),
+	settledAt: timestamp("settled_at", { withTimezone: true, mode: "string" }),
+	settledAs: text("settled_as"),
 }, (table) => [
 	unique("multisport_scans_unique").on(table.matchId, table.playerId),
 	index("multisport_scans_pending_idx").on(table.status, table.playerId),
 	check("multisport_scans_status_check", sql`status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])`),
+	check("multisport_scans_settled_check", sql`((settled_at IS NULL) AND (settled_as IS NULL)) OR ((settled_at IS NOT NULL) AND (settled_as = ANY (ARRAY['refunded'::text, 'fund'::text])) AND (applied_invoice_id IS NULL) AND (status = 'approved'::text))`),
 ]);
 
 export const guestCharges = pgTable("guest_charges", {

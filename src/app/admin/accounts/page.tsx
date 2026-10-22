@@ -23,7 +23,7 @@ import {
   listOutstandingInvoices,
   listWithdrawnWithOpenInvoices,
 } from "@/lib/season-billing";
-import { listPendingScans } from "@/lib/multisport";
+import { listPendingScans, listLeftoverCredits } from "@/lib/multisport";
 import { getFundBalance, listAdjustments } from "@/lib/season-fund";
 import PlayerAdmins from "./player-admins";
 import SeasonsAdmin from "./seasons-admin";
@@ -114,6 +114,7 @@ export default async function AccountsPage({
             paymentDetails,
             outstandingInvoices,
             withdrawnWarnings,
+            leftoverCredits,
           ] =
             await Promise.all([
               listInvoices(subscriptionSeason.id, period),
@@ -126,6 +127,7 @@ export default async function AccountsPage({
               getPaymentDetails(subscriptionSeason.id),
               listOutstandingInvoices(subscriptionSeason.id),
               listWithdrawnWithOpenInvoices(subscriptionSeason.id),
+              listLeftoverCredits(subscriptionSeason.id),
             ]);
           return {
             periods,
@@ -140,6 +142,7 @@ export default async function AccountsPage({
             paymentDetails,
             outstandingInvoices,
             withdrawnWarnings,
+            leftoverCredits,
           };
         })()
       : null;
@@ -222,6 +225,8 @@ export default async function AccountsPage({
             pendingScans={billing.pendingScans}
             outstandingInvoices={billing.outstandingInvoices}
             withdrawnWarnings={billing.withdrawnWarnings}
+            leftoverCredits={billing.leftoverCredits}
+            seasonEndDate={subscriptionSeason.endDate}
             fund={
               <FundAdmin
                 seasonId={subscriptionSeason.id}

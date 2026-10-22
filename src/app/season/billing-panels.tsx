@@ -33,8 +33,10 @@ export function MultisportReporter({
     <div>
       <p className="text-xs text-neutral-500">
         Report each scan made with your own card. An admin confirms it, and the
-        credit comes off your next bill. The discount is yours alone — it is
-        never shared with the group.
+        credit comes off your next bill — as much as that bill can take; any
+        rest comes off the one after. The discount is yours alone — it is never
+        shared with the group. If no bill is left (you withdrew or the season
+        ended), an admin refunds it or, if you agree, adds it to the group fund.
       </p>
       <ul className="mt-3 divide-y divide-black/5 dark:divide-white/10">
         {matches.map((m) => (
@@ -70,7 +72,11 @@ function ScanRow({
   }, [state, router]);
 
   const badge =
-    scan?.status === "approved"
+    scan?.settledAs === "refunded"
+      ? { text: "refunded", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" }
+      : scan?.settledAs === "fund"
+        ? { text: "to group fund", cls: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300" }
+        : scan?.status === "approved"
       ? { text: scan.applied ? "credited" : "approved", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" }
       : scan?.status === "rejected"
         ? { text: "rejected", cls: "bg-red-100 text-red-700 dark:bg-red-950/50 dark:text-red-300" }

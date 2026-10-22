@@ -9,7 +9,8 @@ import type {
   SeasonPaymentDetails,
   WithdrawnInvoiceWarning,
 } from "@/lib/season-billing";
-import type { MultisportScan } from "@/lib/multisport";
+import type { LeftoverCredit, MultisportScan } from "@/lib/multisport";
+import { isCreditStranded } from "@/lib/multisport-rules";
 import { formatMinor } from "@/lib/format-money";
 import {
   generateInvoicesAction,
@@ -17,6 +18,7 @@ import {
   setPlayingDaysAction,
   deleteInvoiceAction,
   setInvoiceHiddenAction,
+  settleLeftoverCreditAction,
   reviewScanAction,
   saveRatesAction,
   savePaymentDetailsAction,
@@ -46,6 +48,8 @@ export default function BillingAdmin({
   pendingScans,
   outstandingInvoices,
   withdrawnWarnings,
+  leftoverCredits,
+  seasonEndDate,
   fund,
 }: {
   seasonId: number;
@@ -59,6 +63,8 @@ export default function BillingAdmin({
   pendingScans: MultisportScan[];
   outstandingInvoices: Invoice[];
   withdrawnWarnings: WithdrawnInvoiceWarning[];
+  leftoverCredits: LeftoverCredit[];
+  seasonEndDate: string | null;
   /** Group fund panel; below the billing card, or in the right column on xl+. */
   fund?: React.ReactNode;
 }) {
@@ -228,6 +234,31 @@ export default function BillingAdmin({
           </ul>
         )}
       </div>
+
+      {leftoverCredits.length > 0 ? (
+        <div className="mt-5 border-t border-black/5 pt-4 dark:border-white/5">
+          <h3 className="text-sm font-medium">Unused MultiSport credit</h3>
+          <p className="mt-1 text-xs text-neutral-500">
+            Approved credit comes off the player&apos;s next bill, only as much as the bill can
+            take; the rest waits for the following one. When no bill is coming (withdrawn, or the
+            season&apos;s last month is billed), refund it or move it to the group fund.
+          </p>
+          <ul className="mt-2 divide-y divide-black/5 dark:divide-white/10">
+            {leftoverCredits.map((credit) => (
+              <LeftoverCreditRow
+                key={credit.playerId}
+                seasonId={seasonId}
+                credit={credit}
+                stranded={isCreditStranded({
+                  withdrawn: credit.withdrawn,
+                  seasonEndDate,
+                  lastBilledPeriod: credit.lastBilledPeriod,
+                })}
+              />
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </section>
     </DesktopSplit>
   );
@@ -601,7 +632,8 @@ function InvoiceRow({
           </form>
           <p className="w-full text-xs text-neutral-500">
             Hidden invoices disappear from the player&apos;s Payments and Home, get no
-            reminders and drop out of &ldquo;Who still owes&rdquo;.
+            reminders and drop out of &ldquo;Who still owes&rdquo;. MultiSport credit on an
+            unpaid hidden bill goes back to the player&apos;s next bill.
           </p>
         </div>
       ) : null}
@@ -609,6 +641,75 @@ function InvoiceRow({
       <FeedbackMessage ok={daysState.ok} message={daysState.message} className="mt-1" />
       <FeedbackMessage ok={hideState.ok} message={hideState.message} className="mt-1" />
       <FeedbackMessage ok={delState.ok} message={delState.message} className="mt-1" />
+    </li>
+  );
+}
+
+function LeftoverCreditRow({
+  seasonId,
+  credit,
+  stranded,
+}: {
+  seasonId: number;
+  credit: LeftoverCredit;
+  stranded: boolean;
+}) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(settleLeftoverCreditAction, INITIAL);
+
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+
+  const confirmText = (as: "refunded" | "fund") => {
+    const what =
+      as === "fund"
+        ? `Move ${formatMinor(credit.creditMinor)} of ${credit.name}'s credit into the group fund?`
+        : `Mark ${formatMinor(credit.creditMinor)} as refunded to ${credit.name}? Pay it back to them yourself.`;
+    return stranded ? what : `${what}\n\nIt would otherwise come off their next bill.`;
+  };
+
+  return (
+    <li className="py-2.5 text-sm">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="min-w-0">
+          <p className="font-medium">
+            {credit.name}
+            {stranded ? (
+              <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                {credit.withdrawn ? "withdrawn · no more bills" : "no more bills"}
+              </span>
+            ) : (
+              <span className="ml-2 rounded bg-neutral-100 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
+                next bill
+              </span>
+            )}
+          </p>
+          <p className="text-xs text-neutral-500">
+            {credit.scans} scan{credit.scans === 1 ? "" : "s"} · {formatMinor(credit.creditMinor)}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          {(["refunded", "fund"] as const).map((as) => (
+            <form
+              key={as}
+              action={formAction}
+              onSubmit={(e) => {
+                if (!window.confirm(confirmText(as))) e.preventDefault();
+              }}
+            >
+              <input type="hidden" name="seasonId" value={seasonId} />
+              <input type="hidden" name="playerId" value={credit.playerId} />
+              <input type="hidden" name="name" value={credit.name} />
+              <input type="hidden" name="as" value={as} />
+              <Button type="submit" variant="secondary" pending={pending} pendingLabel="…">
+                {as === "fund" ? "To group fund" : "Refunded"}
+              </Button>
+            </form>
+          ))}
+        </div>
+      </div>
+      <FeedbackMessage ok={state.ok} message={state.message} className="mt-1" />
     </li>
   );
 }

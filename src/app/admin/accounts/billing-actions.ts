@@ -13,7 +13,8 @@ import {
   setInvoiceHidden,
   confirmDeclaredInvoices,
 } from "@/lib/season-billing";
-import { reviewScan, reportScan, withdrawScan } from "@/lib/multisport";
+import { reviewScan, reportScan, withdrawScan, settleLeftoverCredit } from "@/lib/multisport";
+import { formatMinor } from "@/lib/format-money";
 import { getSubscriptionSeason } from "@/lib/season-subscriptions";
 import { sqlClient } from "@/lib/db";
 import { sendSeasonInvoiceReminder } from "@/lib/season-reminders";
@@ -310,6 +311,42 @@ export async function reviewScanAction(
   await reviewScan(scanId, approve, await actorName());
   revalidateBilling();
   return { ok: true, message: approve ? "Scan approved." : "Scan rejected." };
+}
+
+/** Admin: settle a player's leftover MultiSport credit (refunded, or to the fund). */
+export async function settleLeftoverCreditAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, message: denied };
+
+  const seasonId = Number(formData.get("seasonId"));
+  const playerId = Number(formData.get("playerId"));
+  const as = formData.get("as");
+  const name = String(formData.get("name") ?? "").slice(0, 80);
+  if (!Number.isInteger(seasonId) || !Number.isInteger(playerId) || (as !== "refunded" && as !== "fund")) {
+    return { ok: false, message: "Invalid request." };
+  }
+
+  const amount = await settleLeftoverCredit(
+    seasonId,
+    playerId,
+    as,
+    `Unused MultiSport credit from ${name || "a player"}`,
+    await actorName(),
+  );
+  revalidateBilling();
+  if (amount === 0) {
+    return { ok: false, message: "No unused credit left — it may have just gone on a bill." };
+  }
+  return {
+    ok: true,
+    message:
+      as === "fund"
+        ? `${formatMinor(amount)} added to the group fund.`
+        : `${formatMinor(amount)} marked as refunded.`,
+  };
 }
 
 /** Player-facing: report or withdraw your own MultiSport scan. */
