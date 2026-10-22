@@ -112,6 +112,25 @@ export default async function ProfilePage() {
             roleLabel={roleLabel}
           />
         </section>
+        {!rankInfo?.ranked ? (
+          <section
+            aria-labelledby="rank-progress-title"
+            className="rounded-2xl border border-emerald-700/20 bg-emerald-50/60 p-4 dark:border-emerald-300/20 dark:bg-emerald-950/20"
+          >
+            <h2 id="rank-progress-title" className="text-sm font-semibold">
+              Your rank is in progress
+            </h2>
+            <p className="mt-1 text-sm text-neutral-700 dark:text-neutral-200">
+              Play a few matches to build your record and appear in the leaderboard.
+            </p>
+            <Link
+              href="/matches"
+              className="mt-2 inline-flex min-h-11 items-center font-semibold text-emerald-700 underline underline-offset-2 dark:text-emerald-300"
+            >
+              Find a match
+            </Link>
+          </section>
+        ) : null}
 
         {/* Your season: form, trends, highlights */}
         <Card title="Your season">

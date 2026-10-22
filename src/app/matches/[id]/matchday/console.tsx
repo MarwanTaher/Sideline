@@ -1476,7 +1476,7 @@ function GoalLog({
               <button
                 onClick={() => onEdit(g.id)}
                 aria-label="Edit goal"
-                className="rounded-lg px-2 py-2 text-neutral-400 transition hover:text-neutral-900 dark:hover:text-neutral-100"
+                className="min-h-11 min-w-11 rounded-lg px-2 py-2 text-neutral-500 transition hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-white"
               >
                 <PencilIcon className="h-4 w-4" />
               </button>
@@ -1484,7 +1484,7 @@ function GoalLog({
             <button
               onClick={() => onDelete(round.id, g.id)}
               aria-label="Remove goal"
-              className="rounded-lg px-2 py-2 text-neutral-400 transition hover:text-red-600"
+              className="min-h-11 min-w-11 rounded-lg px-2 py-2 text-neutral-500 transition hover:text-red-600 dark:text-neutral-300"
             >
               <XIcon className="h-4 w-4" />
             </button>

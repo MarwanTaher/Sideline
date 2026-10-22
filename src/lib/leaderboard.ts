@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { sqlClient } from "./db";
-import { getPlayerScores, getScoringPolicy } from "./scoring";
+import { getPlayerScores, getScoringPolicy, type ScorePayload } from "./scoring";
+import { readCurrentScoreSnapshot } from "./score-cache";
 
 /**
  * Cache tag for all computed-score reads. Score-affecting writes (match close,
@@ -8,6 +9,30 @@ import { getPlayerScores, getScoringPolicy } from "./scoring";
  * call `revalidateScores()` to invalidate it. See `scores-cache.ts`.
  */
 export const SCORES_CACHE_TAG = "scores";
+
+/**
+ * Prefer an exact-revision close snapshot. Between closes, computed scores are
+ * cached by database revision so missed application invalidation cannot serve
+ * scores from before a scoring-input edit.
+ */
+const getComputedScoresForRevision = unstable_cache(
+  async (revision: string): Promise<Record<number, ScorePayload>> => {
+    void revision;
+    return getPlayerScores();
+  },
+  ["player-scores-by-revision-v1"],
+  { tags: [SCORES_CACHE_TAG], revalidate: 600 },
+);
+
+export async function getCachedPlayerScores(): Promise<Record<number, ScorePayload>> {
+  const [policy, current] = await Promise.all([
+    getScoringPolicy(),
+    readCurrentScoreSnapshot(),
+  ]);
+  if (policy.recency_decay <= 0 && current.snapshot) return current.snapshot.scores;
+  if (policy.recency_decay > 0) return getPlayerScores();
+  return getComputedScoresForRevision(current.revision);
+}
 
 export interface LeaderboardRow {
   id: number;
@@ -34,7 +59,9 @@ export interface LeaderboardData {
  * scoring engine. Rows are returned sorted by final score (desc); the client
  * applies position / min-match filters.
  */
-export async function getLeaderboard(): Promise<LeaderboardData> {
+export async function getLeaderboard(options: {
+  scorePayload?: Record<number, ScorePayload>;
+} = {}): Promise<LeaderboardData> {
   const policy = await getScoringPolicy();
   const peerWeightPct = Math.round(policy.peer_base_weight * 100);
   const statWeightPct = Math.round(policy.stat_base_weight * 100);
@@ -59,7 +86,7 @@ export async function getLeaderboard(): Promise<LeaderboardData> {
     matchCounts.set(Number(r.player_id), Number(r.n));
   }
 
-  const scores = await getPlayerScores();
+  const scores = options.scorePayload ?? (await getCachedPlayerScores());
 
   const rows: LeaderboardRow[] = players.map((p) => {
     const id = Number(p.id);
@@ -86,18 +113,10 @@ export async function getLeaderboard(): Promise<LeaderboardData> {
   return { rows, peerWeightPct, statWeightPct, unratedMinMatches };
 }
 
-/**
- * Cached leaderboard for the hot read paths (dashboard + leaderboard page).
- * `getPlayerScores()` is a full recompute; caching it behind the `scores` tag
- * turns "recompute on every load" into "compute once per score-affecting
- * change". Invalidation is event-driven via `revalidateScores()`, with a long
- * TTL only as a safety net against a missed invalidation path.
- */
-export const getCachedLeaderboard = unstable_cache(
-  async (): Promise<LeaderboardData> => getLeaderboard(),
-  ["leaderboard-v1"],
-  { tags: [SCORES_CACHE_TAG], revalidate: 600 },
-);
+/** Kept as the existing call-site API; current player metadata is read each time. */
+export async function getCachedLeaderboard(): Promise<LeaderboardData> {
+  return getLeaderboard();
+}
 
 /** A single player's rank/score from the cached leaderboard (dashboard use). */
 export async function getPlayerRank(playerId: number): Promise<{

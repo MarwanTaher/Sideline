@@ -1,8 +1,10 @@
 import "server-only";
 import { sqlClient } from "./db";
 import { invoiceAmountMinor, roundUpToPlnMinor } from "./format-money";
+import { dueDateFor, playingDaysInPeriod } from "./season-calculations";
 
 export { formatMinor, invoiceAmountMinor, roundUpToPlnMinor } from "./format-money";
+export { dueDateFor, playingDaysInPeriod } from "./season-calculations";
 
 /**
  * Season billing — the monthly subscription from the winter contract.
@@ -39,6 +41,7 @@ export type Invoice = {
   paidAt: string | null;
   /** The player says they've paid; not the same as confirmed. */
   declaredPaidAt: string | null;
+  createdAt: string | null;
   declaredNote: string;
   note: string;
 };
@@ -58,6 +61,7 @@ type InvoiceRow = {
   due_at: string | Date | null;
   paid_at: string | Date | null;
   declared_paid_at: string | Date | null;
+  created_at: string | Date | null;
   declared_note: string;
   note: string;
 };
@@ -95,40 +99,10 @@ function toInvoice(r: InvoiceRow): Invoice {
     })(),
     paidAt: toIso(r.paid_at),
     declaredPaidAt: toIso(r.declared_paid_at),
+    createdAt: toIso(r.created_at),
     declaredNote: String(r.declared_note ?? ""),
     note: String(r.note ?? ""),
   };
-}
-
-/** "2026-11" → the Sundays in that month that fall inside the contract. */
-export function playingDaysInPeriod(
-  period: string,
-  startDate: string,
-  endDate: string | null,
-): number {
-  const m = /^(\d{4})-(\d{2})$/.exec(period);
-  if (!m) return 0;
-  const year = Number(m[1]);
-  const month = Number(m[2]);
-
-  const start = Date.parse(`${startDate}T00:00:00Z`);
-  const end = endDate ? Date.parse(`${endDate}T00:00:00Z`) : Number.POSITIVE_INFINITY;
-
-  let count = 0;
-  const cursor = new Date(Date.UTC(year, month - 1, 1));
-  while (cursor.getUTCMonth() === month - 1) {
-    // 0 = Sunday.
-    if (cursor.getUTCDay() === 0) {
-      const t = cursor.getTime();
-      if (t >= start && t <= end) count += 1;
-    }
-    cursor.setUTCDate(cursor.getUTCDate() + 1);
-  }
-  return count;
-}
-
-export function dueDateFor(period: string, dueDay: number): string {
-  return `${period}-${String(Math.max(1, Math.min(28, dueDay))).padStart(2, "0")}`;
 }
 
 export type SeasonRates = {
@@ -138,15 +112,17 @@ export type SeasonRates = {
   guestRateMinor: number;
   extensionCostMinor: number;
   extensionMinExtra: number;
+  ratesChangedAt: string | null;
 };
 
 export async function getSeasonRates(seasonId: number): Promise<SeasonRates | null> {
   const rows = (await sqlClient.query(
     `SELECT day_rate_minor, multisport_credit_minor, payment_due_day,
-            guest_rate_minor, extension_cost_minor, extension_min_extra
+            guest_rate_minor, extension_cost_minor, extension_min_extra,
+            rates_changed_at
        FROM seasons WHERE id = $1`,
     [seasonId],
-  )) as Array<Record<string, number>>;
+  )) as Array<Record<string, number | string | Date | null>>;
   if (rows.length === 0) return null;
   const r = rows[0];
   return {
@@ -156,6 +132,7 @@ export async function getSeasonRates(seasonId: number): Promise<SeasonRates | nu
     guestRateMinor: Number(r.guest_rate_minor),
     extensionCostMinor: Number(r.extension_cost_minor),
     extensionMinExtra: Number(r.extension_min_extra),
+    ratesChangedAt: toIso(r.rates_changed_at as string | Date | null),
   };
 }
 
@@ -165,8 +142,12 @@ export async function getSeasonRates(seasonId: number): Promise<SeasonRates | nu
  */
 export async function updateSeasonRates(
   seasonId: number,
-  rates: SeasonRates,
+  rates: Omit<SeasonRates, "ratesChangedAt">,
 ): Promise<void> {
+  const changed =
+    "day_rate_minor IS DISTINCT FROM $1 OR multisport_credit_minor IS DISTINCT FROM $2 OR " +
+    "payment_due_day IS DISTINCT FROM $3 OR guest_rate_minor IS DISTINCT FROM $4 OR " +
+    "extension_cost_minor IS DISTINCT FROM $5 OR extension_min_extra IS DISTINCT FROM $6";
   await sqlClient.query(
     `UPDATE seasons
         SET day_rate_minor = $1,
@@ -174,7 +155,12 @@ export async function updateSeasonRates(
             payment_due_day = $3,
             guest_rate_minor = $4,
             extension_cost_minor = $5,
-            extension_min_extra = $6
+            extension_min_extra = $6,
+            rates_changed_at = CASE WHEN ${changed}
+              THEN CURRENT_TIMESTAMP ELSE rates_changed_at END,
+            rates_confirmed_at = CASE WHEN ${changed} THEN CASE
+              WHEN visible_to_players THEN CURRENT_TIMESTAMP ELSE NULL
+            END ELSE rates_confirmed_at END
       WHERE id = $7`,
     [
       rates.dayRateMinor,
@@ -204,6 +190,141 @@ export async function listInvoices(
     [seasonId, period ?? null],
   )) as InvoiceRow[];
   return rows.map(toInvoice);
+}
+
+export async function listOutstandingInvoices(seasonId: number): Promise<Invoice[]> {
+  const rows = (await sqlClient.query(
+    `SELECT si.*, ${DUE_AT}, p.name
+       FROM season_invoices si
+       JOIN players p ON p.id = si.player_id
+      WHERE si.season_id = $1 AND si.paid_at IS NULL
+        AND si.credit_minor < CEIL(si.gross_minor::numeric / 100) * 100
+      ORDER BY si.due_date ASC, p.name ASC`,
+    [seasonId],
+  )) as InvoiceRow[];
+  return rows.map(toInvoice);
+}
+
+export type WithdrawnInvoiceWarning = {
+  playerId: number;
+  name: string;
+  period: string;
+  totalMinor: number;
+};
+
+export async function listWithdrawnWithOpenInvoices(
+  seasonId: number,
+): Promise<WithdrawnInvoiceWarning[]> {
+  const rows = (await sqlClient.query(
+    `SELECT si.player_id, p.name, si.period, si.gross_minor, si.credit_minor
+       FROM season_invoices si
+       JOIN season_subscriptions ss
+         ON ss.season_id = si.season_id AND ss.player_id = si.player_id
+       JOIN players p ON p.id = si.player_id
+      WHERE si.season_id = $1 AND ss.status = 'withdrawn' AND si.paid_at IS NULL
+        AND si.credit_minor < CEIL(si.gross_minor::numeric / 100) * 100
+      ORDER BY si.due_date ASC, p.name ASC`,
+    [seasonId],
+  )) as Array<{
+    player_id: number;
+    name: string;
+    period: string;
+    gross_minor: number;
+    credit_minor: number;
+  }>;
+  return rows.map((row) => ({
+    playerId: Number(row.player_id),
+    name: String(row.name),
+    period: String(row.period),
+    totalMinor: Math.max(
+      0,
+      roundUpToPlnMinor(Number(row.gross_minor)) - Number(row.credit_minor),
+    ),
+  }));
+}
+
+export type SeasonGoLiveChecklist = {
+  transferDetailsComplete: boolean;
+  ratesConfirmed: boolean;
+  termsFinal: boolean;
+  testInvoiceCompleted: boolean;
+  reminderTextReviewed: boolean;
+  complete: boolean;
+};
+
+export async function getSeasonGoLiveChecklist(
+  seasonId: number,
+): Promise<SeasonGoLiveChecklist | null> {
+  const rows = (await sqlClient.query(
+    `SELECT payment_name, payment_account, day_rate_minor, payment_due_day, terms,
+            rates_confirmed_at, terms_final_at, test_invoice_completed_at,
+            reminder_text_reviewed_at
+       FROM seasons WHERE id = $1`,
+    [seasonId],
+  )) as Array<{
+    payment_name: string | null;
+    payment_account: string | null;
+    day_rate_minor: number;
+    payment_due_day: number;
+    terms: string | null;
+    rates_confirmed_at: string | Date | null;
+    terms_final_at: string | Date | null;
+    test_invoice_completed_at: string | Date | null;
+    reminder_text_reviewed_at: string | Date | null;
+  }>;
+  if (rows.length === 0) return null;
+
+  const row = rows[0];
+  const checks = {
+    transferDetailsComplete: Boolean(row.payment_name?.trim() && row.payment_account?.trim()),
+    ratesConfirmed:
+      Number(row.day_rate_minor) > 0 &&
+      Number(row.payment_due_day) >= 1 &&
+      Number(row.payment_due_day) <= 28 &&
+      row.rates_confirmed_at != null,
+    termsFinal: Boolean(row.terms?.trim() && row.terms_final_at != null),
+    testInvoiceCompleted: row.test_invoice_completed_at != null,
+    reminderTextReviewed: row.reminder_text_reviewed_at != null,
+  };
+  return { ...checks, complete: Object.values(checks).every(Boolean) };
+}
+
+export type SeasonGoLiveCheckKey =
+  | "ratesConfirmed"
+  | "termsFinal"
+  | "testInvoiceCompleted"
+  | "reminderTextReviewed";
+
+const GO_LIVE_CHECK_COLUMNS: Record<SeasonGoLiveCheckKey, string> = {
+  ratesConfirmed: "rates_confirmed_at",
+  termsFinal: "terms_final_at",
+  testInvoiceCompleted: "test_invoice_completed_at",
+  reminderTextReviewed: "reminder_text_reviewed_at",
+};
+
+export async function setSeasonGoLiveCheck(
+  seasonId: number,
+  check: SeasonGoLiveCheckKey,
+  checked: boolean,
+): Promise<void> {
+  const column = GO_LIVE_CHECK_COLUMNS[check];
+  if (!column) throw new Error("Invalid go-live check.");
+  const preconditions = {
+    ratesConfirmed: `day_rate_minor > 0 AND payment_due_day BETWEEN 1 AND 28`,
+    termsFinal: `length(btrim(terms)) > 0`,
+    testInvoiceCompleted: "TRUE",
+    reminderTextReviewed: "TRUE",
+  }[check];
+  const rows = (await sqlClient.query(
+    `UPDATE seasons
+        SET ${column} = CASE WHEN $2 AND ${preconditions} THEN CURRENT_TIMESTAMP ELSE NULL END
+      WHERE id = $1 AND (NOT $2 OR ${preconditions})
+      RETURNING id`,
+    [seasonId, checked],
+  )) as Array<{ id: number }>;
+  if (rows.length === 0) {
+    throw new Error("Set valid rates or add the final terms before confirming this item.");
+  }
 }
 
 export async function listPlayerInvoices(
@@ -345,51 +466,54 @@ export async function generateInvoices(
     [seasonId],
   )) as Array<{ player_id: number }>;
 
-  let created = 0;
-  let skipped = 0;
-
-  for (const s of subscribers) {
-    const playerId = Number(s.player_id);
-    const credit = await pendingCreditMinor(playerId);
-
-    const inserted = (await sqlClient.query(
-      `INSERT INTO season_invoices
-         (season_id, player_id, period, playing_days, day_rate_minor,
-          split_between, gross_minor, credit_minor, due_date)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-       ON CONFLICT (season_id, player_id, period) DO NOTHING
-       RETURNING id`,
-      [seasonId, playerId, period, playingDays, dayRate, splitBetween, gross, credit, dueDate],
-    )) as Array<{ id: number }>;
-
-    if (inserted.length === 0) {
-      skipped += 1;
-      continue;
-    }
-    created += 1;
-    if (credit > 0) await markCreditsApplied(playerId, Number(inserted[0].id));
-  }
+  const writes = subscribers.map((subscriber) =>
+    sqlClient.query(
+      `WITH available_credit AS MATERIALIZED (
+         SELECT id, credit_minor
+           FROM multisport_scans
+          WHERE player_id = $2 AND status = 'approved' AND applied_invoice_id IS NULL
+          ORDER BY id
+          FOR UPDATE
+       ),
+       credit AS (
+         SELECT COALESCE(SUM(credit_minor), 0)::int AS amount
+           FROM available_credit
+       ),
+       inserted AS (
+         INSERT INTO season_invoices
+           (season_id, player_id, period, playing_days, day_rate_minor,
+            split_between, gross_minor, credit_minor, due_date)
+         SELECT $1, $2, $3, $4, $5, $6, $7, credit.amount, $8 FROM credit
+         ON CONFLICT (season_id, player_id, period) DO NOTHING
+         RETURNING id
+       ),
+       applied AS (
+         UPDATE multisport_scans
+            SET applied_invoice_id = (SELECT id FROM inserted)
+          WHERE id IN (SELECT id FROM available_credit)
+            AND EXISTS (SELECT 1 FROM inserted)
+         RETURNING id
+       )
+       SELECT id FROM inserted`,
+      [
+        seasonId,
+        Number(subscriber.player_id),
+        period,
+        playingDays,
+        dayRate,
+        splitBetween,
+        gross,
+        dueDate,
+      ],
+    ),
+  );
+  const results = writes.length
+    ? await sqlClient.transaction(writes)
+    : [];
+  const created = results.filter((rows) => rows.length > 0).length;
+  const skipped = subscribers.length - created;
 
   return { created, skipped, playingDays, amountMinor: gross };
-}
-
-/** Approved scans not yet credited to any bill. */
-async function pendingCreditMinor(playerId: number): Promise<number> {
-  const rows = (await sqlClient.query(
-    `SELECT COALESCE(SUM(credit_minor), 0)::int AS total
-       FROM multisport_scans
-      WHERE player_id = $1 AND status = 'approved' AND applied_invoice_id IS NULL`,
-    [playerId],
-  )) as Array<{ total: number }>;
-  return Number(rows[0]?.total ?? 0);
-}
-
-async function markCreditsApplied(playerId: number, invoiceId: number): Promise<void> {
-  await sqlClient.query(
-    `UPDATE multisport_scans SET applied_invoice_id = $1
-      WHERE player_id = $2 AND status = 'approved' AND applied_invoice_id IS NULL`,
-    [invoiceId, playerId],
-  );
 }
 
 export async function setInvoicePaid(invoiceId: number, paid: boolean): Promise<void> {
@@ -397,6 +521,21 @@ export async function setInvoicePaid(invoiceId: number, paid: boolean): Promise<
     `UPDATE season_invoices SET paid_at = ${paid ? "CURRENT_TIMESTAMP" : "NULL"} WHERE id = $1`,
     [invoiceId],
   );
+}
+
+export async function confirmDeclaredInvoices(
+  seasonId: number,
+  period: string,
+): Promise<number> {
+  const rows = (await sqlClient.query(
+    `UPDATE season_invoices
+        SET paid_at = CURRENT_TIMESTAMP
+      WHERE season_id = $1 AND period = $2
+        AND declared_paid_at IS NOT NULL AND paid_at IS NULL
+      RETURNING id`,
+    [seasonId, period],
+  )) as Array<{ id: number }>;
+  return rows.length;
 }
 
 /** Correct the billed days when a week is cancelled; recomputes the amount. */
@@ -415,11 +554,13 @@ export async function setInvoicePlayingDays(
 
 export async function deleteInvoice(invoiceId: number): Promise<void> {
   // Release any credits so they fall onto the next bill instead of vanishing.
-  await sqlClient.query(
-    `UPDATE multisport_scans SET applied_invoice_id = NULL WHERE applied_invoice_id = $1`,
-    [invoiceId],
-  );
-  await sqlClient.query(`DELETE FROM season_invoices WHERE id = $1`, [invoiceId]);
+  await sqlClient.transaction([
+    sqlClient.query(
+      `UPDATE multisport_scans SET applied_invoice_id = NULL WHERE applied_invoice_id = $1`,
+      [invoiceId],
+    ),
+    sqlClient.query(`DELETE FROM season_invoices WHERE id = $1`, [invoiceId]),
+  ]);
 }
 
 export type SeasonBillingSummary = {

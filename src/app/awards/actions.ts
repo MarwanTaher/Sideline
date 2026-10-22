@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { revalidatePath } from "next/cache";
+import { revalidateScores } from "@/lib/scores-cache";
 import { auth } from "@/auth";
 import {
   setAwardOverride,
@@ -59,6 +60,7 @@ export async function applyOverrideAction(
 
     await setAwardOverride(scope, awardType, winnerIds, reason, actor, matchId);
     revalidatePath("/awards");
+    revalidateScores();
     return { ok: true, message: "Override applied.", awardType };
   } catch (err) {
     const message =
@@ -83,6 +85,7 @@ export async function clearOverrideAction(
 
     await clearAwardOverride(scope, awardType, actor, matchId);
     revalidatePath("/awards");
+    revalidateScores();
     return { ok: true, message: "Override cleared.", awardType };
   } catch (err) {
     const message =

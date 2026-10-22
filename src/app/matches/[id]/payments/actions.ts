@@ -9,11 +9,13 @@ import {
   savePaymentTotal,
   setPaid,
   setPaymentsActive,
+  setPlayerAndGuestsPaid,
   isPaymentsActive,
   isPlayerInMatch,
   playerHostsGuest,
 } from "@/lib/payments";
 import { setGuestPaid } from "@/lib/guests";
+import { DEFAULT_CURRENCY, isPaymentCurrency } from "@/lib/currency";
 
 export interface PaymentActionState {
   ok: boolean;
@@ -63,12 +65,17 @@ export async function saveDetailsAction(
   try {
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const currency = String(formData.get("currency") ?? DEFAULT_CURRENCY);
+    if (!isPaymentCurrency(currency)) {
+      return { ok: false, message: "Pick a currency from the list." };
+    }
     await savePaymentDetails(matchId, {
       name: String(formData.get("name") ?? ""),
       mobile: String(formData.get("mobile") ?? ""),
       method: String(formData.get("method") ?? ""),
       note: String(formData.get("note") ?? ""),
       payLink: String(formData.get("payLink") ?? ""),
+      currency,
     });
     revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: "Payment details saved." };
@@ -171,6 +178,35 @@ export async function playerSetPaidAction(
     }
 
     await setPaid(matchId, playerId, paid);
+    revalidatePath(`/matches/${matchId}/payments`);
+    return { ok: true, message: paid ? "Marked as paid." : "Marked as not paid." };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/**
+ * Player self-service: one "I've paid" covers the player's own share and every
+ * guest they brought (or undoes it). Same open-payments guard as above.
+ */
+export async function playerSetAllPaidAction(
+  _prev: PaymentActionState,
+  formData: FormData,
+): Promise<PaymentActionState> {
+  try {
+    const session = await auth();
+    const playerId = session?.user?.playerId;
+    if (playerId == null) {
+      return { ok: false, message: "Only player accounts can update payments." };
+    }
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    const paid = formData.get("paid") === "1";
+
+    if (!(await isPaymentsActive(matchId))) {
+      return { ok: false, message: "Payments are closed for this match." };
+    }
+
+    await setPlayerAndGuestsPaid(matchId, playerId, paid);
     revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: paid ? "Marked as paid." : "Marked as not paid." };
   } catch (err) {

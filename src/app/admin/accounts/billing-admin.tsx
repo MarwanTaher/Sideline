@@ -7,6 +7,7 @@ import type {
   SeasonBillingSummary,
   SeasonRates,
   SeasonPaymentDetails,
+  WithdrawnInvoiceWarning,
 } from "@/lib/season-billing";
 import type { MultisportScan } from "@/lib/multisport";
 import { formatMinor } from "@/lib/format-money";
@@ -18,6 +19,8 @@ import {
   reviewScanAction,
   saveRatesAction,
   savePaymentDetailsAction,
+  confirmDeclaredInvoicesAction,
+  sendInvoiceReminderAction,
   type BillingActionState,
 } from "./billing-actions";
 import { Button } from "@/components/ui/button";
@@ -39,6 +42,8 @@ export default function BillingAdmin({
   rates,
   paymentDetails,
   pendingScans,
+  outstandingInvoices,
+  withdrawnWarnings,
 }: {
   seasonId: number;
   seasonName: string;
@@ -49,13 +54,19 @@ export default function BillingAdmin({
   rates: SeasonRates;
   paymentDetails: SeasonPaymentDetails;
   pendingScans: MultisportScan[];
+  outstandingInvoices: Invoice[];
+  withdrawnWarnings: WithdrawnInvoiceWarning[];
 }) {
   const router = useRouter();
   const [genState, genAction, genPending] = useActionState(generateInvoicesAction, INITIAL);
+  const [confirmState, confirmAction, confirmPending] = useActionState(
+    confirmDeclaredInvoicesAction,
+    INITIAL,
+  );
 
   useEffect(() => {
-    if (genState.ok) router.refresh();
-  }, [genState, router]);
+    if (genState.ok || confirmState.ok) router.refresh();
+  }, [genState, confirmState, router]);
 
   return (
     <section className="mt-8 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
@@ -86,6 +97,21 @@ export default function BillingAdmin({
         </Button>
       </form>
       <FeedbackMessage ok={genState.ok} message={genState.message} className="mt-2" />
+      {invoices.some((invoice) => invoice.declaredPaidAt && !invoice.paidAt) ? (
+        <form action={confirmAction} className="mt-2 flex flex-wrap items-center gap-2">
+          <input type="hidden" name="seasonId" value={seasonId} />
+          <input type="hidden" name="period" value={period} />
+          <Button
+            type="submit"
+            variant="success"
+            pending={confirmPending}
+            pendingLabel="Confirming…"
+          >
+            Confirm all declared payments for {period}
+          </Button>
+          <FeedbackMessage ok={confirmState.ok} message={confirmState.message} />
+        </form>
+      ) : null}
 
       {periods.length > 0 ? (
         <div className="mt-3 flex flex-wrap items-center gap-1.5">
@@ -122,10 +148,46 @@ export default function BillingAdmin({
       ) : (
         <ul className="mt-4 divide-y divide-black/5 dark:divide-white/10">
           {invoices.map((inv) => (
-            <InvoiceRow key={inv.id} invoice={inv} />
+            <InvoiceRow
+              key={inv.id}
+              invoice={inv}
+              ratesChangedAt={rates.ratesChangedAt}
+            />
           ))}
         </ul>
       )}
+
+      {withdrawnWarnings.length > 0 ? (
+        <div className="mt-5 rounded-xl border border-amber-500/40 bg-amber-50/60 p-3 dark:bg-amber-950/20">
+          <h3 className="text-sm font-semibold">Withdrawn subscribers with open invoices</h3>
+          <ul className="mt-2 space-y-1 text-sm">
+            {withdrawnWarnings.map((warning) => (
+              <li key={`${warning.playerId}-${warning.period}`} className="flex justify-between gap-3">
+                <span>{warning.name} · {warning.period}</span>
+                <span className="shrink-0 font-medium tabular-nums">
+                  {formatMinor(warning.totalMinor)}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-neutral-600 dark:text-neutral-300">
+            Withdrawing does not cancel invoices already raised.
+          </p>
+        </div>
+      ) : null}
+
+      <section className="mt-5 border-t border-black/5 pt-4 dark:border-white/5">
+        <h3 className="text-sm font-medium">Who still owes</h3>
+        {outstandingInvoices.length === 0 ? (
+          <p className="mt-2 text-sm text-neutral-500">All season invoices are confirmed paid.</p>
+        ) : (
+          <ul className="mt-2 divide-y divide-black/5 dark:divide-white/10">
+            {outstandingInvoices.map((invoice) => (
+              <OutstandingInvoiceRow key={invoice.id} invoice={invoice} />
+            ))}
+          </ul>
+        )}
+      </section>
 
       <div className="mt-5 border-t border-black/5 pt-4 dark:border-white/5">
         <h3 className="text-sm font-medium">
@@ -340,7 +402,45 @@ function PaymentDetailsForm({
   );
 }
 
-function InvoiceRow({ invoice }: { invoice: Invoice }) {
+function OutstandingInvoiceRow({ invoice }: { invoice: Invoice }) {
+  const [state, formAction, pending] = useActionState(sendInvoiceReminderAction, INITIAL);
+  return (
+    <li className="flex flex-wrap items-center justify-between gap-2 py-2 text-sm">
+      <div>
+        <p className="font-medium">
+          {invoice.name} · {invoice.period}
+          {invoice.declaredPaidAt ? (
+            <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-xs text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+              declared · confirm
+            </span>
+          ) : null}
+        </p>
+        <p className="text-xs text-neutral-500">
+          Due {invoice.dueDate} · {formatMinor(invoice.totalMinor)}
+        </p>
+      </div>
+      {invoice.declaredPaidAt ? (
+        <span className="text-xs text-neutral-500">No reminder while awaiting confirmation</span>
+      ) : (
+        <form action={formAction}>
+          <input type="hidden" name="invoiceId" value={invoice.id} />
+          <Button type="submit" variant="secondary" pending={pending} pendingLabel="Sending…">
+            Remind
+          </Button>
+        </form>
+      )}
+      <FeedbackMessage ok={state.ok} message={state.message} className="basis-full" />
+    </li>
+  );
+}
+
+function InvoiceRow({
+  invoice,
+  ratesChangedAt,
+}: {
+  invoice: Invoice;
+  ratesChangedAt: string | null;
+}) {
   const router = useRouter();
   const [paidState, paidAction, paidPending] = useActionState(setInvoicePaidAction, INITIAL);
   const [daysState, daysAction, daysPending] = useActionState(setPlayingDaysAction, INITIAL);
@@ -381,6 +481,13 @@ function InvoiceRow({ invoice }: { invoice: Invoice }) {
               ? ` · MultiSport −${formatMinor(invoice.creditMinor)}`
               : ""}
           </p>
+          {ratesChangedAt &&
+          invoice.createdAt &&
+          Date.parse(invoice.createdAt) < Date.parse(ratesChangedAt) ? (
+            <p className="mt-0.5 text-xs text-blue-700 dark:text-blue-300">
+              Rates changed on {new Date(ratesChangedAt).toLocaleDateString()}; this invoice keeps its original snapshot.
+            </p>
+          ) : null}
         </div>
         <div className="flex items-center gap-2">
           <span className="font-semibold tabular-nums">{formatMinor(invoice.totalMinor)}</span>

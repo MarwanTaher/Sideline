@@ -1,5 +1,5 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import Link from "next/link";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
 import { getVotingState, votingOpen, type MatchdayStatus } from "@/lib/voting";
@@ -7,6 +7,13 @@ import { getMotmTally, getMotmVote, getMotmVoteCount } from "@/lib/motm";
 import { VoteForm } from "./vote-form";
 import { MotmVote } from "./motm-vote";
 import { MatchNav } from "../match-nav";
+import { getAvailabilityMatch } from "@/lib/availability";
+import { getMatchDetail } from "@/lib/matches";
+import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
+import { getMatchPhase } from "@/lib/match-phase";
+import { matchLabelWithTime } from "@/lib/format";
+import { MatchPageHeader } from "../match-page-header";
+import { MessageAdminLink } from "@/components/message-admin-link";
 
 export const metadata = {
   title: "Vote · Sideline",
@@ -39,24 +46,30 @@ export default async function VotePage({
   const isAdmin = await isAdminView(
     session.user.role === "admin" || session.user.role === "super",
   );
-
-  const backLink = (
-    <>
-      <Link
-        href={`/matches/${matchId}`}
-        className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
-      >
-        ← Back to match
-      </Link>
-      <MatchNav matchId={matchId} isAdmin={isAdmin} />
-    </>
-  );
+  const [availability, detail, lockEnabled] = await Promise.all([
+    getAvailabilityMatch(matchId),
+    getMatchDetail(matchId),
+    isAvailabilityLockEnabled(),
+  ]);
+  if (!availability || !detail) notFound();
+  const phase = getMatchPhase({
+    matchdayStatus: availability.matchdayStatus,
+    availabilityOpen: availability.availabilityOpen,
+    kickoffAt: availability.kickoffAt,
+    lockEnabled,
+    hasRoster: detail.teams.some((team) => team.players.length > 0),
+  });
 
   if (playerId == null) {
     return (
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10">
-        {backLink}
-        <h1 className="mt-3 text-2xl font-semibold tracking-tight">Rate players</h1>
+        <MatchPageHeader
+          matchId={matchId}
+          dateLabel={matchLabelWithTime(availability.playedOn, availability.matchTime)}
+          title="Rate players"
+          phase={phase}
+        />
+        <MatchNav matchId={matchId} isAdmin={isAdmin} />
         <p className="mt-2 text-sm text-neutral-500">
           Only player accounts can vote. Admins can review votes from the admin tools.
         </p>
@@ -66,6 +79,13 @@ export default async function VotePage({
 
   const state = await getVotingState(matchId, playerId);
   if (!state) notFound();
+  const statePhase = getMatchPhase({
+    matchdayStatus: state.matchdayStatus,
+    availabilityOpen: availability.availabilityOpen,
+    kickoffAt: availability.kickoffAt,
+    lockEnabled,
+    hasRoster: detail.teams.some((team) => team.players.length > 0),
+  });
 
   const openForAccess =
     state.matchdayStatus === "draft" || state.matchdayStatus === "active";
@@ -95,10 +115,15 @@ export default async function VotePage({
 
   return (
     <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-10">
-      {backLink}
+      <MatchPageHeader
+        matchId={matchId}
+        dateLabel={matchLabelWithTime(availability.playedOn, availability.matchTime)}
+        title="Rate players"
+        phase={statePhase}
+      />
+      <MatchNav matchId={matchId} isAdmin={isAdmin} />
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Rate players</h1>
+      <div className="flex flex-wrap items-center gap-2">
         <span
           className={`rounded px-1.5 py-0.5 text-xs font-medium capitalize ${MATCHDAY_BADGE[state.matchdayStatus]}`}
         >
@@ -110,8 +135,25 @@ export default async function VotePage({
       </p>
 
       {notice ? (
-        <p className="mt-6 rounded-xl border border-black/10 p-4 text-sm text-neutral-500 dark:border-white/10">
+        <p className="mt-6 rounded-xl border border-black/10 p-4 text-sm text-neutral-600 dark:border-white/10 dark:text-neutral-300">
           {notice}
+          {state.matchdayStatus === "closed" ? (
+            <>
+              {" "}
+              <Link className="font-semibold underline underline-offset-2" href={`/matches/${matchId}`}>
+                See match overview
+              </Link>
+              .
+            </>
+          ) : state.matchdayStatus === "draft" || !state.voterInRoster ? (
+            <>
+              {" "}
+              <MessageAdminLink
+                matchId={matchId}
+                reason="I need help with voting access for this match."
+              />
+            </>
+          ) : null}
         </p>
       ) : open && state.voterInRoster ? (
         <VoteForm

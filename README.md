@@ -20,6 +20,55 @@ You can start editing the page by modifying `app/page.tsx`. The page auto-update
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
 
+## Validation
+
+```bash
+npm run test:unit
+npm run build
+```
+
+The unit gate is database-free and covers match phases, time boundaries, money,
+personal moments, recorded audio, reminder scheduling, and export/log formatting.
+It also checks local payment-QR payloads and score-snapshot revision/completeness rules.
+`npm run build` runs this gate before compiling Next.js, including on Vercel.
+The separate `test:scoring` and `test:awards` golden suites require database
+configuration and are deliberately not run by the database-free gate.
+
+Celebration and bummer recordings are bundled in `public/audio/`. Their verified
+CC0 sources and file checksums are listed in [LICENSES.txt](./public/audio/LICENSES.txt).
+
+### Preview integration tests
+
+Apply migrations `0029`–`0032` to the approved Preview branch first. Point the local
+`.env.local` at **Preview, never production**, and ensure Preview has no registered
+push devices. The following PowerShell opt-ins must identify that same approved host:
+
+```powershell
+$env:ALLOW_PREVIEW_DB_TESTS = "1"
+$env:PREVIEW_DATABASE_HOST = "your-approved-preview-host.neon.tech"
+node --use-system-ca --conditions=react-server --import tsx tests\preview-phases.test.mts
+```
+
+The suite creates uniquely named fixture players and an archived test season, checks
+billing concurrency, credit release, checklist changes, reserve-list joins, auto-IN,
+score revisions and sanitized error logging, and removes only its fixtures in `finally`.
+It is deliberately excluded from the build/unit gate.
+
+### Release prerequisites
+
+- Migrations `0029`–`0032` are applied to Preview and production (2026-10-22). Any new
+  environment needs them before running this code.
+  `0032` adds the per-match payment currency (`matches.payment_currency`, default `PLN`).
+- Verify Vercel's daily reminders cron and separate Preview push configuration.
+  Lock notifications are daily, not exact-time.
+- Configure and verify Neon recovery/pre-season snapshots separately. The Diagnostics
+  CSV exports are not a full database backup.
+- Payment QR uses the Polish ZBP field layout (26-digit NRB, zero-padded grosz amount,
+  UTF-8 recipient/reference) documented by
+  [pl-qr-payment](https://github.com/IonBazan/pl-qr-payment).
+  The encoder runs locally and never truncates payment details; manual transfer remains
+  available when the fields do not fit.
+
 ## Learn More
 
 To learn more about Next.js, take a look at the following resources:

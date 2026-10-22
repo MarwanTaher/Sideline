@@ -12,6 +12,11 @@ import {
 } from "@/lib/matchday";
 import { MatchNav } from "../match-nav";
 import { MatchdayConsole } from "./console";
+import { getAvailabilityMatch } from "@/lib/availability";
+import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
+import { getMatchPhase } from "@/lib/match-phase";
+import { MatchPageHeader } from "../match-page-header";
+import { MessageAdminLink } from "@/components/message-admin-link";
 
 export const metadata = {
   title: "Matchday console · Sideline",
@@ -42,6 +47,18 @@ export default async function MatchdayPage({
 
   const match = await getMatchDetail(matchId);
   if (!match) notFound();
+  const [availability, lockEnabled] = await Promise.all([
+    getAvailabilityMatch(matchId),
+    isAvailabilityLockEnabled(),
+  ]);
+  if (!availability) notFound();
+  const phase = getMatchPhase({
+    matchdayStatus: match.matchdayStatus,
+    availabilityOpen: availability.availabilityOpen,
+    kickoffAt: availability.kickoffAt,
+    lockEnabled,
+    hasRoster: match.teams.some((team) => team.players.length > 0),
+  });
 
   const consoleData = await getMatchdayConsole(matchId);
   if (!consoleData) notFound();
@@ -54,25 +71,33 @@ export default async function MatchdayPage({
 
   return (
     <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
-      <Link
-        href={`/matches/${matchId}`}
-        className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
-      >
-        ← Back to match
-      </Link>
-
+      <MatchPageHeader
+        matchId={matchId}
+        dateLabel={`${fmtDate(match.playedOn)} at ${fmtMatchTime(match.matchTime)}`}
+        title="Matchday console"
+        phase={phase}
+      />
       <MatchNav matchId={matchId} isAdmin={isAdmin} canScore={canScore} />
-
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight">Matchday console</h1>
-      <p className="mt-1 text-sm text-neutral-500">
-        {fmtDate(match.playedOn)} at {fmtMatchTime(match.matchTime)} · matchday{" "}
-        {match.matchdayStatus}
-      </p>
+      <p className="text-sm text-neutral-500">Matchday {match.matchdayStatus}</p>
 
       {match.teams.length < 2 ? (
         <p className="mt-6 rounded-xl border border-black/10 p-4 text-sm text-neutral-500 dark:border-white/10">
           Draft at least two teams first — the console rotates rounds between the
           drafted teams.
+          {isAdmin ? (
+            <>
+              {" "}
+              <Link href={`/matches/${matchId}/draft`} className="font-semibold underline underline-offset-2">
+                Open the lineup builder
+              </Link>
+              .
+            </>
+          ) : (
+            <MessageAdminLink
+              matchId={matchId}
+              reason="The matchday console says teams are not ready."
+            />
+          )}
         </p>
       ) : (
         <div className="mt-6">

@@ -10,9 +10,9 @@ import { getPlayerAchievementsLive } from "@/lib/achievements";
 import { getLastMatchdayStatline } from "@/lib/matchday";
 import { getKudos } from "@/lib/kudos";
 import {
-  getAwardsSettings,
-  getPlayerBadgeCounts,
-  getPlayerAwardHistory,
+  getCachedAwardsSettings,
+  getCachedPlayerBadgeCounts,
+  getCachedPlayerAwardHistory,
 } from "@/lib/awards";
 import { Avatar } from "@/components/ui/avatar";
 import { Card } from "@/components/ui/card";
@@ -35,7 +35,7 @@ export const dynamic = "force-dynamic";
  */
 const getCachedProfileBundle = unstable_cache(
   async (pid: number) => {
-    const settings = await getAwardsSettings();
+    const settings = await getCachedAwardsSettings();
     const thresholds = {
       minMatchVotes: settings.matchMinValidVotes,
       minOverallVotes: settings.overallMinValidVotes,
@@ -45,8 +45,8 @@ const getCachedProfileBundle = unstable_cache(
         getPlayerSeason(pid),
         getPlayerRank(pid),
         getPlayerAchievementsLive(pid),
-        getPlayerBadgeCounts(pid, thresholds),
-        getPlayerAwardHistory(pid, {
+        getCachedPlayerBadgeCounts(pid, thresholds),
+        getCachedPlayerAwardHistory(pid, {
           recentMatchLimit: 8,
           minMatchVotes: thresholds.minMatchVotes,
           minOverallVotes: thresholds.minOverallVotes,
@@ -228,6 +228,11 @@ export default async function PublicPlayerProfilePage({
               ))}
             </ul>
           )}
+          {kudos.count > kudos.givers.length ? (
+            <p className="mt-3 text-xs text-neutral-500">
+              Showing the 16 most recent of {kudos.count}.
+            </p>
+          ) : null}
         </SectionCard>
       </div>
 

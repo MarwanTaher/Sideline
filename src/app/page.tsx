@@ -35,6 +35,7 @@ import InstallPrompt from "@/components/install-prompt";
 import { AvailabilityControls } from "./matches/[id]/availability/availability-controls";
 import { StoriesRow } from "@/components/stories-row";
 import { getPlayerPhoto, listActiveStories } from "@/lib/stories";
+import { WelcomeGuide } from "@/components/welcome-guide";
 
 export const dynamic = "force-dynamic";
 
@@ -47,10 +48,14 @@ export default async function Home() {
   }
 
   const { name, role, playerId } = session.user;
-  const isAdmin = await isAdminView(role === "admin" || role === "super");
+  const isAdminP = isAdminView(role === "admin" || role === "super");
+  // Admin-only reads that don't depend on the match start alongside the rest.
+  const statsCountsP = isAdminP.then((a) => (a ? getStatsReviewCounts() : null));
+  const playersAdminP = isAdminP.then((a) => (a ? getPlayersAdminData() : null));
 
-  const [match, rankInfo, movement, voteObligation, lastMatchday, form, season, lockEnabled, stories, myPhoto] =
+  const [isAdmin, match, rankInfo, movement, voteObligation, lastMatchday, form, season, lockEnabled, stories, myPhoto] =
     await Promise.all([
+      isAdminP,
       getHomeMatch(playerId ?? null),
       playerId != null ? getPlayerRank(playerId) : Promise.resolve(null),
       playerId != null ? getLeaderboardMovement() : Promise.resolve(null),
@@ -84,8 +89,8 @@ export default async function Home() {
       seasonVisible && season.signupOpen ? countActiveSubscribers(season.id) : Promise.resolve(0),
       seasonVisible && playerId != null ? listPlayerInvoices(season.id, playerId) : Promise.resolve([]),
       isAdmin ? getHomeAdminCounts(match?.id ?? null, seasonVisible ? season.id : null) : Promise.resolve(null),
-      isAdmin ? getStatsReviewCounts() : Promise.resolve(null),
-      isAdmin ? getPlayersAdminData() : Promise.resolve(null),
+      statsCountsP,
+      playersAdminP,
     ]);
 
   // ── To do: at most three things the player actually has to act on. ──
@@ -147,6 +152,7 @@ export default async function Home() {
           match={match ? { id: match.id, label: matchLabel(match.playedOn) } : null}
         />
       ) : null}
+      {playerId != null ? <WelcomeGuide /> : null}
       <section className="relative overflow-hidden rounded-3xl px-5 py-4 text-white shadow-sm">
         <Image
           src="/home-hero.jpg"
@@ -266,7 +272,7 @@ export default async function Home() {
             ) : null}
             {lastMatchday && lastMatchday.rounds > 0 ? (
               <Link
-                href={`/matches/${lastMatchday.matchId}/recap`}
+                href={`/matches/${lastMatchday.matchId}/recap?back=/`}
                 className="mt-3 flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-3 py-2 text-sm font-semibold text-white transition hover:opacity-90"
               >
                 ▶ Watch your recap

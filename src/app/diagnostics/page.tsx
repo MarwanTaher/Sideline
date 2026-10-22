@@ -43,6 +43,33 @@ export default async function DiagnosticsPage() {
         A read-only health check of the data the scoring engine depends on.
       </p>
 
+      <section className="mt-6 rounded-2xl border border-black/[0.06] p-4 dark:border-white/10">
+        <h2 className="text-sm font-semibold">Admin data exports</h2>
+        <p className="mt-1 text-xs text-neutral-500">
+          Download CSVs for matches, current scores, season invoices, or the fund ledger.
+          These exports do not include login credentials or access tokens.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {[
+            ["matches", "Matches"],
+            ["scores", "Scores"],
+            ["invoices", "Season invoices"],
+            ["fund-ledger", "Fund ledger"],
+          ].map(([dataset, label]) => (
+            <a
+              key={dataset}
+              href={`/api/admin/export/${dataset}`}
+              className="inline-flex rounded-xl border border-black/10 px-3 py-2 text-sm font-medium transition hover:bg-neutral-50 dark:border-white/10 dark:hover:bg-neutral-800"
+            >
+              Export {label}
+            </a>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-neutral-500">
+          Full database backups still require a separately scheduled Neon branch snapshot.
+        </p>
+      </section>
+
       {d.warnings.length > 0 ? (
         <ul className="mt-5 space-y-2">
           {d.warnings.map((w, i) => (
@@ -113,6 +140,34 @@ export default async function DiagnosticsPage() {
         Stat rows returned by the engine query: <span className="font-semibold">{d.engineStatRows}</span>.
         Total goals in those rows: {d.engineGoalsTotal} | Total assists: {d.engineAssistsTotal}.
       </p>
+
+      <section className="mt-8">
+        <h2 className="text-lg font-semibold tracking-tight">Recent server errors</h2>
+        {!d.errorLogAvailable ? (
+          <p className="mt-2 text-sm text-neutral-500">
+            Error logging is unavailable until migration 0030 is deployed.
+          </p>
+        ) : d.latestErrors.length === 0 ? (
+          <p className="mt-2 text-sm text-neutral-500">No server errors have been recorded.</p>
+        ) : (
+          <div className="mt-3 space-y-2">
+            {d.latestErrors.map((entry) => (
+              <article
+                key={entry.id}
+                className="rounded-xl border border-black/[0.06] p-3 text-sm dark:border-white/10"
+              >
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <span className="font-medium">{entry.errorName} · {entry.source}</span>
+                  <time className="text-xs text-neutral-500">{entry.occurredAt}</time>
+                </div>
+                <p className="mt-1 break-words text-xs text-neutral-600 dark:text-neutral-300">
+                  {entry.message}
+                </p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
     </main>
   );
 }

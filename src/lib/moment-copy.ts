@@ -20,6 +20,8 @@ export type MomentKind =
   | "bummer_winless"
   | "bummer_rating_drop"
   | "bummer_scoreless"
+  | "bummer_losing_record"
+  | "bummer_no_contribution"
   | "bummer_own_goal";
 
 export type Moment = {
@@ -62,6 +64,8 @@ export const MOMENT_PRIORITY: Record<MomentKind, number> = {
   bummer_winless: 10,
   bummer_rating_drop: 10,
   bummer_scoreless: 10,
+  bummer_losing_record: 10,
+  bummer_no_contribution: 10,
   bummer_own_goal: 10,
 };
 
@@ -127,6 +131,18 @@ export const MOMENT_KIND_INFO: Record<MomentKind, KindInfo> = {
   bummer_winless: { label: "Winless night", group: "bummer", placeholders: ["name"], sample: {} },
   bummer_rating_drop: { label: "Rating drop", group: "bummer", placeholders: ["name", "rating"], sample: { newFinal: 6.4 } },
   bummer_scoreless: { label: "Goal drought", group: "bummer", placeholders: ["name"], sample: {} },
+  bummer_losing_record: {
+    label: "More losses than wins",
+    group: "bummer",
+    placeholders: ["name", "w", "d", "l"],
+    sample: { w: 1, d: 1, l: 3 },
+  },
+  bummer_no_contribution: {
+    label: "No goals or assists (MID/FWD)",
+    group: "bummer",
+    placeholders: ["name"],
+    sample: {},
+  },
   bummer_own_goal: { label: "Own goal", group: "bummer", placeholders: ["name"], sample: {} },
 };
 
@@ -155,6 +171,7 @@ export function momentVars(m: Moment, name?: string): Record<string, string> {
     ),
     w: String(num(p.w)),
     d: String(num(p.d)),
+    l: String(num(p.l)),
     rating: num(p.newFinal).toFixed(1),
     badges: Array.isArray(p.badges) ? (p.badges as string[]).join(" · ") : "",
     from: joinNames(p.from) || "A teammate",
@@ -389,6 +406,29 @@ export function defaultMomentView(m: Moment): MomentView {
         ),
         tone: "bummer",
         footnote: str(p.silverLining) || undefined,
+      };
+    case "bummer_losing_record":
+      return {
+        emoji: "🫣",
+        title: pick(["The comeback is loading", "A rebuilding matchday"], m.id),
+        body: pick([
+          `${num(p.w)}W ${num(p.d)}D ${num(p.l)}L. Your team collected more plot twists than wins.`,
+          `${num(p.l)} losses, ${num(p.w)} wins. The next training montage starts now.`,
+        ], m.id),
+        tone: "bummer",
+        footnote: str(p.silverLining) || "Fresh teams, fresh start next week.",
+      };
+    case "bummer_no_contribution":
+      return {
+        emoji: "🕵️",
+        title: pick(["Stealth mode today", "Saving it for next week"], m.id),
+        body: pick([
+          "No goals or assists this matchday. We checked both columns, just to be sure.",
+          "The scoresheet missed your name today. Must be saving the highlight reel for next week.",
+          "Zero goals, zero assists. Your off-the-ball work is demanding its own stat.",
+        ], m.id),
+        tone: "bummer",
+        footnote: str(p.silverLining) || "Runs, passes and effort still count. Next week is a fresh chance.",
       };
     case "bummer_own_goal":
       return {

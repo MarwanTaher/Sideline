@@ -17,10 +17,12 @@ export function RatingSlider({
   value,
   onChange,
   name,
+  label = "Rating",
 }: {
   value: number;
   onChange: (v: number) => void;
   name?: string;
+  label?: string;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -49,7 +51,7 @@ export function RatingSlider({
       <div
         ref={trackRef}
         role="slider"
-        aria-label="Rating"
+        aria-label={label}
         aria-valuemin={0}
         aria-valuemax={10}
         aria-valuenow={value}
@@ -75,7 +77,7 @@ export function RatingSlider({
             onChange(Math.max(0, value - 1));
           }
         }}
-        className="relative h-6 cursor-pointer touch-none focus-visible:outline-none"
+        className="relative h-11 cursor-pointer touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-neutral-900"
       >
         <div className="absolute inset-x-0 top-1/2 h-2 -translate-y-1/2 rounded-full bg-neutral-200 dark:bg-neutral-800" />
         <div

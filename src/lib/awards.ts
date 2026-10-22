@@ -1,4 +1,6 @@
+import { unstable_cache } from "next/cache";
 import { sqlClient } from "./db";
+import { SCORES_CACHE_TAG } from "./leaderboard";
 
 /**
  * Direct TypeScript port of the read/compute path of `src/awards.py`.
@@ -371,6 +373,18 @@ export async function getAwards(
   };
 }
 
+/**
+ * Cached awards for the /awards page. Awards only change when scores do
+ * (votes, stats, roster, matchday close) or an admin override is saved — all
+ * of which call revalidateScores(). Arguments are part of the cache key.
+ */
+export const getCachedAwards = unstable_cache(
+  (scopeType: "match" | "overall", matchId: number | null, thresholds: { minMatchVotes?: number; minOverallVotes?: number }) =>
+    getAwards(scopeType, matchId, thresholds),
+  ["awards-v1"],
+  { revalidate: 600, tags: [SCORES_CACHE_TAG] },
+);
+
 export interface AwardsSettings {
   matchMinValidVotes: number;
   overallMinValidVotes: number;
@@ -396,6 +410,12 @@ export async function getAwardsSettings(): Promise<AwardsSettings> {
   }
   return settings;
 }
+
+export const getCachedAwardsSettings = unstable_cache(
+  getAwardsSettings,
+  ["awards-settings-v1"],
+  { revalidate: 600, tags: [SCORES_CACHE_TAG] },
+);
 
 export interface AwardMatch {
   id: number;
@@ -446,6 +466,14 @@ export async function getPlayerBadgeCounts(
 
   return counts;
 }
+
+/** Cached badge counts (the heaviest awards query); same invalidation as getCachedAwards. */
+export const getCachedPlayerBadgeCounts = unstable_cache(
+  (playerId: number, thresholds: { minMatchVotes?: number; minOverallVotes?: number }) =>
+    getPlayerBadgeCounts(playerId, thresholds),
+  ["badge-counts-v1"],
+  { revalidate: 600, tags: [SCORES_CACHE_TAG] },
+);
 
 type MaxRow = {
   match_id: number | string;
@@ -638,9 +666,29 @@ export async function getPlayerAwardHistory(
   }: { recentMatchLimit?: number; minMatchVotes?: number; minOverallVotes?: number } = {},
 ): Promise<AwardHistoryEntry[]> {
   const pid = Math.trunc(playerId);
-  const history: AwardHistoryEntry[] = [];
+  const thresholds = { minMatchVotes, minOverallVotes };
+  const [overall, matchRows] = await Promise.all([
+    getCachedAwards("overall", null, thresholds),
+    sqlClient.query(
+      `
+      SELECT m.id AS match_id, m.played_on
+      FROM match_players mp
+      JOIN matches m ON m.id = mp.match_id
+      WHERE mp.player_id = $1
+      ORDER BY m.played_on DESC, m.id DESC
+      LIMIT $2
+      `,
+      [pid, Math.trunc(recentMatchLimit)],
+    ) as unknown as Promise<Array<{ match_id: number }>>,
+  ]);
+  const recentMatches = matchRows.map((r) => Number(r.match_id));
+  const matchAwards = await Promise.all(
+    recentMatches.map((matchId) =>
+      getCachedAwards("match", matchId, thresholds),
+    ),
+  );
 
-  const overall = await getAwards("overall", null, { minMatchVotes, minOverallVotes });
+  const history: AwardHistoryEntry[] = [];
   for (const awardType of AWARD_TYPES) {
     const block = overall.awards[awardType];
     if (block.winners.some((w) => Number(w.player_id) === pid)) {
@@ -653,21 +701,8 @@ export async function getPlayerAwardHistory(
     }
   }
 
-  const matchRows = (await sqlClient.query(
-    `
-    SELECT m.id AS match_id, m.played_on
-    FROM match_players mp
-    JOIN matches m ON m.id = mp.match_id
-    WHERE mp.player_id = $1
-    ORDER BY m.played_on DESC, m.id DESC
-    LIMIT $2
-    `,
-    [pid, Math.trunc(recentMatchLimit)],
-  )) as Array<{ match_id: number }>;
-
-  for (const r of matchRows) {
-    const mid = Number(r.match_id);
-    const awards = await getAwards("match", mid, { minMatchVotes, minOverallVotes });
+  for (const [index, awards] of matchAwards.entries()) {
+    const mid = recentMatches[index];
     for (const awardType of AWARD_TYPES) {
       const block = awards.awards[awardType];
       if (block.winners.some((w) => Number(w.player_id) === pid)) {
@@ -683,6 +718,19 @@ export async function getPlayerAwardHistory(
 
   return history;
 }
+
+export const getCachedPlayerAwardHistory = unstable_cache(
+  (
+    playerId: number,
+    options: {
+      recentMatchLimit?: number;
+      minMatchVotes?: number;
+      minOverallVotes?: number;
+    },
+  ) => getPlayerAwardHistory(playerId, options),
+  ["player-award-history-v1"],
+  { revalidate: 600, tags: [SCORES_CACHE_TAG] },
+);
 
 export interface ActivePlayer {
   id: number;

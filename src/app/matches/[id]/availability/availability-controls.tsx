@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useActionState } from "react";
+import { useEffect, useActionState, useOptimistic } from "react";
 import { useRouter } from "next/navigation";
 import { setAvailabilityAction, type AvailabilityActionState } from "./actions";
 import type { AvailabilityStatus } from "@/lib/availability";
@@ -9,6 +9,7 @@ import { FeedbackMessage } from "@/components/ui/banner";
 import { CheckIcon, XIcon } from "@/components/ui/icons";
 import { useTapSpam } from "@/components/use-tap-spam";
 import { TapSmoke } from "@/components/tap-smoke";
+import { MessageAdminLink } from "@/components/message-admin-link";
 
 const INITIAL: AvailabilityActionState = { ok: false, message: "" };
 
@@ -33,6 +34,25 @@ function buzz(e: React.MouseEvent) {
   }
 }
 
+/**
+ * Squash-and-spring on every press, including the already-selected (disabled)
+ * button, so the control always feels pushed. Web Animations restart cleanly on
+ * rapid taps without re-rendering, which would swallow the form submit.
+ */
+function bounce(el: Element | null) {
+  if (!(el instanceof HTMLElement) || typeof el.animate !== "function") return;
+  if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  el.animate(
+    [
+      { transform: "scale(1)" },
+      { transform: "scale(0.9)", offset: 0.3 },
+      { transform: "scale(1.05)", offset: 0.65 },
+      { transform: "scale(1)" },
+    ],
+    { duration: 320, easing: "ease-out" },
+  );
+}
+
 export function AvailabilityControls({
   matchId,
   currentStatus,
@@ -42,7 +62,19 @@ export function AvailabilityControls({
   isSubscriber = false,
 }: AvailabilityControlsProps) {
   const router = useRouter();
-  const [state, formAction, pending] = useActionState(setAvailabilityAction, INITIAL);
+  // Flip the button the instant it's tapped; React drops the optimistic value
+  // when the action finishes (server rejected → back to the real status).
+  const [shownStatus, setShownStatus] = useOptimistic<AvailabilityStatus, AvailabilityStatus>(
+    currentStatus,
+    (_cur, next) => next,
+  );
+  const [state, formAction] = useActionState(
+    async (prev: AvailabilityActionState, fd: FormData) => {
+      setShownStatus(fd.get("status") === "in" ? "in" : "out");
+      return setAvailabilityAction(prev, fd);
+    },
+    INITIAL,
+  );
   const { onTap, puffs, smoking } = useTapSpam();
 
   useEffect(() => {
@@ -50,30 +82,35 @@ export function AvailabilityControls({
   }, [state, router]);
 
   const closed = !open;
-  const disabled = pending || locked || closed;
+  const disabled = locked || closed;
   // One short line, only when there is something the buttons can't say.
   const note = closed
     ? "Sign-up is closed."
     : locked
-      ? "🔒 Locked within 24h of kickoff. Ask an admin to change it."
+      ? "Locked within 24 hours of kickoff."
       : msToLock != null && msToLock > 0 && msToLock <= LOCK_WARNING_MS
         ? `⏳ Changes close in ${formatDuration(msToLock)}.`
-        : isSubscriber && currentStatus !== "out"
+        : isSubscriber && shownStatus !== "out"
           ? "★ Season place: going OUT frees your spot, the fee still applies."
           : null;
 
   const btn = (value: "in" | "out") => {
-    const selected = currentStatus === value;
+    const selected = shownStatus === value;
     const isIn = value === "in";
     return (
-      <form action={formAction} className="flex-1">
+      <form
+        action={formAction}
+        className="flex-1"
+        onPointerDown={(e) => bounce(e.currentTarget.querySelector("button"))}
+      >
         <input type="hidden" name="matchId" value={matchId} />
         <input type="hidden" name="status" value={value} />
         <button
           type="submit"
           disabled={disabled || selected}
           aria-pressed={selected}
-          className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-base font-bold transition active:scale-[0.97] disabled:pointer-events-none ${
+          aria-describedby={disabled && (closed || locked) ? "availability-blocked-note" : undefined}
+          className={`flex w-full items-center justify-center gap-2 rounded-xl px-3 py-3 text-base font-bold transition-colors disabled:pointer-events-none ${
             selected
               ? isIn
                 ? "bg-emerald-600 text-white shadow-sm"
@@ -83,7 +120,7 @@ export function AvailabilityControls({
                 }`
           }`}
         >
-          <span key={`${value}-${currentStatus}`} className={selected ? "tap-pop" : ""}>
+          <span key={`${value}-${shownStatus}`} className={selected ? "tap-pop" : ""}>
             {isIn ? <CheckIcon className="h-5 w-5" /> : <XIcon className="h-5 w-5" />}
           </span>
           {isIn ? "IN" : "OUT"}
@@ -94,12 +131,12 @@ export function AvailabilityControls({
 
   return (
     <div>
-      {currentStatus === "pending" && !closed ? (
+      {shownStatus === "pending" && !closed ? (
         <p className="mb-2 text-sm font-semibold">Can you play?</p>
       ) : null}
       <div
         className={`relative flex gap-1 rounded-2xl border bg-white p-1 shadow-sm dark:bg-neutral-900 ${smoking ? "tap-shake" : ""} ${
-          currentStatus === "pending" && !closed
+          shownStatus === "pending" && !closed
             ? "border-amber-400/60"
             : "border-black/[0.06] dark:border-white/10"
         }`}
@@ -111,7 +148,20 @@ export function AvailabilityControls({
         {btn("out")}
         <TapSmoke puffs={puffs} smoking={smoking} />
       </div>
-      {note ? <p className="mt-2 px-1 text-xs text-neutral-500">{note}</p> : null}
+      {note ? (
+        <p
+          id={closed || locked ? "availability-blocked-note" : undefined}
+          className="mt-2 px-1 text-xs text-neutral-600 dark:text-neutral-300"
+        >
+          {closed ? "Sign-up is closed." : note}
+          {closed || locked ? (
+            <MessageAdminLink
+              matchId={matchId}
+              reason={closed ? "I need help with the closed sign-up." : "I need to change my availability after the lock."}
+            />
+          ) : null}
+        </p>
+      ) : null}
       {!state.ok && state.message ? (
         <FeedbackMessage ok={false} message={state.message} className="mt-2" />
       ) : null}

@@ -1,9 +1,11 @@
 import { sqlClient } from "@/lib/db";
 import { notify } from "@/lib/push";
-import { applySubscribersToMatch } from "@/lib/season-subscriptions";
 import { deleteGuestsForMatch } from "@/lib/guests";
 import { syncAchievements } from "@/lib/achievements";
 import { generateMatchMoments } from "@/lib/moments";
+import { getMatchDigest } from "@/lib/match-digest";
+import { digestPushBody } from "@/lib/digest-push";
+import { logAppError } from "@/lib/error-log";
 import {
   captureScoreSnapshot,
   getRatingChangesForMatch,
@@ -160,34 +162,43 @@ export async function getMatchAdmin(matchId: number): Promise<MatchAdmin | null>
  * Returns the new match id.
  */
 export async function createMatch(input: CreateMatchInput): Promise<number> {
-  const raw = await sqlClient.query(
-    `INSERT INTO matches
-       (played_on, match_time, kickoff_at, num_teams, team_size, total_payment, stats_scoring_enabled, status,
-        location_name, location_lat, location_lng, venue, season_id)
-     VALUES ($1, $2, ${KICKOFF_FROM_LOCAL}, $3, 0, 0, $4, 'open', $5, $6, $7, $8, $9)
-     RETURNING id`,
-    [
-      input.playedOn,
-      normalizeMatchTime(input.matchTime),
-      input.numTeams,
-      input.statsScoringEnabled ? 1 : 0,
-      input.locationName?.trim() || null,
-      input.locationLat ?? null,
-      input.locationLng ?? null,
-      input.venue ?? null,
-      input.seasonId ?? null,
-    ],
-  );
-  const rows = raw as { id: number }[];
+  const [rows] = (await sqlClient.transaction([
+    sqlClient.query(
+      `WITH created AS (
+         INSERT INTO matches
+           (played_on, match_time, kickoff_at, num_teams, team_size, total_payment,
+            stats_scoring_enabled, status, location_name, location_lat, location_lng,
+            venue, season_id, payment_currency)
+         VALUES ($1, $2, ${KICKOFF_FROM_LOCAL}, $3, 0, 0, $4, 'open',
+                 $5, $6, $7, $8, $9,
+                 COALESCE((SELECT payment_currency FROM matches ORDER BY id DESC LIMIT 1), 'PLN'))
+         RETURNING id
+       ),
+       auto_in AS (
+         INSERT INTO match_availability (match_id, player_id, status, updated_at)
+         SELECT created.id, ss.player_id, 'in', CURRENT_TIMESTAMP
+           FROM created
+           JOIN season_subscriptions ss ON ss.season_id = $9 AND ss.status = 'active'
+           JOIN seasons s ON s.id = ss.season_id AND s.subscription_enabled = true
+          WHERE $9::int IS NOT NULL
+         ON CONFLICT (match_id, player_id) DO NOTHING
+         RETURNING player_id
+       )
+       SELECT id FROM created`,
+      [
+        input.playedOn,
+        normalizeMatchTime(input.matchTime),
+        input.numTeams,
+        input.statsScoringEnabled ? 1 : 0,
+        input.locationName?.trim() || null,
+        input.locationLat ?? null,
+        input.locationLng ?? null,
+        input.venue ?? null,
+        input.seasonId ?? null,
+      ],
+    ),
+  ]));
   const matchId = Number(rows[0].id);
-
-  // Core subscribers are committed for every match of the contract period, so
-  // they start IN rather than pending.
-  try {
-    await applySubscribersToMatch(matchId);
-  } catch {
-    // A subscription problem must never block match creation.
-  }
 
   // Ask everyone to mark their availability for the new match. Never let a
   // push failure block match creation.
@@ -313,10 +324,13 @@ export async function setMatchdayStatus(
       );
     }
   }
-  await sqlClient.query(`UPDATE matches SET matchday_status = $1 WHERE id = $2`, [
-    status,
-    matchId,
-  ]);
+  const updated = await sqlClient.query(
+    `UPDATE matches SET matchday_status = $1
+      WHERE id = $2 AND matchday_status IS DISTINCT FROM $1
+      RETURNING id`,
+    [status, matchId],
+  );
+  if (updated.length === 0) return;
 
   if (status === "closed") {
     // Guests are temporary — remove them when the matchday is closed.
@@ -326,8 +340,8 @@ export async function setMatchdayStatus(
     // block the status change.
     try {
       await sendMatchdayCloseNotifications(matchId);
-    } catch {
-      // ignore snapshot/push errors
+    } catch (err) {
+      await logAppError(err, "matches.close-notifications");
     }
   }
 
@@ -370,13 +384,19 @@ export async function deleteMatch(matchId: number): Promise<void> {
  */
 async function sendMatchdayCloseNotifications(matchId: number): Promise<void> {
   // Capture the leaderboard first so rating-change diffing has fresh data.
-  await captureScoreSnapshot(snapshotKeyForMatch(matchId));
+  if (
+    !(await captureScoreSnapshot(snapshotKeyForMatch(matchId))) &&
+    !(await captureScoreSnapshot(snapshotKeyForMatch(matchId)))
+  ) {
+    throw new Error("Scoring inputs changed during match close; score snapshot could not be captured.");
+  }
+  const digest = await getMatchDigest(matchId);
 
   // "Results are in" — one broadcast per close, gated by the per-type toggle.
   await notify("results_in", {
     title: "Results are in \u26bd",
-    body: "Ratings are updated for the latest match \u2014 see how you did.",
-    url: "/leaderboard",
+    body: digestPushBody(digest),
+    url: `/matches/${matchId}/recap`,
     tag: `match-${matchId}-results`,
   });
 
@@ -422,6 +442,7 @@ async function sendMatchdayCloseNotifications(matchId: number): Promise<void> {
     });
   } catch (err) {
     console.error("generateMatchMoments failed", err);
+    await logAppError(err, "matches.moments");
   }
 
   const byPlayer = new Map<number, string[]>();

@@ -1,6 +1,7 @@
 import { sqlClient } from "@/lib/db";
+import { getRecentFormForPlayers } from "@/lib/home";
 import { parseTeamColors, type KitKey } from "./field-view";
-import { getPlayerScores } from "@/lib/scoring";
+import { getCachedPlayerScores } from "@/lib/leaderboard";
 import {
   listGuests,
   updateGuestTeam,
@@ -35,6 +36,7 @@ export interface DraftPlayer {
   teamNo: number | null;
   availStatus: AvailabilityStatus;
   score: number;
+  recentForm?: Array<"W" | "D" | "L">;
   photoUrl?: string | null;
   isGuest?: boolean;
   hostName?: string;
@@ -189,7 +191,11 @@ export async function getDraftState(matchId: number): Promise<DraftState | null>
   );
   const candidateRows = candidatesRaw as CandidateRow[];
 
-  const scores = await getPlayerScores();
+  const [scores, recentFormByPlayer, guestsRaw] = await Promise.all([
+    getCachedPlayerScores(),
+    getRecentFormForPlayers(candidateRows.map((r) => Number(r.player_id))),
+    listGuests(matchId),
+  ]);
 
   const players: DraftPlayer[] = candidateRows.map((r) => ({
     playerId: Number(r.player_id),
@@ -199,11 +205,12 @@ export async function getDraftState(matchId: number): Promise<DraftState | null>
     teamNo: r.team_no == null ? null : Number(r.team_no),
     availStatus: normAvail(r.avail_status),
     score: scores[Number(r.player_id)]?.final ?? 50,
+    recentForm: recentFormByPlayer[Number(r.player_id)] ?? [],
     photoUrl: r.photo_url ?? null,
   }));
 
   // Append approved guests as draftable entities using negative ids.
-  const guests = (await listGuests(matchId)).filter((g) => g.status === "approved");
+  const guests = guestsRaw.filter((g) => g.status === "approved");
   for (const g of guests) {
     players.push({
       playerId: guestToDraftId(g.id),

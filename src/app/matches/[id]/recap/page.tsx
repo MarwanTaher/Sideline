@@ -32,12 +32,26 @@ function Stat({ value, label }: { value: ReactNode; label: string }) {
   );
 }
 
-export default async function RecapPage({ params }: { params: Promise<{ id: string }> }) {
+/** Where closing the recap returns to; only same-site paths, never another host. */
+function safeBack(value: string | string[] | undefined, fallback: string): string {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw || !raw.startsWith("/") || raw.startsWith("//") || raw.includes("\\")) return fallback;
+  return raw;
+}
+
+export default async function RecapPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ back?: string | string[] }>;
+}) {
   const session = await auth();
   if (!session?.user) redirect("/login");
   const { id } = await params;
   const matchId = Number(id);
   if (!Number.isFinite(matchId)) notFound();
+  const closeHref = safeBack((await searchParams).back, `/matches/${matchId}`);
 
   const playerId = session.user.playerId != null ? Number(session.user.playerId) : null;
   const recap = await getMatchRecap(matchId, playerId);
@@ -50,8 +64,8 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
   if (!digest.hasResult) {
     return (
       <main className="mx-auto w-full max-w-md flex-1 px-4 py-10">
-        <Link href={`/matches/${matchId}`} className="text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">
-          ← Back to match
+        <Link href={closeHref} className="text-sm text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">
+          ← Back
         </Link>
         <p className="mt-6 text-sm text-neutral-500">The recap appears once the matchday is closed.</p>
       </main>
@@ -190,7 +204,7 @@ export default async function RecapPage({ params }: { params: Promise<{ id: stri
   return (
     <main className="flex-1">
       <h1 className="sr-only">Matchday recap</h1>
-      <StoryDeck closeHref={`/matches/${matchId}`}>{cards}</StoryDeck>
+      <StoryDeck closeHref={closeHref}>{cards}</StoryDeck>
     </main>
   );
 }

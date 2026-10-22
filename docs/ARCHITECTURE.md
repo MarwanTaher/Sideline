@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Scope | The `football-web` Next.js application (production: Vercel `main`, staging: `dev`) |
-| Based on | `main` @ `a4342eb`, migrations `0000`–`0023` |
+| Based on | Baseline `main` @ `a4342eb`; updated for local Phase 3–5 code through migration `0031` (Preview verified, not production-deployed) |
 | Related | [REQUIREMENTS.md](./REQUIREMENTS.md) · [IMPROVEMENTS.md](./IMPROVEMENTS.md) · [../design/DESIGN_SYSTEM.md](../design/DESIGN_SYSTEM.md) |
 
 ---
@@ -71,14 +71,15 @@ flowchart TB
   dev -->|preview deploy| VP[Vercel Preview]
   main -->|production deploy| VPROD[Vercel Production<br/>Serverless + Edge middleware]
   VPROD --> NEON[(Neon Postgres<br/>production branch)]
-  VP --> NEON
+  VP --> PREVIEWDB[(Neon Postgres<br/>isolated Preview branch)]
   VPROD --> BLOB[(Vercel Blob)]
   CRON[Vercel Cron 0 17 * * *] --> VPROD
   ENV[[Env vars:<br/>DATABASE_URL, AUTH_SECRET,<br/>VAPID keys, CRON_SECRET,<br/>BLOB token]] -.-> VPROD
 ```
 
 Notes
-- Preview and production currently share **one** Neon database (see IMPROVEMENTS P-7).
+- Preview uses a separate Neon branch and separate push configuration. Local migration/test
+  writes for this batch were guarded against the explicitly approved Preview hostname.
 - Migrations are hand-written SQL in `drizzle/00xx_*.sql`, applied manually to Neon before the
   code that needs them is deployed.
 
@@ -341,10 +342,8 @@ sequenceDiagram
 
   Ad->>A: date, time, teams, type = Season | Normal
   A->>A: kickoff_at = toInstant(date, time, Europe/Warsaw)
-  A->>DB: INSERT matches (season_id = chosen season | NULL)
-  alt Season match
-    A->>DB: INSERT match_availability 'in' for active subscribers (ON CONFLICT DO NOTHING)
-  end
+  A->>DB: One transaction / CTE: INSERT match + subscriber auto-IN (season only)
+  DB-->>A: commit both writes or roll back both
   A->>Pu: "New match" notification
 ```
 
@@ -361,8 +360,8 @@ sequenceDiagram
   B->>DB: count season Sundays in month, active seats, approved unapplied MultiSport scans
   B->>B: gross = day_rate × playing_days / split_between (grosz)
   B->>B: charged = CEIL(gross / 100) × 100, payable = charged − MultiSport credit
-  B->>DB: INSERT season_invoices (snapshot columns) ON CONFLICT (season, player, period) DO NOTHING
-  B->>DB: set multisport_scans.applied_invoice_id
+  B->>DB: Transaction: lock eligible scans FOR UPDATE, INSERT invoices, allocate locked scans
+  DB-->>B: commit invoices + credits together (duplicate invoices do not consume credit)
   Pl->>DB: view invoice, due countdown (SQL, Warsaw end-of-day)
   Pl->>DB: declare "sent"
   Ad->>DB: confirm paid
@@ -416,9 +415,77 @@ flowchart LR
   RG[round_goals] --> RES[results W/D/L]
   PS --> F[final = w_peer·peer + w_stat·stat]
   SC --> F
-  F --> LB[leaderboard<br/>unstable_cache tag 'scores']
+  F --> LB[leaderboard<br/>exact-revision snapshot or revision-keyed cache]
   F --> DR[draft board ratings]
 ```
+
+### 7.8 Personal moments and recorded audio
+
+```mermaid
+flowchart LR
+  CLOSE[Matchday closed] --> FACTS[Recorded stats + completed rounds]
+  FACTS --> POSITIVE[Generate celebrations]
+  FACTS --> GUARD{Opted in, no celebration,<br/>no bummer in 14 days?}
+  GUARD -- yes --> RULES[Pure matchdayBummer rules]
+  POSITIVE --> STORE[(player_moments<br/>unique player/kind/match)]
+  RULES --> STORE
+  STORE --> GATE[Authenticated player's unseen moments]
+  GATE --> CARD[MomentsOverlay]
+  PREVIEW[Admin Play preview<br/>no writes] --> CARD
+  CARD --> SOUND[Uploaded sound from Vercel Blob<br/>or locally bundled CC0 MP3]
+  SOUND --> AUTOPLAY{Playback allowed?}
+  AUTOPLAY -- no --> TAP[Tap to play sound]
+  CARD --> STOP[Dismiss/change: stop audio]
+```
+
+`bummer-rules.ts` is client-safe and DB-free. Zero-contribution checks require known stats,
+a completed round and a matchday MID/FWD assignment; preferred positions are not a substitute
+because players rotate. Loss-record checks compare mini-match wins and losses, not a season rank.
+`moment-copy.ts` contains default copy, admin-editable kind metadata and preview payloads.
+All bummer kinds share the opt-out and cooldown.
+
+`silly-sounds.ts` plays the super-admin's uploaded celebration/bummer sounds (Vercel Blob URLs
+listed in `app_settings`, passed to the overlay by `MomentsGate`); a group without uploads falls
+back to the recorded applause/cheers/laughter in `public/audio/`, whose source pages, CC0 licenses
+and SHA-256 checksums are recorded in `public/audio/LICENSES.txt`. Informational moments are
+silent. Audio is requested only on playback and is capped at 8 seconds. The separate tap-spam
+easter egg reuses a single voice per tap (custom upload or synthesized fart) so rapid taps never
+overlap. The overlay traps keyboard
+focus, supports Escape and respects reduced-motion preferences for haptics/animations.
+
+### 7.9 Revision-stamped scores and operational safeguards
+
+```mermaid
+flowchart TD
+  WRITE[Scoring input mutation] --> TRIGGER[Postgres trigger advances revision]
+  CLOSE[Close matchday and voting] --> COMPUTE[Compute scores between two revision reads]
+  COMPUTE --> STABLE{Revision unchanged?}
+  STABLE -- no --> RETRY[Bounded retry, then explicit logged failure]
+  STABLE -- yes --> TX[Atomic transaction: score rows + manifest]
+  TX --> STORE[(Snapshot key, revision, model, player count)]
+  READ[Leaderboard / draft / profile GET] --> CHECK{Complete snapshot at exact revision<br/>and non-time-dependent model?}
+  STORE --> CHECK
+  TRIGGER --> CHECK
+  CHECK -- yes --> REUSE[Reuse payload]
+  CHECK -- no --> CURRENT[Compute current scores, cached by revision]
+```
+
+Revision triggers cover `players`, `matches`, `match_players`, `votes`, `stats`,
+`player_stats_submissions`, and `scoring_*` settings. A snapshot contains the score payload
+needed by hot reads as well as historical rank data. Missing/malformed rows or a changed model
+reject reuse. Time-decayed scoring is always computed from current time. Read paths do not write.
+
+The release checklist stores explicit confirmations on the season. Concurrent invoice periods
+lock the same MultiSport scan rows before summing/allocating, preventing double-credit use.
+Reserve-list updates serialize through an atomic settings-row update.
+Payment QR generation lazily imports a local encoder in the browser; validated Polish account,
+amount and reference never leave the app for a QR service. Oversized/unsupported fields retain
+the complete manual-transfer path rather than truncating details.
+
+Server-action/cron failures can persist a sanitized record in `app_errors`; Diagnostics displays
+recent entries. Admin CSV endpoints additionally require an unlocked Diagnostics permission and
+use private/no-store responses. These exports omit authentication/push secrets and are not full
+backups. Neon recovery/pre-season snapshots require separate operational configuration.
 
 ## 8. Cross-cutting concerns
 

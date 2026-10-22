@@ -246,3 +246,72 @@ export async function getRecentForm(
     return { matchId: Number(r.match_id), result: w > l ? "W" : w < l ? "L" : "D" };
   });
 }
+
+/** Recent form for a whole roster, read with one round-trip instead of N calls. */
+export async function getRecentFormForPlayers(
+  playerIds: number[],
+  limit = 3,
+): Promise<Record<number, Array<"W" | "D" | "L">>> {
+  const result: Record<number, Array<"W" | "D" | "L">> = {};
+  const ids = [...new Set(playerIds.map(Number).filter(Number.isInteger))];
+  for (const id of ids) result[id] = [];
+  if (ids.length === 0) return result;
+
+  const rows = (await sqlClient.query(
+    `
+    WITH ranked_matches AS (
+      SELECT mp.player_id, m.id AS match_id, m.played_on, mp.team_no,
+             ROW_NUMBER() OVER (
+               PARTITION BY mp.player_id
+               ORDER BY m.played_on DESC, m.id DESC
+             ) AS match_rank
+        FROM match_players mp
+        JOIN matches m ON m.id = mp.match_id
+       WHERE mp.player_id = ANY($1::int[])
+         AND m.matchday_status = 'closed'
+    ),
+    rounds AS (
+      SELECT rm.player_id, rm.match_id, rm.played_on, rm.team_no,
+             mr.id AS round_id, mr.team_a, mr.team_b,
+             COALESCE(SUM(CASE WHEN rg.team_no = mr.team_a THEN 1 ELSE 0 END), 0) AS goals_a,
+             COALESCE(SUM(CASE WHEN rg.team_no = mr.team_b THEN 1 ELSE 0 END), 0) AS goals_b
+        FROM ranked_matches rm
+        JOIN match_rounds mr
+          ON mr.match_id = rm.match_id
+         AND mr.status = 'done'
+         AND (mr.team_a = rm.team_no OR mr.team_b = rm.team_no)
+        LEFT JOIN round_goals rg ON rg.round_id = mr.id
+       WHERE rm.match_rank <= $2
+       GROUP BY rm.player_id, rm.match_id, rm.played_on, rm.team_no,
+                mr.id, mr.team_a, mr.team_b
+    )
+    SELECT player_id, match_id,
+           CASE
+             WHEN SUM(CASE
+               WHEN (team_no = team_a AND goals_a > goals_b)
+                 OR (team_no = team_b AND goals_b > goals_a) THEN 1 ELSE 0
+             END) >
+             SUM(CASE
+               WHEN (team_no = team_a AND goals_a < goals_b)
+                 OR (team_no = team_b AND goals_b < goals_a) THEN 1 ELSE 0
+             END) THEN 'W'
+             WHEN SUM(CASE
+               WHEN (team_no = team_a AND goals_a < goals_b)
+                 OR (team_no = team_b AND goals_b < goals_a) THEN 1 ELSE 0
+             END) >
+             SUM(CASE
+               WHEN (team_no = team_a AND goals_a > goals_b)
+                 OR (team_no = team_b AND goals_b > goals_a) THEN 1 ELSE 0
+             END) THEN 'L'
+             ELSE 'D'
+           END AS result
+      FROM rounds
+     GROUP BY player_id, match_id, played_on
+     ORDER BY player_id, played_on DESC, match_id DESC
+    `,
+    [ids, Math.max(1, Math.trunc(limit))],
+  )) as Array<{ player_id: number; result: "W" | "D" | "L" }>;
+
+  for (const row of rows) result[Number(row.player_id)].push(row.result);
+  return result;
+}

@@ -12,7 +12,7 @@ import {
 } from "@/lib/moment-copy";
 import type { ReactNode } from "react";
 import { markMomentsSeenAction } from "@/app/moments-actions";
-import { playMomentSound, sillySoundsEnabled } from "@/lib/silly-sounds";
+import { playMomentSound, sillySoundsEnabled, stopMomentSound, type MomentSoundUrls } from "@/lib/silly-sounds";
 
 const TONE_STYLE: Record<MomentTone, { card: string; badge: string }> = {
   epic: {
@@ -36,7 +36,7 @@ const TONE_STYLE: Record<MomentTone, { card: string; badge: string }> = {
 /**
  * Shows the player's unseen moments (max 3) one after another, the next time
  * they open the app: confetti + haptics + a short sting for celebrations, a
- * softer card and a sad trombone for bummers. Everything shown is marked seen
+ * softer card and a recorded crowd laugh for bummers. Everything shown is marked seen
  * when the stack is dismissed. `preview` (admin "Play") marks nothing and
  * keeps CTAs from navigating.
  */
@@ -46,6 +46,7 @@ export function MomentsOverlay({
   name,
   preview = false,
   sound,
+  customSounds,
   onClose,
 }: {
   moments: Moment[];
@@ -54,10 +55,14 @@ export function MomentsOverlay({
   preview?: boolean;
   /** Force one sound (admin preview); random per tone otherwise. */
   sound?: string;
+  /** Admin-uploaded sounds; these replace the built-in recordings per group. */
+  customSounds?: MomentSoundUrls;
   onClose?: () => void;
 }) {
   const [index, setIndex] = useState(0);
   const [closed, setClosed] = useState(false);
+  const [soundBlocked, setSoundBlocked] = useState(false);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const marked = useRef(false);
 
   const current = moments[index];
@@ -67,12 +72,30 @@ export function MomentsOverlay({
   const tone = view?.tone;
   const shownId = current?.id;
   useEffect(() => {
+    if (closed) return;
+    const previousFocus = document.activeElement;
+    dialogRef.current?.focus();
+    return () => {
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
+  }, [closed]);
+  useEffect(() => {
     if (!tone || closed) return;
-    if (tone === "epic") navigator.vibrate?.([30, 40, 60]);
-    else if (tone === "good") navigator.vibrate?.(25);
-    // Browsers may block audio until the first tap of the session; that's fine.
-    if (preview || sillySoundsEnabled()) playMomentSound(tone, sound);
-  }, [tone, shownId, index, closed, preview, sound]);
+    let active = true;
+    if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (tone === "epic") navigator.vibrate?.([30, 40, 60]);
+      else if (tone === "good") navigator.vibrate?.(25);
+    }
+    if (preview || sillySoundsEnabled()) {
+      void playMomentSound(tone, sound, customSounds).then((played) => {
+        if (active) setSoundBlocked(!played);
+      });
+    }
+    return () => {
+      active = false;
+      stopMomentSound();
+    };
+  }, [tone, shownId, index, closed, preview, sound, customSounds]);
 
   if (!current || !view || closed) return null;
 
@@ -82,12 +105,41 @@ export function MomentsOverlay({
     if (preview) return;
     if (!marked.current) {
       marked.current = true;
-      void markMomentsSeenAction(moments.map((m) => m.id)).catch(() => {});
+      void markMomentsSeenAction(moments.map((m) => m.id)).catch((error: unknown) => {
+        console.error("Could not mark moments as seen.", error);
+      });
     }
   };
   const next = () => (index + 1 < moments.length ? setIndex(index + 1) : finish());
   return (
-    <div className="fixed inset-0 z-[60] flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-labelledby="moment-title">
+    <div
+      ref={dialogRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-[60] flex items-end justify-center outline-none sm:items-center"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="moment-title"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          finish();
+        }
+        if (event.key !== "Tab") return;
+        const buttons = dialogRef.current?.querySelectorAll<HTMLElement>(
+          "button:not([disabled]), a[href]",
+        );
+        if (!buttons?.length) return;
+        const first = buttons[0];
+        const last = buttons[buttons.length - 1];
+        if (event.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }}
+    >
       <button type="button" aria-label="Dismiss" className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={finish} />
       {celebrate ? <Confetti fire={index + 1} pieces={view.tone === "epic" ? 180 : 90} /> : null}
       <MomentCard
@@ -105,6 +157,17 @@ export function MomentsOverlay({
         }
       >
         <div className="mt-6 flex flex-col gap-2">
+          {soundBlocked ? (
+            <button
+              type="button"
+              onClick={() => {
+                void playMomentSound(view.tone, sound, customSounds).then((played) => setSoundBlocked(!played));
+              }}
+              className="min-h-11 rounded-xl border border-black/10 px-4 py-2 text-sm dark:border-white/10"
+            >
+              Tap to play sound
+            </button>
+          ) : null}
           <button
             type="button"
             onClick={next}

@@ -2,196 +2,189 @@
 
 import { useEffect, useState, useActionState } from "react";
 import { useRouter } from "next/navigation";
-import {
-  playerSetPaidAction,
-  playerSetGuestPaidAction,
-  type PaymentActionState,
-} from "./actions";
+import { playerSetAllPaidAction, type PaymentActionState } from "./actions";
 import type { PlayerPaymentMatch } from "@/lib/payments";
-import { fmtDate } from "@/lib/format";
-import { matchLabel } from "@/lib/format";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { formatAmount } from "@/lib/currency";
+import { fmtDate, matchLabel } from "@/lib/format";
 import { FeedbackMessage } from "@/components/ui/banner";
 
 const INITIAL: PaymentActionState = { ok: false, message: "" };
 
-function useRefreshOnOk(state: PaymentActionState) {
+function CopyButton({ value, label }: { value: string; label: string }) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  const flash = (next: "copied" | "failed") => {
+    setState(next);
+    setTimeout(() => setState("idle"), 1500);
+  };
+  return (
+    <button
+      type="button"
+      aria-label={`Copy ${label}`}
+      onClick={() => {
+        if (!navigator.clipboard) return flash("failed");
+        navigator.clipboard.writeText(value).then(
+          () => flash("copied"),
+          (error: unknown) => {
+            console.error("Could not copy to the clipboard.", error);
+            flash("failed");
+          },
+        );
+      }}
+      className={`min-h-9 shrink-0 rounded-lg border px-3 text-xs font-semibold transition active:scale-95 ${
+        state === "copied"
+          ? "border-emerald-500/40 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+          : state === "failed"
+            ? "border-amber-500/40 bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+            : "border-black/10 bg-white/60 text-neutral-700 hover:bg-white dark:border-white/15 dark:bg-transparent dark:text-neutral-200 dark:hover:bg-neutral-800"
+      }`}
+    >
+      {state === "copied" ? "Copied ✓" : state === "failed" ? "Couldn't copy" : "Copy"}
+    </button>
+  );
+}
+
+function CopyField({ label, value }: { label: string; value: string }) {
+  if (!value) return null;
+  return (
+    <div className="flex items-center justify-between gap-3 py-2.5">
+      <div className="min-w-0">
+        <p className="text-[11px] font-medium uppercase tracking-wide text-neutral-400">{label}</p>
+        <p className="truncate text-sm font-semibold">{value}</p>
+      </div>
+      <CopyButton value={value} label={label.toLowerCase()} />
+    </div>
+  );
+}
+
+function MatchCard({ m, showHeader }: { m: PlayerPaymentMatch; showHeader: boolean }) {
   const router = useRouter();
+  const [state, action, pending] = useActionState(playerSetAllPaidAction, INITIAL);
   useEffect(() => {
     if (state.ok) router.refresh();
   }, [state, router]);
-}
 
-function DetailRow({ label, value }: { label: string; value: string }) {
-  if (!value) return null;
+  const heads = (m.inRoster ? 1 : 0) + m.guests.length;
+  const paidHeads = (m.inRoster && m.paid ? 1 : 0) + m.guests.filter((g) => g.paid).length;
+  const fmt = (n: number) => formatAmount(n, m.currency);
+  const due = (heads - paidHeads) * m.share;
+  const settled = paidHeads === heads;
+  const shown = settled ? heads * m.share : due;
+
+  const guestNames = m.guests.map((g) => g.name).join(", ");
+  const breakdown =
+    m.guests.length === 0
+      ? null
+      : `${m.inRoster ? `You + ${guestNames}` : `Your guests ${guestNames}`} · ${fmt(m.share)} each`;
+  const partly = !settled && paidHeads > 0 ? `${fmt(paidHeads * m.share)} already marked paid` : null;
+  const reference = `Match ${m.matchId} · ${m.playerName || "your name"}`;
+  const hasDetails = Boolean(m.paymentName || m.paymentMobile || m.paymentMethod || m.paymentNote);
+
+  const details = hasDetails ? (
+    <>
+      <div className="divide-y divide-black/5 dark:divide-white/10">
+        <CopyField label="Recipient" value={m.paymentName} />
+        <CopyField label="Phone / account" value={m.paymentMobile} />
+        <CopyField label="Reference" value={reference} />
+      </div>
+      {m.paymentMethod || m.paymentNote ? (
+        <p className="mt-1 text-xs text-neutral-500">
+          {m.paymentMethod ? <span className="font-medium text-neutral-600 dark:text-neutral-300">Pay via {m.paymentMethod}. </span> : null}
+          {m.paymentNote}
+        </p>
+      ) : null}
+    </>
+  ) : null;
+
   return (
-    <div className="flex justify-between gap-3 text-sm">
-      <span className="text-neutral-500">{label}</span>
-      <span className="text-right font-medium">{value}</span>
-    </div>
-  );
-}
+    <div className="space-y-3">
+      {showHeader ? (
+        <div>
+          <h2 className="text-lg font-semibold">{matchLabel(m.playedOn)}</h2>
+          <p className="text-sm text-neutral-500">{fmtDate(m.playedOn)}</p>
+        </div>
+      ) : null}
 
-function CopyDetailRow({ label, value }: { label: string; value: string }) {
-  const [copied, setCopied] = useState(false);
-  if (!value) return null;
-
-  async function handleCopy() {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch {
-      // Clipboard unavailable — leave the number visible for manual copy.
-    }
-  }
-
-  return (
-    <div className="flex items-center justify-between gap-3 text-sm">
-      <span className="text-neutral-500">{label}</span>
-      <span className="flex items-center gap-2">
-        <span className="text-right font-medium">{value}</span>
-        <button
-          type="button"
-          onClick={handleCopy}
-          className="rounded-md border border-black/15 px-2 py-0.5 text-xs font-medium text-neutral-600 transition hover:bg-neutral-50 dark:border-white/15 dark:text-neutral-300 dark:hover:bg-neutral-900"
-          title="Copy number"
-        >
-          {copied ? "Copied" : "Copy"}
-        </button>
-      </span>
-    </div>
-  );
-}
-
-function SelfPaidToggle({ matchId, paid }: { matchId: number; paid: boolean }) {
-  const [state, action, pending] = useActionState(playerSetPaidAction, INITIAL);
-  useRefreshOnOk(state);
-  return (
-    <form action={action}>
-      <input type="hidden" name="matchId" value={matchId} />
-      <input type="hidden" name="paid" value={paid ? "0" : "1"} />
-      <Button
-        type="submit"
-        variant={paid ? "secondary" : "success"}
-        pending={pending}
-        pendingLabel="Saving…"
+      <section
+        className={`rounded-2xl p-5 ${
+          settled
+            ? "bg-emerald-50 text-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100"
+            : "bg-amber-50 text-amber-950 dark:bg-amber-950/25 dark:text-amber-100"
+        }`}
       >
-        {paid ? "Mark as not paid" : "I've paid"}
-      </Button>
-      <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
-    </form>
-  );
-}
+        <p className="text-xs font-semibold uppercase tracking-widest opacity-70">
+          {settled ? "Settled" : "To pay"}
+        </p>
+        <div className="mt-1 flex items-center justify-between gap-3">
+          <p className="text-3xl font-extrabold tabular-nums">{fmt(shown)}</p>
+          {settled ? null : <CopyButton value={String(due)} label="amount" />}
+        </div>
+        {breakdown || partly || settled ? (
+          <p className="mt-1 text-sm opacity-80">
+            {[breakdown, partly, settled ? "Thanks — you're all set for this match." : null]
+              .filter(Boolean)
+              .join(" · ")}
+          </p>
+        ) : null}
+      </section>
 
-function GuestPaidToggle({
-  matchId,
-  guestId,
-  paid,
-}: {
-  matchId: number;
-  guestId: number;
-  paid: boolean;
-}) {
-  const [state, action, pending] = useActionState(playerSetGuestPaidAction, INITIAL);
-  useRefreshOnOk(state);
-  return (
-    <form action={action}>
-      <input type="hidden" name="matchId" value={matchId} />
-      <input type="hidden" name="guestId" value={guestId} />
-      <input type="hidden" name="paid" value={paid ? "0" : "1"} />
-      <Button
-        type="submit"
-        size="sm"
-        variant={paid ? "secondary" : "success"}
-        pending={pending}
-        pendingLabel="Saving…"
-      >
-        {paid ? "Not paid" : "Paid"}
-      </Button>
-    </form>
-  );
-}
+      {settled ? (
+        details ? (
+          <details className="rounded-2xl border border-black/10 px-4 py-3 dark:border-white/10">
+            <summary className="cursor-pointer text-sm font-medium text-neutral-500">Transfer details</summary>
+            <div className="mt-1">{details}</div>
+          </details>
+        ) : null
+      ) : details ? (
+        <section className="rounded-2xl border border-black/10 px-4 py-2 dark:border-white/10">{details}</section>
+      ) : (
+        <p className="rounded-2xl border border-dashed border-black/15 p-4 text-sm text-neutral-500 dark:border-white/15">
+          The admin hasn&apos;t added transfer details yet.
+        </p>
+      )}
 
-function MatchCard({ m, showHeader = true }: { m: PlayerPaymentMatch; showHeader?: boolean }) {
-  const guestsOwed = m.guests.length * m.share;
-  const myOwed = m.inRoster ? m.share : 0;
-  const total = myOwed + guestsOwed;
-
-  return (
-    <div className="rounded-2xl border border-black/10 p-5 dark:border-white/10">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {showHeader ? (
-          <div>
-            <h2 className="text-lg font-semibold">{matchLabel(m.playedOn)}</h2>
-            <p className="text-sm text-neutral-500">{fmtDate(m.playedOn)}</p>
-          </div>
+      <form action={action} className="space-y-2">
+        <input type="hidden" name="matchId" value={m.matchId} />
+        <input type="hidden" name="paid" value={settled ? "0" : "1"} />
+        {settled ? (
+          <>
+            <button
+              type="button"
+              disabled
+              className="flex w-full cursor-not-allowed items-center justify-center rounded-xl bg-neutral-200 px-4 py-3 text-sm font-semibold text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400"
+            >
+              ✓ Paid
+            </button>
+            <button
+              type="submit"
+              disabled={pending}
+              className="mx-auto block min-h-9 text-xs text-neutral-400 underline underline-offset-2 hover:text-neutral-600 disabled:opacity-50 dark:hover:text-neutral-200"
+            >
+              {pending ? "Saving…" : "Not paid yet? Undo"}
+            </button>
+          </>
         ) : (
-          <div>
-            <p className="text-sm font-medium">What you owe</p>
+          <div className="flex gap-2">
+            {m.payLink ? (
+              <a
+                href={m.payLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex flex-1 items-center justify-center rounded-xl border border-black/10 px-4 py-3 text-sm font-semibold transition hover:bg-neutral-50 active:scale-[0.98] dark:border-white/15 dark:hover:bg-neutral-900"
+              >
+                Open payment link ↗
+              </a>
+            ) : null}
+            <button
+              type="submit"
+              disabled={pending}
+              className="flex flex-1 items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-500 active:scale-[0.98] disabled:opacity-60"
+            >
+              {pending ? "Saving…" : "I've paid"}
+            </button>
           </div>
         )}
-        <div className="text-right">
-          <div className="text-xs uppercase tracking-wide text-neutral-500">You owe</div>
-          <div className="text-2xl font-semibold">{total}</div>
-        </div>
-      </div>
-
-      {m.inRoster ? (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/10 p-3 dark:border-white/10">
-          <div>
-            <p className="text-sm font-medium">Your share</p>
-            <p className="text-xs text-neutral-500">{m.share} for you</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Badge tone={m.paid ? "success" : "warning"}>{m.paid ? "Paid" : "Not paid"}</Badge>
-            <SelfPaidToggle matchId={m.matchId} paid={m.paid} />
-          </div>
-        </div>
-      ) : null}
-
-      {m.guests.length > 0 ? (
-        <div className="mt-3 rounded-xl border border-black/10 p-3 dark:border-white/10">
-          <p className="text-sm font-medium">Your guests</p>
-          <ul className="mt-2 space-y-2">
-            {m.guests.map((g) => (
-              <li key={g.id} className="flex items-center justify-between gap-3">
-                <span className="text-sm">
-                  {g.name} <span className="text-neutral-500">· {m.share}</span>
-                </span>
-                <div className="flex items-center gap-2">
-                  <Badge tone={g.paid ? "success" : "warning"}>{g.paid ? "Paid" : "Not paid"}</Badge>
-                  <GuestPaidToggle matchId={m.matchId} guestId={g.id} paid={g.paid} />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-
-      {m.paymentName || m.paymentMobile || m.paymentMethod || m.paymentNote || m.payLink ? (
-        <div className="mt-3 rounded-xl bg-black/[0.03] p-3 dark:bg-white/[0.04]">
-          <p className="text-sm font-medium">Where to send it</p>
-          <div className="mt-2 space-y-1">
-            <DetailRow label="Recipient" value={m.paymentName} />
-            <CopyDetailRow label="Mobile" value={m.paymentMobile} />
-            <DetailRow label="Method" value={m.paymentMethod} />
-            <DetailRow label="Note" value={m.paymentNote} />
-            <DetailRow label="Reference" value={`Match ${m.matchId} · your name`} />
-          </div>
-          {m.payLink ? (
-            <a
-              href={m.payLink}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-3 inline-flex w-full items-center justify-center rounded-lg bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500"
-            >
-              Pay {total} now
-            </a>
-          ) : null}
-        </div>
-      ) : null}
+        {state.message && !state.ok ? <FeedbackMessage ok={false} message={state.message} /> : null}
+      </form>
     </div>
   );
 }
@@ -206,9 +199,9 @@ export function PaymentsPlayer({ matches }: { matches: PlayerPaymentMatch[] }) {
     );
   }
   return (
-    <div className="mt-6 space-y-4">
+    <div className="mt-6 space-y-8">
       {matches.map((m) => (
-        <MatchCard key={m.matchId} m={m} />
+        <MatchCard key={m.matchId} m={m} showHeader />
       ))}
     </div>
   );

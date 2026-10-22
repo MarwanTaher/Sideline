@@ -4,6 +4,7 @@ import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   acceptTermsAction,
+  seasonWaitlistAction,
   withdrawAction,
   type SubscriptionActionState,
 } from "./actions";
@@ -115,5 +116,42 @@ export function WithdrawButton({ seasonId }: { seasonId: number }) {
       </div>
       <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
     </form>
+  );
+}
+
+export function SeasonWaitlistButton({
+  seasonId,
+  position,
+}: {
+  seasonId: number;
+  position: number | null;
+}) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(seasonWaitlistAction, INITIAL);
+
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+
+  return (
+    <div className="mt-3">
+      <form action={formAction}>
+        <input type="hidden" name="seasonId" value={seasonId} />
+        <input type="hidden" name="intent" value={position == null ? "join" : "leave"} />
+        <Button
+          type="submit"
+          variant="secondary"
+          pending={pending}
+          pendingLabel="Saving…"
+        >
+          {position == null ? "Join the season reserve list" : `Leave reserve list (#${position})`}
+        </Button>
+      </form>
+      <p className="mt-1 text-xs text-neutral-500">
+        If a place opens, the next person in order gets a push offer. You still
+        need to review and accept the season rules before joining.
+      </p>
+      <FeedbackMessage ok={state.ok} message={state.message} className="mt-1" />
+    </div>
   );
 }

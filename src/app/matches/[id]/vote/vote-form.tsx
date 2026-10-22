@@ -119,16 +119,17 @@ export function VoteForm({ matchId, ballot, hasVotedBefore }: VoteFormProps) {
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-neutral-500">
-          Drag each slider from <span className="font-medium">0</span> to{" "}
+          Adjust each slider from <span className="font-medium">0</span> to{" "}
           <span className="font-medium">10</span>. Each number has a meaning —
-          see the scale below. Use &ldquo;Skip&rdquo; for players you can&rsquo;t
-          rate.
+          see the scale below. Use the arrow keys or touch to adjust, and
+          &ldquo;Skip&rdquo; for players you can&rsquo;t rate.
         </p>
         <div className="flex items-center gap-2">
           <Button
             type="button"
             variant="secondary"
             size="sm"
+            className="min-h-11"
             onClick={() => setAllSkipped(true)}
           >
             Skip all
@@ -137,6 +138,7 @@ export function VoteForm({ matchId, ballot, hasVotedBefore }: VoteFormProps) {
             type="button"
             variant="secondary"
             size="sm"
+            className="min-h-11"
             onClick={() => setAllSkipped(false)}
           >
             Clear skips
@@ -185,7 +187,8 @@ export function VoteForm({ matchId, ballot, hasVotedBefore }: VoteFormProps) {
                 <button
                   type="button"
                   onClick={() => setSkipped(b.playerId, !row.skipped)}
-                  className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                  aria-pressed={row.skipped}
+                  className={`min-h-11 shrink-0 rounded-lg border px-3 py-2 text-xs font-medium transition ${
                     row.skipped
                       ? "border-emerald-600/40 text-emerald-700 dark:text-emerald-400"
                       : "border-black/15 text-neutral-500 dark:border-white/15"
@@ -198,7 +201,11 @@ export function VoteForm({ matchId, ballot, hasVotedBefore }: VoteFormProps) {
                 <p className="mt-2 text-xs text-neutral-400">Skipped — not counted.</p>
               ) : (
                 <div className="mt-3">
-                  <RatingSlider value={row.rating} onChange={(v) => setRating(b.playerId, v)} />
+                  <RatingSlider
+                    value={row.rating}
+                    onChange={(v) => setRating(b.playerId, v)}
+                    label={`Rating for ${b.name}`}
+                  />
                   <div className="mt-1 flex justify-center">
                     <span
                       className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium text-white ${TIER_DOT[ratingTier(row.rating)]}`}

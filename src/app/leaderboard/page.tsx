@@ -13,6 +13,7 @@ import LeaderboardTable from "./leaderboard-table";
 import ScoreBreakdownPanel from "./score-breakdown-panel";
 import SeasonStandings from "./season-standings";
 import { listSeasons, getSeasonStandings, type Season } from "@/lib/seasons";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const metadata = {
   title: "Leaderboard · Sideline",
@@ -175,6 +176,24 @@ export default async function LeaderboardPage({
             <span className="text-sm font-normal text-neutral-400"> of {rankedRows.length}</span>
           </p>
         </Card>
+      ) : null}
+
+      {rankedRows.length === 0 ? (
+        <EmptyState
+          className="mt-6"
+          title="The leaderboard is warming up"
+          action={
+            <Link
+              href="/matches"
+              className="inline-flex min-h-11 items-center rounded-lg bg-neutral-900 px-4 font-semibold text-white dark:bg-white dark:text-neutral-900"
+            >
+              Find a match
+            </Link>
+          }
+        >
+          Players appear in the ranks after {unratedMinMatches} completed match
+          {unratedMinMatches === 1 ? "" : "es"}.
+        </EmptyState>
       ) : null}
 
       <LeaderboardTable

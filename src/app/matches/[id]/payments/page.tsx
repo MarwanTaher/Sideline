@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
@@ -25,6 +24,12 @@ import {
   listSubscribers,
 } from "@/lib/season-subscriptions";
 import SessionCharges from "./session-charges";
+import { getMatchDetail } from "@/lib/matches";
+import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
+import { getMatchPhase } from "@/lib/match-phase";
+import { MatchPageHeader } from "../match-page-header";
+import { MessageAdminLink } from "@/components/message-admin-link";
+import { DEFAULT_CURRENCY } from "@/lib/currency";
 
 export const metadata = {
   title: "Payments · Sideline",
@@ -44,27 +49,32 @@ export default async function MatchPaymentsPage({
   const matchId = Number(id);
   if (!Number.isFinite(matchId)) notFound();
 
-  const match = await getAvailabilityMatch(matchId);
-  if (!match) notFound();
+  const [match, detail, lockEnabled] = await Promise.all([
+    getAvailabilityMatch(matchId),
+    getMatchDetail(matchId),
+    isAvailabilityLockEnabled(),
+  ]);
+  if (!match || !detail) notFound();
 
   const role = session.user.role;
   const isAdmin = await isAdminView(role === "admin" || role === "super");
+  const phase = getMatchPhase({
+    matchdayStatus: match.matchdayStatus,
+    availabilityOpen: match.availabilityOpen,
+    kickoffAt: match.kickoffAt,
+    lockEnabled,
+    hasRoster: detail.teams.some((team) => team.players.length > 0),
+  });
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
-      <Link
-        href={`/matches/${matchId}`}
-        className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
-      >
-        ← Back to match
-      </Link>
-
+      <MatchPageHeader
+        matchId={matchId}
+        dateLabel={matchLabelWithTime(match.playedOn, match.matchTime)}
+        title="Payments"
+        phase={phase}
+      />
       <MatchNav matchId={matchId} isAdmin={isAdmin} />
-
-      <h1 className="mt-3 text-2xl font-semibold tracking-tight">Payments</h1>
-      <p className="mt-1 text-sm text-neutral-500">
-          {matchLabelWithTime(match.playedOn, match.matchTime)}
-      </p>
 
       {isAdmin ? (
         <>
@@ -126,6 +136,7 @@ async function AdminSection({ matchId }: { matchId: number }) {
     paymentNote: "",
     payLink: "",
     paymentsActive: false,
+    currency: DEFAULT_CURRENCY,
   };
 
   return (
@@ -169,6 +180,12 @@ async function PlayerSection({
       {active
         ? "You have nothing to pay for this match."
         : "Payments are not open for this match yet."}
+      {!active ? (
+        <MessageAdminLink
+          matchId={matchId}
+          reason="I have a question about payments for this match."
+        />
+      ) : null}
     </p>
   );
 }

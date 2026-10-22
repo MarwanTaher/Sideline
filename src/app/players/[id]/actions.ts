@@ -11,21 +11,29 @@ export type KudosActionState = {
 };
 
 export async function toggleKudosAction(
-  _prev: KudosActionState,
+  prev: KudosActionState,
   formData: FormData,
 ): Promise<KudosActionState> {
   const session = await auth();
   const viewerId = session?.user?.playerId;
   if (viewerId == null) {
-    return { ok: false, error: "You must be signed in as a player." };
+    return {
+      ok: false,
+      given: prev.given ?? false,
+      error: "You must be signed in as a player.",
+    };
   }
 
   const targetId = Number(formData.get("targetId"));
   if (!Number.isFinite(targetId) || targetId <= 0) {
-    return { ok: false, error: "Invalid player." };
+    return { ok: false, given: prev.given ?? false, error: "Invalid player." };
   }
   if (Number(viewerId) === targetId) {
-    return { ok: false, error: "You cannot give kudos to yourself." };
+    return {
+      ok: false,
+      given: prev.given ?? false,
+      error: "You cannot give kudos to yourself.",
+    };
   }
 
   try {
@@ -35,6 +43,7 @@ export async function toggleKudosAction(
   } catch (err) {
     return {
       ok: false,
+      given: prev.given ?? false,
       error: err instanceof Error ? err.message : "Could not update kudos.",
     };
   }

@@ -2,11 +2,19 @@
 
 import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import type { SeasonSubscription, SubscriptionSeason } from "@/lib/season-subscriptions";
+import type {
+  SeasonSubscription,
+  SeasonWaitlistPlayer,
+  SubscriptionSeason,
+} from "@/lib/season-subscriptions";
+import type { SeasonGoLiveChecklist } from "@/lib/season-billing";
+import { SEASON_PAYMENT_REMINDER_COPY } from "@/lib/season-calculations";
 import {
   saveSubscriptionSettingsAction,
   addSubscriberAction,
   removeSubscriberAction,
+  removeSeasonWaitlistPlayerAction,
+  setSeasonGoLiveCheckAction,
   type SubscriptionAdminState,
 } from "./subscription-actions";
 import { Avatar } from "@/components/ui/avatar";
@@ -22,10 +30,14 @@ export default function SubscriptionAdmin({
   season,
   subscribers,
   candidates,
+  waitlist,
+  goLiveChecklist,
 }: {
   season: SubscriptionSeason;
   subscribers: SeasonSubscription[];
   candidates: { id: number; name: string }[];
+  waitlist: SeasonWaitlistPlayer[];
+  goLiveChecklist: SeasonGoLiveChecklist | null;
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(
@@ -48,6 +60,10 @@ export default function SubscriptionAdmin({
         season dates. Accepting the terms secures a place; payment is tracked
         separately.
       </p>
+
+      {goLiveChecklist ? (
+        <GoLiveChecklist seasonId={season.id} checklist={goLiveChecklist} />
+      ) : null}
 
       <form action={formAction} className="mt-3 space-y-3">
         <input type="hidden" name="seasonId" value={season.id} />
@@ -179,7 +195,138 @@ export default function SubscriptionAdmin({
         </form>
         <FeedbackMessage ok={addState.ok} message={addState.message} className="mt-2" />
       </div>
+
+      <div className="mt-5 border-t border-black/5 pt-4 dark:border-white/5">
+        <h3 className="text-sm font-medium">Season reserve list ({waitlist.length})</h3>
+        <p className="mt-1 text-xs text-neutral-500">
+          When a core subscriber withdraws, the first eligible person gets a
+          targeted push offer. They still need to accept the terms.
+        </p>
+        {waitlist.length === 0 ? (
+          <p className="mt-2 text-sm text-neutral-500">Nobody is waiting.</p>
+        ) : (
+          <ol className="mt-2 divide-y divide-black/5 dark:divide-white/10">
+            {waitlist.map((player, index) => (
+              <WaitlistRow
+                key={player.playerId}
+                seasonId={season.id}
+                index={index}
+                player={player}
+              />
+            ))}
+          </ol>
+        )}
+      </div>
     </section>
+  );
+}
+
+function GoLiveChecklist({
+  seasonId,
+  checklist,
+}: {
+  seasonId: number;
+  checklist: SeasonGoLiveChecklist;
+}) {
+  const checks = [
+    { key: "transferDetailsComplete", label: "Transfer recipient and account details are filled", done: checklist.transferDetailsComplete },
+    { key: "ratesConfirmed", label: "Rates and due day are confirmed", done: checklist.ratesConfirmed, manual: true },
+    { key: "termsFinal", label: "Season terms are final", done: checklist.termsFinal, manual: true },
+    { key: "testInvoiceCompleted", label: "Test invoice generated, reviewed and deleted", done: checklist.testInvoiceCompleted, manual: true },
+    { key: "reminderTextReviewed", label: "Payment reminder copy reviewed", done: checklist.reminderTextReviewed, manual: true },
+  ] as const;
+
+  return (
+    <section className="mt-4 rounded-xl border border-amber-500/30 bg-amber-50/40 p-3 dark:bg-amber-950/20">
+      <h3 className="text-sm font-semibold">
+        Go-live checklist {checklist.complete ? "· ready" : "· required before release"}
+      </h3>
+      <ul className="mt-2 space-y-2">
+        {checks.map((check) => (
+          <li key={check.key} className="flex items-start gap-2 text-sm">
+            <span aria-hidden="true" className={check.done ? "text-emerald-700" : "text-amber-700"}>
+              {check.done ? "✓" : "○"}
+            </span>
+            <span className="flex-1">{check.label}</span>
+            {"manual" in check ? (
+              <ChecklistConfirmation
+                seasonId={seasonId}
+                check={check.key}
+                done={check.done}
+              />
+            ) : (
+              <span className="text-xs text-neutral-500">{check.done ? "complete" : "missing"}</span>
+            )}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 rounded-lg bg-white/70 px-2.5 py-2 text-xs text-neutral-600 dark:bg-neutral-900/60 dark:text-neutral-300">
+        Reminder copy (3 days): “{SEASON_PAYMENT_REMINDER_COPY.threeDays}” Due day:
+        “{SEASON_PAYMENT_REMINDER_COPY.today}”
+      </p>
+    </section>
+  );
+}
+
+function ChecklistConfirmation({
+  seasonId,
+  check,
+  done,
+}: {
+  seasonId: number;
+  check: "ratesConfirmed" | "termsFinal" | "testInvoiceCompleted" | "reminderTextReviewed";
+  done: boolean;
+}) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(setSeasonGoLiveCheckAction, INITIAL);
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+  return (
+    <div>
+      <form action={formAction}>
+        <input type="hidden" name="seasonId" value={seasonId} />
+        <input type="hidden" name="check" value={check} />
+        <input type="hidden" name="checked" value={done ? "false" : "true"} />
+        <button
+          type="submit"
+          disabled={pending}
+          className="text-xs font-medium text-blue-700 underline underline-offset-2 disabled:opacity-50 dark:text-blue-300"
+        >
+          {pending ? "Saving…" : done ? "Undo" : "Confirm"}
+        </button>
+      </form>
+      <FeedbackMessage ok={state.ok} message={state.message} className="mt-1 max-w-52 text-xs" />
+    </div>
+  );
+}
+
+function WaitlistRow({
+  seasonId,
+  index,
+  player,
+}: {
+  seasonId: number;
+  index: number;
+  player: SeasonWaitlistPlayer;
+}) {
+  const router = useRouter();
+  const [state, formAction, pending] = useActionState(removeSeasonWaitlistPlayerAction, INITIAL);
+  useEffect(() => {
+    if (state.ok) router.refresh();
+  }, [state, router]);
+
+  return (
+    <li className="flex items-center justify-between gap-3 py-2 text-sm">
+      <span>{index + 1}. {player.name}</span>
+      <form action={formAction}>
+        <input type="hidden" name="seasonId" value={seasonId} />
+        <input type="hidden" name="playerId" value={player.playerId} />
+        <Button type="submit" variant="secondary" pending={pending} pendingLabel="…">
+          Remove
+        </Button>
+      </form>
+    </li>
   );
 }
 

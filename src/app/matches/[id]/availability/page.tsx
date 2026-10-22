@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { isAdminView } from "@/lib/view-mode";
@@ -24,7 +23,8 @@ import { AddGuestForm, GuestList, AdminAddGuestForm } from "./guest-controls";
 import { listGuests, MAX_GUESTS_PER_HOST } from "@/lib/guests";
 import { MatchNav } from "../match-nav";
 import { SquadGrid, PeopleChips } from "./who-is-playing";
-import { SectionIcon } from "@/components/section-icon";
+import { getMatchPhase } from "@/lib/match-phase";
+import { MatchPageHeader } from "../match-page-header";
 
 export const metadata = {
   title: "Availability · Sideline",
@@ -98,6 +98,13 @@ export default async function AvailabilityPage({
 
   const iAmSubscriber = myPlayerId != null && subscriberIds.has(Number(myPlayerId));
   const seasonMatch = subscriberIds.size > 0;
+  const phase = getMatchPhase({
+    matchdayStatus: match.matchdayStatus,
+    availabilityOpen: match.availabilityOpen,
+    kickoffAt: match.kickoffAt,
+    lockEnabled: availabilityLockEnabled,
+    hasRoster: inPlayers.length > 0 || approvedGuests.length > 0,
+  });
 
   // Players an admin can still add to the waitlist: not already IN and not queued.
   const waitlistedIds = new Set(waitlistPlayers.map((w) => w.playerId));
@@ -119,19 +126,15 @@ export default async function AvailabilityPage({
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
-      <Link
-        href={`/matches/${matchId}`}
-        className="text-sm text-neutral-500 transition hover:text-neutral-900 dark:hover:text-neutral-100"
-      >
-        ← Match
-      </Link>
-
+      <MatchPageHeader
+        matchId={matchId}
+        dateLabel={matchLabelWithTime(match.playedOn, match.matchTime)}
+        title="Availability"
+        phase={phase}
+      />
       <MatchNav matchId={matchId} isAdmin={isAdmin} />
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <SectionIcon name="availability" className="h-8 w-8" />
-        <h1 className="text-xl font-bold tracking-tight">Availability</h1>
-        <span className="text-sm text-neutral-500">{matchLabelWithTime(match.playedOn, match.matchTime)}</span>
+      <div className="flex flex-wrap items-center gap-2">
         {seasonMatch ? (
           <span className="rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
             season

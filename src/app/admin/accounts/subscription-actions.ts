@@ -3,14 +3,22 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/auth";
+import { logAppError } from "@/lib/error-log";
 import {
   applySubscribersToMatch,
   applySubscriberToUpcomingMatches,
+  offerNextSeasonWaitlistPlayer,
+  removeSeasonWaitlistPlayer,
   subscribePlayer,
   updateSeasonSubscriptionSettings,
   withdrawPlayer,
   getSubscriptionSeason,
 } from "@/lib/season-subscriptions";
+import {
+  getSeasonGoLiveChecklist,
+  setSeasonGoLiveCheck,
+  type SeasonGoLiveCheckKey,
+} from "@/lib/season-billing";
 
 export type SubscriptionAdminState = { ok: boolean; message: string };
 
@@ -56,7 +64,25 @@ export async function saveSubscriptionSettingsAction(
   }
 
   const { seasonId, ...rest } = parsed.data;
-  await updateSeasonSubscriptionSettings(seasonId, rest);
+  const current = await getSubscriptionSeason(seasonId);
+  if (rest.visibleToPlayers && current && !current.visibleToPlayers) {
+    if (rest.terms !== current.terms) {
+      return { ok: false, message: "Save the new terms while hidden, then confirm them before releasing the season." };
+    }
+    const checklist = await getSeasonGoLiveChecklist(seasonId);
+    if (!checklist?.complete) {
+      return {
+        ok: false,
+        message: "Complete every go-live checklist item before releasing the season.",
+      };
+    }
+  }
+  try {
+    await updateSeasonSubscriptionSettings(seasonId, rest);
+  } catch (error) {
+    await logAppError(error, "season.subscription-settings");
+    return { ok: false, message: error instanceof Error ? error.message : "Could not save season settings." };
+  }
   revalidateAll();
   return {
     ok: true,
@@ -66,6 +92,40 @@ export async function saveSubscriptionSettingsAction(
         ? "Saved. The season is visible to players."
         : "Saved. The season stays hidden from players.",
   };
+}
+
+export async function setSeasonGoLiveCheckAction(
+  _prev: SubscriptionAdminState,
+  formData: FormData,
+): Promise<SubscriptionAdminState> {
+  const denied = await requireSuper();
+  if (denied) return { ok: false, message: denied };
+
+  const seasonId = Number(formData.get("seasonId"));
+  const check = String(formData.get("check")) as SeasonGoLiveCheckKey;
+  const checked = formData.get("checked") === "true";
+  if (!Number.isInteger(seasonId) || seasonId <= 0) {
+    return { ok: false, message: "Invalid season." };
+  }
+  if (
+    !["ratesConfirmed", "termsFinal", "testInvoiceCompleted", "reminderTextReviewed"].includes(
+      check,
+    )
+  ) {
+    return { ok: false, message: "Invalid checklist item." };
+  }
+
+  try {
+    await setSeasonGoLiveCheck(seasonId, check, checked);
+  } catch (err) {
+    await logAppError(err, "season.go_live_check");
+    return {
+      ok: false,
+      message: err instanceof Error ? err.message : "Could not update the checklist.",
+    };
+  }
+  revalidatePath("/admin/accounts");
+  return { ok: true, message: checked ? "Checklist updated." : "Confirmation cleared." };
 }
 
 export async function addSubscriberAction(
@@ -119,6 +179,25 @@ export async function removeSubscriberAction(
     message:
       "Removed from the core group. Their availability on existing matches is unchanged — adjust it per match if needed.",
   };
+}
+
+export async function removeSeasonWaitlistPlayerAction(
+  _prev: SubscriptionAdminState,
+  formData: FormData,
+): Promise<SubscriptionAdminState> {
+  const denied = await requireSuper();
+  if (denied) return { ok: false, message: denied };
+
+  const seasonId = Number(formData.get("seasonId"));
+  const playerId = Number(formData.get("playerId"));
+  if (!Number.isInteger(seasonId) || seasonId <= 0 || !Number.isInteger(playerId) || playerId <= 0) {
+    return { ok: false, message: "Invalid request." };
+  }
+
+  await removeSeasonWaitlistPlayer(seasonId, playerId);
+  await offerNextSeasonWaitlistPlayer(seasonId);
+  revalidateAll();
+  return { ok: true, message: "Removed from the reserve list." };
 }
 
 export async function syncSubscribersAction(

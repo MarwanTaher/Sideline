@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { revalidateScores } from "@/lib/scores-cache";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import {
@@ -210,6 +211,7 @@ export async function addSubstituteAction(
     const mid = idSchema.parse(matchId);
     await requireCanScore(mid);
     const player = await addMatchPlayer(mid, idSchema.parse(playerId), teamSchema.parse(teamNo));
+    revalidateScores();
     revalidate(mid);
     return { ok: true, message: "", player };
   } catch (err) {
@@ -222,6 +224,7 @@ export async function syncStatsAction(matchId: number): Promise<ActionResult> {
     const mid = idSchema.parse(matchId);
     await requireCanScore(mid);
     const n = await syncMatchdayToStats(mid);
+    revalidateScores();
     revalidate(mid);
     revalidatePath(`/matches/${mid}/stats`);
     revalidatePath("/leaderboard");

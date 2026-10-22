@@ -18,6 +18,7 @@ import type {
   PaymentSummary,
 } from "@/lib/payments";
 import type { Guest } from "@/lib/guests-shared";
+import { PAYMENT_CURRENCIES, formatAmount } from "@/lib/currency";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
@@ -35,14 +36,14 @@ function useRefreshOnOk(state: PaymentActionState) {
   }, [state, router]);
 }
 
-function TotalForm({ matchId, total }: { matchId: number; total: number }) {
+function TotalForm({ matchId, total, currency }: { matchId: number; total: number; currency: string }) {
   const [state, action, pending] = useActionState(saveTotalAction, INITIAL);
   useRefreshOnOk(state);
   return (
     <form action={action} className="rounded-xl border border-black/10 p-4 dark:border-white/10">
       <input type="hidden" name="matchId" value={matchId} />
       <label className="block text-sm">
-        <span className="font-medium">Total payment value for this match day</span>
+        <span className="font-medium">Total cost for this match day ({currency})</span>
         <input type="number" name="total" min={0} step={1} defaultValue={total} className={inputCls} />
       </label>
       <Button type="submit" className="mt-3" pending={pending} pendingLabel="Saving…">
@@ -96,11 +97,22 @@ function DetailsForm({ matchId, meta }: { matchId: number; meta: PaymentMeta }) 
       <p className="mt-0.5 text-xs text-neutral-500">Shown to players so they know where to send money.</p>
       <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
+          <span className="font-medium">Currency</span>
+          <select name="currency" defaultValue={meta.currency} className={inputCls}>
+            {PAYMENT_CURRENCIES.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-neutral-500">New matches keep the last currency you used.</span>
+        </label>
+        <label className="block text-sm">
           <span className="font-medium">Recipient name</span>
           <input type="text" name="name" defaultValue={meta.paymentName} className={inputCls} />
         </label>
         <label className="block text-sm">
-          <span className="font-medium">Mobile number</span>
+          <span className="font-medium">Phone / account number</span>
           <input type="text" name="mobile" defaultValue={meta.paymentMobile} className={inputCls} />
         </label>
         <label className="block text-sm">
@@ -122,7 +134,8 @@ function DetailsForm({ matchId, meta }: { matchId: number; meta: PaymentMeta }) 
             className={inputCls}
           />
           <span className="mt-1 block text-xs text-neutral-500">
-            Players get a one-tap “Pay now” button. Ask them to add their name as the reference.
+            Players get a one-tap Pay button with their exact amount, plus copy buttons for every
+            detail and a ready-made reference.
           </span>
         </label>
       </div>
@@ -233,7 +246,7 @@ function ResetForm({ matchId }: { matchId: number }) {
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: string | number }) {
   return (
     <div>
       <div className="text-xs text-neutral-500">{label}</div>
@@ -290,11 +303,13 @@ export function PaymentsAdmin({
   summary: PaymentSummary;
   totalChange: number;
 }) {
+  const money = (n: number) => formatAmount(n, meta.currency);
   return (
     <div className="mt-6 space-y-6">
       <ActivateForm matchId={selectedMatchId} active={meta.paymentsActive} />
-      <TotalForm matchId={selectedMatchId} total={meta.totalPayment} />
-      <DetailsForm matchId={selectedMatchId} meta={meta} />      {rows.length === 0 && guests.length === 0 ? (
+      <TotalForm matchId={selectedMatchId} total={meta.totalPayment} currency={meta.currency} />
+      <DetailsForm matchId={selectedMatchId} meta={meta} />
+      {rows.length === 0 && guests.length === 0 ? (
         <p className="text-sm text-neutral-500">No players in this match.</p>
       ) : (
         <div>
@@ -302,9 +317,9 @@ export function PaymentsAdmin({
             <Metric label="Total" value={summary.totalPlayers} />
             <Metric label="Paid" value={summary.paidCount} />
             <Metric label="Unpaid" value={summary.unpaidCount} />
-            <Metric label="Per player share" value={summary.sharePerPlayer} />
-            <Metric label="Remaining" value={summary.remaining} />
-            <Metric label="Change (this match)" value={summary.changeCollected} />
+            <Metric label="Per player share" value={money(summary.sharePerPlayer)} />
+            <Metric label="Remaining" value={money(summary.remaining)} />
+            <Metric label="Change (this match)" value={money(summary.changeCollected)} />
             <Metric label="Change (all matches)" value={totalChange} />
           </div>
 
@@ -331,7 +346,7 @@ export function PaymentsAdmin({
                   <tr key={r.playerId} className="border-t border-black/5 dark:border-white/5">
                     <td className="py-2 pr-4">{r.name}</td>
                     <td className="py-2 pr-4">{r.teamNo}</td>
-                    <td className="py-2 pr-4">{summary.sharePerPlayer}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap">{money(summary.sharePerPlayer)}</td>
                     <td className="py-2 pr-4">
                       <PaidToggle matchId={selectedMatchId} playerId={r.playerId} paid={r.paid} />
                     </td>
@@ -348,7 +363,7 @@ export function PaymentsAdmin({
                       <span className="text-xs text-neutral-500"> · of {g.hostName}</span>
                     </td>
                     <td className="py-2 pr-4">{g.teamNo ?? "—"}</td>
-                    <td className="py-2 pr-4">{summary.sharePerPlayer}</td>
+                    <td className="py-2 pr-4 whitespace-nowrap">{money(summary.sharePerPlayer)}</td>
                     <td className="py-2 pr-4">
                       <GuestPaidToggle matchId={selectedMatchId} guestId={g.id} paid={g.paid} />
                     </td>
@@ -360,9 +375,9 @@ export function PaymentsAdmin({
           </DataTable>
 
           <p className="mt-3 text-xs text-neutral-500">
-            Collected so far: {summary.collected} / {Math.trunc(meta.totalPayment)}
+            Collected so far: {money(summary.collected)} / {money(Math.trunc(meta.totalPayment))}
             {summary.changeCollected > 0
-              ? ` · +${summary.changeCollected} extra from rounding`
+              ? ` · +${money(summary.changeCollected)} extra from rounding`
               : ""}
           </p>
           <div className="mt-3">

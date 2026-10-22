@@ -19,12 +19,11 @@ import { getFieldFeatures, getMatchLive } from "@/lib/field-view-settings";
 import { balanceSummary } from "@/lib/field-view";
 import { getDraftState } from "@/lib/draft";
 import { MatchSocial } from "./match-social";
-import { SectionIcon } from "@/components/section-icon";
-import { PhaseStrip } from "@/components/phase-strip";
 import { YouChip } from "@/components/you-chip";
 import { getMatchPhase, phaseAction } from "@/lib/match-phase";
 import { getAvailabilityMatch, getPlayerAvailabilityStatus } from "@/lib/availability";
 import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
+import { MatchPageHeader } from "./match-page-header";
 
 export const metadata = {
   title: "Match · Sideline",
@@ -47,30 +46,28 @@ export default async function MatchDetailPage({
   const matchId = Number(id);
   if (!Number.isFinite(matchId)) notFound();
 
-  const match = await getMatchDetail(matchId);
-  if (!match) notFound();
-
   const role = session.user.role;
-  const isAdmin = await isAdminView(role === "admin" || role === "super");
   const viewerPlayerId = session.user.playerId;
-  const isMember =
-    viewerPlayerId != null && (await isPlayerInMatch(matchId, viewerPlayerId));
+  // Independent reads in one round-trip window instead of one after another.
+  const [match, isAdmin, isMember, fieldFeatures] = await Promise.all([
+    getMatchDetail(matchId),
+    isAdminView(role === "admin" || role === "super"),
+    viewerPlayerId != null ? isPlayerInMatch(matchId, viewerPlayerId) : Promise.resolve(false),
+    getFieldFeatures(),
+  ]);
+  if (!match) notFound();
   const openForAvailability =
     match.matchdayStatus === "draft" || match.matchdayStatus === "active";
   if (!isAdmin && !isMember && !openForAvailability) {
     redirect("/matches");
   }
-  const adminMatch = isAdmin ? await getMatchAdmin(matchId) : null;
-  const canScore =
-    isAdmin ||
-    (await canRunMatchday(matchId, { role, playerId: viewerPlayerId ?? null }));
-
   // Social hub data (reactions, share). Rostered players may interact.
   const canInteract = isMember;
   const hasRoster = match.teams.some((t) => t.players.length > 0);
 
-  const fieldFeatures = await getFieldFeatures();
-  const [reactions, digest, baseUrl, weather, availMeta, lockEnabled, myStatus, fieldLive, draftForBalance] = await Promise.all([
+  const [adminMatch, canScore, reactions, digest, baseUrl, weather, availMeta, lockEnabled, myStatus, fieldLive, draftForBalance] = await Promise.all([
+    isAdmin ? getMatchAdmin(matchId) : Promise.resolve(null),
+    isAdmin ? Promise.resolve(true) : canRunMatchday(matchId, { role, playerId: viewerPlayerId ?? null }),
     getReactionSummary(matchId, viewerPlayerId ?? null),
     getMatchDigest(matchId),
     getBaseUrl(),
@@ -110,20 +107,19 @@ export default async function MatchDetailPage({
 
   return (
     <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10">
-      <Link
-        href="/matches"
-        className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-3.5 py-2 text-sm font-semibold text-neutral-700 shadow-sm transition hover:border-emerald-500/40 hover:text-emerald-700 active:scale-[0.97] dark:border-white/15 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:text-emerald-300"
-      >
-        <span aria-hidden="true">←</span> All matches
-      </Link>
+      <MatchPageHeader
+        matchId={matchId}
+        dateLabel={matchLabel(match.playedOn)}
+        title={matchLabel(match.playedOn)}
+        subtitle={fmtMatchTime(match.matchTime)}
+        phase={phase}
+        overview
+      />
 
       <div className="mt-3 rounded-2xl border border-black/[0.06] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
         <div className="flex flex-wrap items-center gap-2.5">
-          <SectionIcon name="matches" className="h-9 w-9" />
-            <h1 className="text-2xl font-bold tracking-tight">{matchLabel(match.playedOn)}</h1>
           <YouChip phase={phase} myStatus={myStatus} onRoster={isMember} />
         </div>
-        <PhaseStrip phase={phase} className="mt-3" />
         {nextStep ? (
           <Link
             href={nextStep.href}
