@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent } from "react";
-import { createTapCounter, createTapSoundPlayer, playFart, sillySoundsEnabled, TAP_SPAM } from "@/lib/silly-sounds";
+import { createTapCounter, playFart, sillySoundsEnabled, tapSoundPlayer, TAP_SPAM } from "@/lib/silly-sounds";
 
 type Loaded = { enabled: boolean; urls: string[] };
 export type Puff = { id: number; x: number; y: number; size: number; drift: number };
@@ -9,14 +9,17 @@ export type Puff = { id: number; x: number; y: number; size: number; drift: numb
 const MAX_PUFFS = 14;
 
 /**
- * T-1: pointer-down handler for the IN/OUT control. Once the player is
- * spamming (3 taps in 1.5 s), every tap plays a sound and vibrates at once,
- * and the control smokes until 1 s passes without a tap. The config is loaded
- * on mount so the first spam tap already uses the admin's custom sound.
+ * T-1: pointer-up handler for the IN/OUT control. Once the player is spamming
+ * (3 taps in 1.5 s), every tap plays a sound and vibrates, and the control
+ * smokes until 1 s passes without a tap.
+ *
+ * Pointer-up, not down: iOS only lets audio start from the end of a touch, and
+ * per the HTML spec a touch pointerdown is not a user activation at all.
+ * Settings are fetched fresh on mount and whenever the app comes back to the
+ * foreground, so an installed app picks up admin changes without a reload.
  */
 export function useTapSpam() {
   const counter = useRef<ReturnType<typeof createTapCounter> | null>(null);
-  const player = useRef<ReturnType<typeof createTapSoundPlayer> | null>(null);
   const cfg = useRef<Loaded | null>(null);
   const loading = useRef<Promise<void> | null>(null);
   const calm = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -24,13 +27,13 @@ export function useTapSpam() {
   const [puffs, setPuffs] = useState<Puff[]>([]);
   const [smoking, setSmoking] = useState(false);
 
-  const load = useCallback(() => {
-    loading.current ??= fetch("/api/tap-spam")
+  const load = useCallback((force = false) => {
+    if (force) loading.current = null;
+    loading.current ??= fetch("/api/tap-spam", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : { enabled: true, urls: [] }))
       .then((c: Loaded) => {
         cfg.current = { enabled: c.enabled, urls: c.urls };
-        player.current ??= createTapSoundPlayer();
-        player.current.preload(c.urls);
+        tapSoundPlayer().setUrls(c.urls);
       })
       .catch((error: unknown) => {
         console.error("Could not load tap sounds.", error);
@@ -40,9 +43,14 @@ export function useTapSpam() {
   }, []);
 
   useEffect(() => {
-    if (sillySoundsEnabled()) void load();
+    if (sillySoundsEnabled()) void load(true);
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && sillySoundsEnabled()) void load(true);
+    };
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      player.current?.stop();
+      document.removeEventListener("visibilitychange", onVisible);
+      tapSoundPlayer().stop();
       if (calm.current) clearTimeout(calm.current);
     };
   }, [load]);
@@ -55,13 +63,20 @@ export function useTapSpam() {
     const c = cfg.current;
     if (c && !c.enabled) return;
 
-    // Until the config arrives, stay quiet rather than guess the default fart.
     if (c?.urls.length) {
-      player.current ??= createTapSoundPlayer();
-      player.current.play(c.urls);
+      void tapSoundPlayer()
+        .play(c.urls)
+        .then((result) => {
+          if (result === "played") return;
+          // The upload may have been replaced or deleted: fart now, re-sync for next time.
+          playFart();
+          void load(true);
+        });
     } else if (c) {
       playFart();
     }
+    // No settings yet (first request still in flight): stay quiet rather than
+    // fart and then switch to the custom sound — that mix was a reported bug.
     navigator.vibrate?.(60);
 
     const box = e.currentTarget.getBoundingClientRect();

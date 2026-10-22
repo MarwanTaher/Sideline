@@ -601,7 +601,8 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
   Messages; stored in Vercel Blob, list in `app_settings` `tap_spam_sounds`. When the list is empty
   the synth farts are used. Admin master switch to disable the egg entirely.
 - **Opt-out:** "Silly sounds" switch in Profile (per device, `localStorage`), default on.
-- **Caveat:** an iPhone on silent mutes web audio; that is expected.
+- **Caveat:** iPhone silent mode mutes app sounds (they are declared "ambient" so they mix with
+  music rather than pausing it).
 - Exception to §9 "sounds on by default": this only fires on deliberate spam, never on normal use.
 - **Revised (owner feedback):** 3 taps within 1.5 s starts spam mode; from then on *every* tap plays
   the sound and vibrates with no delay, and the control shakes and puffs smoke until 1 s without a tap.
@@ -613,6 +614,23 @@ Agreed with the group owner after the UX bundles shipped to dev. Order of work: 
 - **Fixed (owner feedback):** sounds no longer stack when someone keeps spamming. One voice is
   reused: each tap restarts the custom sound from the top (and cuts the previous synth fart), and
   uploads accept WAV too.
+- **Mobile / installed-app fixes (owner feedback: changes slow to show on Android, installed app
+  silent, iOS unknown):**
+  - *Delay:* `GET /api/tap-spam` was cached for 5 minutes and the installed app never reloads.
+    It is now `no-store`, re-fetched whenever the app returns to the foreground, and the page
+    refreshes (`router.refresh()`) after ≥ 60 s in the background so new pop-ups and pop-up sounds
+    appear too. A fresh set of pop-ups remounts the overlay.
+  - *Installed app silence:* a long-lived app created new preloaded `<audio>` players on every visit
+    to Home/Availability and never released them; mobile browsers cap media players per page. One
+    shared player now keeps exactly the current sounds and releases removed ones. A deleted or
+    unplayable upload falls back to the fart (and re-syncs) instead of going silent. Bundled
+    `/audio/*.mp3` no longer go through the login middleware.
+  - *iOS:* WebKit only lets audio start inside `touchend`/`click`/`keydown`, so spam detection now
+    runs on **pointer-up** (a touch pointer-down is not a user activation per the HTML spec). The
+    Web Audio context is resumed from any non-running state, including iOS's "interrupted" after
+    backgrounding. Pages declare `navigator.audioSession.type = "ambient"` where supported, so
+    sounds mix with the user's music instead of pausing it and follow the iPhone silent switch.
+    The iOS home-screen app keeps its own cookies and storage, separate from Safari.
 
 ### S-1 24-hour photo stories — P2 · M
 

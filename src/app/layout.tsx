@@ -5,6 +5,7 @@ import SiteHeader from "@/components/site-header";
 import { SplashScreen } from "@/components/splash-screen";
 import OnboardingFlow from "@/components/onboarding-flow";
 import PullToRefresh from "@/components/pull-to-refresh";
+import RefreshOnResume from "@/components/refresh-on-resume";
 import { auth } from "@/auth";
 import { Suspense } from "react";
 import { MomentsGate } from "@/components/moments-gate";
@@ -69,6 +70,7 @@ export default async function RootLayout({
       <body className="min-h-full flex flex-col pb-20 md:pb-0">
         <SplashScreen />
         <PullToRefresh />
+        <RefreshOnResume />
         <SiteHeader />
         {children}
         <OnboardingFlow show={Boolean(session?.user)} />

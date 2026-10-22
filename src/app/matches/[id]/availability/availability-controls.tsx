@@ -142,7 +142,8 @@ export function AvailabilityControls({
         }`}
         onClickCapture={buzz}
         // Disabled buttons let the tap through (pointer-events-none) so spam still counts.
-        onPointerDown={onTap}
+        // Pointer-up: iOS only allows audio to start at the end of a touch.
+        onPointerUp={onTap}
       >
         {btn("in")}
         {btn("out")}

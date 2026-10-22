@@ -25,6 +25,9 @@ export async function MomentsGate() {
   ]);
   return (
     <MomentsOverlay
+      // A new set of moments (e.g. after a refresh on resume) gets a fresh overlay,
+      // even if the previous set was already dismissed.
+      key={moments.map((m) => m.id).join(",")}
       moments={moments}
       overrides={overrides}
       customSounds={sounds}

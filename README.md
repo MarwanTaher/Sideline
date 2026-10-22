@@ -54,6 +54,17 @@ billing concurrency, credit release, checklist changes, reserve-list joins, auto
 score revisions and sanitized error logging, and removes only its fixtures in `finally`.
 It is deliberately excluded from the build/unit gate.
 
+> **Warning — `.env.production.local` wins in production mode.** `next build` and `next start`
+> load `.env.production.local` *before* `.env.local`. If that file holds the production
+> `DATABASE_URL`, a local production server talks to **production**, even though your scripts read
+> Preview from `.env.local`. When testing locally, pin the database in the process environment
+> (which overrides every `.env` file), for example:
+>
+> ```powershell
+> $env:DATABASE_URL = node -e "process.stdout.write(require('dotenv').parse(require('fs').readFileSync('.env.local')).DATABASE_URL)"
+> npx next start -p 3123
+> ```
+
 ### Release prerequisites
 
 - Migrations `0029`–`0032` are applied to Preview and production (2026-10-22). Any new
