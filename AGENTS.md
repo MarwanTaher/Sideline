@@ -21,4 +21,3 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): module boundaries, data access, and deployment.
 - [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md): product behavior and requirements.
-- [design/DESIGN_SYSTEM.md](design/DESIGN_SYSTEM.md): UI tokens and component guidance.

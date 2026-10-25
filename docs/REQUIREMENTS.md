@@ -5,7 +5,7 @@
 | Product | Sideline — weekly football group manager (PWA) |
 | Version of this document | Baseline `main` @ `a4342eb`; updated with local Phase 3–5 requirements (Preview verified, not production-deployed) |
 | Audience | Group organisers (admins), developers, future contributors |
-| Related | [ARCHITECTURE.md](./ARCHITECTURE.md) · [IMPROVEMENTS.md](./IMPROVEMENTS.md) · [scoring-guide.html](./scoring-guide.html) |
+| Related | [ARCHITECTURE.md](./ARCHITECTURE.md) |
 
 ---
 

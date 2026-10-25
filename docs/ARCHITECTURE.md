@@ -4,7 +4,7 @@
 |---|---|
 | Scope | The `football-web` Next.js application (production: Vercel `main`, staging: `dev`) |
 | Based on | Baseline `main` @ `a4342eb`; updated for local Phase 3–5 code through migration `0031` (Preview verified, not production-deployed) |
-| Related | [REQUIREMENTS.md](./REQUIREMENTS.md) · [IMPROVEMENTS.md](./IMPROVEMENTS.md) · [../design/DESIGN_SYSTEM.md](../design/DESIGN_SYSTEM.md) |
+| Related | [REQUIREMENTS.md](./REQUIREMENTS.md) |
 
 ---
 
