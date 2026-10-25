@@ -1,0 +1,28 @@
+Sideline moment sound recordings
+Verified on 2026-10-22. All three source pages specify CC0 1.0:
+https://creativecommons.org/publicdomain/zero/1.0/
+
+applause.mp3
+  Title: applause005.mp3
+  Creator: tec_studio
+  Source: https://freesound.org/people/tec_studio/sounds/361558/
+  Download: https://cdn.freesound.org/previews/361/361558_1431924-hq.mp3
+  SHA-256: 684839eb2db41d297f7f92b9f0f7dbb5620540a964fd3037844d479f4e068546
+
+laugh.mp3
+  Title: Laugh 1 pun dad joke.wav
+  Creator: jayfrosting
+  Source: https://freesound.org/people/jayfrosting/sounds/333403/
+  Download: https://cdn.freesound.org/previews/333/333403_5884138-hq.mp3
+  SHA-256: e411ac22aa7880cdfc586a69cecb3ee2f1ba67dd9b6963be5550be2e3138854f
+
+cheer.mp3
+  Title: Crowd Cheer 5
+  Creator: Krizin
+  Source: https://freesound.org/people/Krizin/sounds/651646/
+  Download: https://cdn.freesound.org/previews/651/651646_5315864-hq.mp3
+  SHA-256: 417e0bcc7d22a6e3c2906ad53df5b373fcd950920834950c1cfa586b16249e8d
+
+Files are unmodified MP3 previews supplied publicly by Freesound.
+Playback is capped at 4.5 seconds with a short fade. No third-party
+audio server is contacted by the app; recordings are served locally.

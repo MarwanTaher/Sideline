@@ -1,0 +1,41 @@
+import assert from "node:assert/strict";
+import { isAvailabilityLockPushDue } from "../src/lib/reminder-scheduling";
+import { AVAILABILITY_LOCK_MS } from "../src/lib/match-schedule";
+import { digestPushBody } from "../src/lib/digest-push";
+import { formatAmount, isPaymentCurrency, normCurrency } from "../src/lib/currency";
+
+assert.equal(formatAmount(45, "PLN"), "45 PLN");
+assert.equal(formatAmount(12.5, "EUR"), "12.50 EUR");
+assert.equal(normCurrency("EGP"), "EGP");
+assert.equal(normCurrency(null), "PLN");
+assert.equal(normCurrency("XYZ"), "PLN");
+assert.equal(isPaymentCurrency("PLN; DROP"), false);
+console.log("Match payment currency tests passed.");
+
+const now = Date.parse("2026-10-22T12:00:00Z");
+
+assert.equal(
+  isAvailabilityLockPushDue(new Date(now + AVAILABILITY_LOCK_MS), now),
+  true,
+);
+assert.equal(
+  isAvailabilityLockPushDue(new Date(now + AVAILABILITY_LOCK_MS + 1), now),
+  false,
+);
+assert.equal(isAvailabilityLockPushDue(new Date(now), now), false);
+assert.equal(isAvailabilityLockPushDue(new Date(now - 1), now), false);
+assert.equal(isAvailabilityLockPushDue(null, now), false);
+
+console.log("Phase 4 reminder scheduling tests passed.");
+
+assert.equal(digestPushBody(null), "The matchday is complete. Open your recap and updated ratings.");
+assert.equal(
+  digestPushBody({
+    matchId: 1, playedOn: "2026-10-22", playedOnLabel: "22 Oct",
+    matchTimeLabel: "", teams: [], hasResult: true,
+    motm: { name: "test_user", votes: 4 }, topScorer: { name: "test_user#2", goals: 3 },
+    movers: [{ name: "test_user#3", deltaFinal: 0.74 }],
+  }),
+  "MOTM: test_user · Top scorer: test_user#2 (3) · test_user#3 +0.7. Full recap inside.",
+);
+console.log("Phase 4 final-matchday digest copy tests passed.");

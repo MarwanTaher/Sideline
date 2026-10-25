@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sideline · Section Icons (Proposal)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --black: #0D0D0D;
+      --green: #A6CE39;
+      --gray: #555555;
+      --bg: #F8F9FA;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Montserrat', sans-serif;
+      margin: 0;
+      background: var(--bg);
+      color: var(--black);
+    }
+    header {
+      background: var(--black);
+      color: #fff;
+      padding: 48px 40px;
+      border-bottom: 6px solid var(--green);
+    }
+    header h1 {
+      margin: 0;
+      font-weight: 700;
+      letter-spacing: 4px;
+      text-transform: uppercase;
+      font-size: 28px;
+    }
+    header p { margin: 10px 0 0; color: #bbb; font-size: 14px; max-width: 720px; line-height: 1.6; }
+    .section-title {
+      font-weight: 700; text-transform: uppercase; letter-spacing: 2px;
+      font-size: 15px; margin: 40px 40px 0; padding-left: 14px;
+      border-left: 4px solid var(--green);
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 20px;
+      padding: 24px 40px 8px;
+    }
+    .card {
+      background: #fff; border: 1px solid #e6e6e6; border-radius: 16px;
+      padding: 20px; text-align: center;
+      box-shadow: 0 2px 8px rgba(0,0,0,.04);
+    }
+    .card svg { width: 84px; height: 84px; }
+    .card .label { margin-top: 12px; font-weight: 600; font-size: 13px; }
+    .card .use { margin-top: 2px; font-size: 11px; color: var(--gray); }
+    .darkstrip { background: var(--black); padding: 24px 40px; margin-top: 24px; }
+    .darkstrip .row { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+    .darkstrip svg { width: 60px; height: 60px; }
+    .darkstrip .note { color: #999; font-size: 12px; width: 100%; margin-bottom: 6px; }
+    footer { padding: 30px 40px 60px; color: var(--gray); font-size: 12px; }
+    code { background: #eee; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Sideline — Section Icons</h1>
+    <p>
+      Proposed icon family for the app sections. Each icon is a black
+      (<code>#0D0D0D</code>) rounded tile with a white line glyph and a single
+      green (<code>#A6CE39</code>) accent — mirroring the app-icon's motif so the
+      whole UI feels like one system. Tiles are self-contained, so they read on
+      both light and dark backgrounds. Review below; on approval I'll export each
+      as an SVG and place them beside dashboard cards, nav/section headers, and
+      empty states.
+    </p>
+  </header>
+
+  <div class="section-title">Player-facing sections</div>
+  <div class="grid">
+    <!-- Dashboard -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <rect x="55" y="55" width="40" height="40" rx="9" fill="#FFFFFF"/>
+        <rect x="105" y="55" width="40" height="40" rx="9" fill="#A6CE39"/>
+        <rect x="55" y="105" width="40" height="40" rx="9" fill="#FFFFFF"/>
+        <rect x="105" y="105" width="40" height="40" rx="9" fill="#FFFFFF"/>
+      </svg>
+      <div class="label">Dashboard</div>
+      <div class="use">home / summary</div>
+    </div>
+
+    <!-- Matches -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <circle cx="100" cy="100" r="46" fill="none" stroke="#FFFFFF" stroke-width="8"/>
+        <path d="M100 78 L120.9 93.2 L112.9 117.8 L87.1 117.8 L79.1 93.2 Z" fill="#A6CE39"/>
+        <path d="M100 78 V64 M120.9 93.2 L134 84 M112.9 117.8 L121 131 M87.1 117.8 L79 131 M79.1 93.2 L66 84"
+              stroke="#FFFFFF" stroke-width="6" stroke-linecap="round"/>
+      </svg>
+      <div class="label">Matches</div>
+      <div class="use">fixtures list</div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <rect x="56" y="100" width="26" height="46" rx="6" fill="#FFFFFF"/>
+        <rect x="87" y="72" width="26" height="74" rx="6" fill="#A6CE39"/>
+        <rect x="118" y="116" width="26" height="30" rx="6" fill="#FFFFFF"/>
+      </svg>
+      <div class="label">Leaderboard</div>
+      <div class="use">rankings / podium</div>
+    </div>
+
+    <!-- Awards -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <path d="M68 62 H132 V80 C132 101 117 113 100 113 C83 113 68 101 68 80 Z" fill="#A6CE39"/>
+        <path d="M68 70 C54 70 54 92 70 92" fill="none" stroke="#FFFFFF" stroke-width="7"/>
+        <path d="M132 70 C146 70 146 92 130 92" fill="none" stroke="#FFFFFF" stroke-width="7"/>
+        <rect x="92" y="111" width="16" height="16" fill="#FFFFFF"/>
+        <rect x="76" y="126" width="48" height="13" rx="4" fill="#FFFFFF"/>
+      </svg>
+      <div class="label">Awards</div>
+      <div class="use">MOTM / honours</div>
+    </div>
+
+    <!-- Votes -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <path d="M100 60 L110 86.2 L138 87.6 L116.2 105.3 L123.5 132.4 L100 117 L76.5 132.4 L83.8 105.3 L62 87.6 L90 86.2 Z" fill="#A6CE39"/>
+      </svg>
+      <div class="label">Votes / Rate</div>
+      <div class="use">player ratings</div>
+    </div>
+
+    <!-- Stats -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <polyline points="58,132 82,108 106,118 140,70" fill="none" stroke="#A6CE39" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M140 70 L126 70 M140 70 L140 84" stroke="#A6CE39" stroke-width="8" stroke-linecap="round"/>
+        <circle cx="58" cy="132" r="5" fill="#FFFFFF"/>
+        <circle cx="82" cy="108" r="5" fill="#FFFFFF"/>
+        <circle cx="106" cy="118" r="5" fill="#FFFFFF"/>
+      </svg>
+      <div class="label">Stats</div>
+      <div class="use">match stats</div>
+    </div>
+
+    <!-- Availability -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <rect x="54" y="62" width="92" height="82" rx="12" fill="none" stroke="#FFFFFF" stroke-width="8"/>
+        <line x1="54" y1="86" x2="146" y2="86" stroke="#FFFFFF" stroke-width="8"/>
+        <line x1="78" y1="54" x2="78" y2="70" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+        <line x1="122" y1="54" x2="122" y2="70" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/>
+        <path d="M76 112 L92 128 L124 96" fill="none" stroke="#A6CE39" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="label">Availability</div>
+      <div class="use">who's in</div>
+    </div>
+
+    <!-- Profile -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <circle cx="100" cy="100" r="44" fill="none" stroke="#A6CE39" stroke-width="8"/>
+        <circle cx="100" cy="88" r="15" fill="#FFFFFF"/>
+        <path d="M74 130 C74 110 126 110 126 130 Z" fill="#FFFFFF"/>
+      </svg>
+      <div class="label">Profile</div>
+      <div class="use">my account</div>
+    </div>
+  </div>
+
+  <div class="section-title">Admin sections</div>
+  <div class="grid">
+    <!-- Payments -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <rect x="52" y="72" width="96" height="56" rx="12" fill="#FFFFFF"/>
+        <circle cx="100" cy="100" r="16" fill="#A6CE39"/>
+        <circle cx="65" cy="100" r="4" fill="#0D0D0D"/>
+        <circle cx="135" cy="100" r="4" fill="#0D0D0D"/>
+      </svg>
+      <div class="label">Payments</div>
+      <div class="use">dues / fees</div>
+    </div>
+
+    <!-- Players -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <circle cx="118" cy="82" r="15" fill="#FFFFFF"/>
+        <path d="M96 130 C96 106 140 106 140 130 Z" fill="#FFFFFF"/>
+        <circle cx="84" cy="88" r="17" fill="#A6CE39"/>
+        <path d="M58 138 C58 110 110 110 110 138 Z" fill="#A6CE39"/>
+      </svg>
+      <div class="label">Players</div>
+      <div class="use">roster mgmt</div>
+    </div>
+
+    <!-- Scoring -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <circle cx="100" cy="100" r="40" fill="none" stroke="#FFFFFF" stroke-width="8"/>
+        <circle cx="100" cy="100" r="23" fill="none" stroke="#FFFFFF" stroke-width="8"/>
+        <circle cx="100" cy="100" r="9" fill="#A6CE39"/>
+      </svg>
+      <div class="label">Scoring</div>
+      <div class="use">weights / rules</div>
+    </div>
+
+    <!-- Draft -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <circle cx="74" cy="84" r="12" fill="#FFFFFF"/>
+        <circle cx="74" cy="116" r="12" fill="#FFFFFF"/>
+        <circle cx="126" cy="84" r="12" fill="#FFFFFF"/>
+        <circle cx="126" cy="116" r="12" fill="#FFFFFF"/>
+        <rect x="96" y="54" width="8" height="92" rx="4" fill="#A6CE39"/>
+      </svg>
+      <div class="label">Draft / Teams</div>
+      <div class="use">team split (sideline motif)</div>
+    </div>
+
+    <!-- Diagnostics -->
+    <div class="card">
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+        <rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/>
+        <path d="M58 100 H80 L90 76 L104 128 L116 100 H142" fill="none" stroke="#A6CE39" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="label">Diagnostics</div>
+      <div class="use">system health</div>
+    </div>
+  </div>
+
+  <div class="darkstrip">
+    <div class="row">
+      <div class="note">Same icons on a dark surface (they hold up on both themes):</div>
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/><rect x="55" y="55" width="40" height="40" rx="9" fill="#FFFFFF"/><rect x="105" y="55" width="40" height="40" rx="9" fill="#A6CE39"/><rect x="55" y="105" width="40" height="40" rx="9" fill="#FFFFFF"/><rect x="105" y="105" width="40" height="40" rx="9" fill="#FFFFFF"/></svg>
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/><circle cx="100" cy="100" r="46" fill="none" stroke="#FFFFFF" stroke-width="8"/><path d="M100 78 L120.9 93.2 L112.9 117.8 L87.1 117.8 L79.1 93.2 Z" fill="#A6CE39"/></svg>
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/><rect x="56" y="100" width="26" height="46" rx="6" fill="#FFFFFF"/><rect x="87" y="72" width="26" height="74" rx="6" fill="#A6CE39"/><rect x="118" y="116" width="26" height="30" rx="6" fill="#FFFFFF"/></svg>
+      <svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><rect x="4" y="4" width="192" height="192" rx="40" fill="#0D0D0D"/><path d="M100 60 L110 86.2 L138 87.6 L116.2 105.3 L123.5 132.4 L100 117 L76.5 132.4 L83.8 105.3 L62 87.6 L90 86.2 Z" fill="#A6CE39"/></svg>
+    </div>
+  </div>
+
+  <footer>
+    Proposal only — no app files were changed. Icons use exactly the brand palette
+    (#0D0D0D / #A6CE39 / #FFFFFF) and the tile/accent motif of the Sideline app icon.
+    Tell me which to keep, tweak, or replace, and whether you prefer this filled-tile
+    style or an alternative (e.g. flat line icons without the dark tile).
+  </footer>
+</body>
+</html>

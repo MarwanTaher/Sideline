@@ -1,0 +1,1 @@
+ALTER TABLE matches ADD COLUMN IF NOT EXISTS payments_active integer DEFAULT 0 NOT NULL;
