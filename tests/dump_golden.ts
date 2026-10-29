@@ -1,8 +1,7 @@
 /**
- * Regenerate tests/golden_scores.json from the current scoring engine + live
- * DB. Run when the golden master has drifted because the database gained new
- * matches, votes or stats (the golden is a static snapshot; the engine reads
- * live data).
+ * Regenerate ignored tests/.local/golden_scores.json from an explicitly
+ * approved non-production database. Set ALLOW_GOLDEN_DB_TESTS=1 and a matching
+ * GOLDEN_DATABASE_HOST before running. Never commit database snapshots.
  *
  *   node --env-file=.env.local --import tsx tests/dump_golden.ts
  *
@@ -10,12 +9,10 @@
  * against the previous snapshot stays minimal and reviewable.
  */
 
-import { writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import { getPlayerScores } from "../src/lib/scoring";
-
-const here = dirname(fileURLToPath(import.meta.url));
+import { localGoldenPath } from "./golden-db";
 
 /** Stable stringify: numeric-sorted top-level ids, alpha-sorted inner keys. */
 function stableStringify(scores: Record<number, unknown>): string {
@@ -33,8 +30,9 @@ function stableStringify(scores: Record<number, unknown>): string {
 }
 
 async function main() {
+  const out = localGoldenPath("golden_scores.json");
   const scores = await getPlayerScores();
-  const out = join(here, "golden_scores.json");
+  mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, stableStringify(scores), "utf-8");
   console.log(`Wrote ${Object.keys(scores).length} players to ${out}`);
 }

@@ -1,0 +1,29 @@
+{
+  "overall": {
+    "motm": {
+      "metric_label": "Votes",
+      "source": "computed",
+      "winners": [{ "metric_value": 2, "player_id": 900002 }]
+    },
+    "top_defender": {
+      "metric_label": "Peer Avg",
+      "source": "computed",
+      "winners": [{ "metric_value": 7.5, "player_id": 900002 }]
+    },
+    "top_goal_contribution": {
+      "metric_label": "Assists",
+      "source": "computed",
+      "winners": [{ "metric_value": 3, "player_id": 900002 }]
+    },
+    "top_performer": {
+      "metric_label": "Peer Avg",
+      "source": "computed",
+      "winners": [{ "metric_value": 8, "player_id": 900002 }]
+    },
+    "top_scorer": {
+      "metric_label": "Goals",
+      "source": "computed",
+      "winners": [{ "metric_value": 4, "player_id": 900002 }]
+    }
+  }
+}

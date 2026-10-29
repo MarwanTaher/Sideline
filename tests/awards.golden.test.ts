@@ -1,7 +1,8 @@
 /**
  * Golden-master + unit parity test for the awards engine.
  *
- * Run with the same env the app uses (loads DATABASE_URL before imports):
+ * Run only with an explicitly approved non-production database and the
+ * ALLOW_GOLDEN_DB_TESTS / GOLDEN_DATABASE_HOST opt-ins described in README.md:
  *
  *   node --env-file=.env.local --import tsx tests/awards.golden.test.ts
  *
@@ -9,14 +10,13 @@
  *   1. Unit-checks the pure helpers (tie handling, scope keys) against
  *      hand-computed values — protects the logic even when live data is empty.
  *   2. Runs getAwards() for the overall scope and every match, diffing the
- *      winners / metric_label / source against tests/golden_awards.json (a dump
- *      of the Python get_awards()).
+ *      winners / metric_label / source against the ignored local baseline in
+ *      tests/.local/golden_awards.json.
  */
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import assert from "node:assert/strict";
+import { localGoldenPath } from "./golden-db";
 import {
   getAwards,
   winnersFromRows,
@@ -26,7 +26,6 @@ import {
 } from "../src/lib/awards";
 
 const TOLERANCE = 0.01;
-const here = dirname(fileURLToPath(import.meta.url));
 
 let failures = 0;
 function check(name: string, fn: () => void) {
@@ -89,9 +88,6 @@ interface GoldenBlock {
   source: string;
 }
 type GoldenScope = Record<string, GoldenBlock>;
-
-const goldenPath = join(here, "golden_awards.json");
-const golden = JSON.parse(readFileSync(goldenPath, "utf-8")) as Record<string, GoldenScope>;
 
 function projectWinners(winners: AwardWinner[]): GoldenWinner[] {
   return winners
@@ -156,6 +152,7 @@ async function computeScope(scopeName: string): Promise<GoldenScope> {
 }
 
 async function main() {
+  const golden = JSON.parse(readFileSync(localGoldenPath("golden_awards.json"), "utf-8")) as Record<string, GoldenScope>;
   const scopeNames = Object.keys(golden).sort();
 
   check("scope set is non-empty", () => {
