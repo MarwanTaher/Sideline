@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { assertApprovedGoldenDatabase } from "./golden-db";
 import { escapeCsvCell, toCsv } from "../src/lib/export-csv";
 import { sanitizeErrorMessage } from "../src/lib/error-sanitization";
 import {
@@ -69,6 +70,36 @@ test("snapshots with missing or extra score entries are rejected", () => {
   assert.equal(isSnapshotComplete(3, 2), false);
   assert.equal(isSnapshotComplete(3, 4), false);
   assert.equal(isSnapshotComplete(0, 0), true);
+});
+
+test("golden database checks require an explicit opt-in and matching approved host", () => {
+  const approved = {
+    ALLOW_GOLDEN_DB_TESTS: "1",
+    GOLDEN_DATABASE_HOST: "approved-preview.example.com",
+    DATABASE_URL: "postgresql://approved-preview.example.com/testdb",
+  };
+  assert.doesNotThrow(() => assertApprovedGoldenDatabase(approved));
+  for (const env of [
+    {},
+    { ...approved, ALLOW_GOLDEN_DB_TESTS: "0" },
+    { ...approved, GOLDEN_DATABASE_HOST: "another-preview.example.com" },
+    { ...approved, DATABASE_URL: "invalid-url" },
+    { ...approved, DATABASE_URL: "https://approved-preview.example.com/testdb" },
+  ]) {
+    assert.throws(() => assertApprovedGoldenDatabase(env), /approved non-production/);
+  }
+});
+
+test("committed score and awards examples contain only fictional player identifiers", () => {
+  const scores = JSON.parse(readFileSync("tests/golden_scores.json", "utf8"));
+  const awards = JSON.parse(readFileSync("tests/golden_awards.json", "utf8"));
+  assert.deepEqual(Object.keys(scores), ["900001", "900002"]);
+  assert.equal(scores["900001"].match_count, 0);
+  assert.equal(scores["900002"].final, 72.5);
+  assert.deepEqual(Object.keys(awards), ["overall"]);
+  for (const block of Object.values(awards.overall) as { winners: { player_id: number }[] }[]) {
+    assert.deepEqual(block.winners.map((winner) => winner.player_id), [900002]);
+  }
 });
 
 console.log(`\n${passed} phase-5 tests passed.`);

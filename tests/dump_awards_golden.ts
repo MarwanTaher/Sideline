@@ -1,7 +1,7 @@
 /**
- * Regenerate tests/golden_awards.json from the current awards engine + live DB.
- * Run when the awards baseline legitimately changes (engine change or new match
- * data):
+ * Regenerate ignored tests/.local/golden_awards.json from an explicitly approved
+ * non-production database. Set ALLOW_GOLDEN_DB_TESTS=1 and a matching
+ * GOLDEN_DATABASE_HOST before running. Never commit database snapshots.
  *
  *   node --env-file=.env.local --import tsx tests/dump_awards_golden.ts
  *
@@ -10,17 +10,15 @@
  * ("overall" and "match:<id>") with sorted keys for a minimal diff.
  */
 
-import { writeFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
+import { localGoldenPath } from "./golden-db";
 import {
   getAwards,
   getAwardMatches,
   AWARD_TYPES,
   type AwardWinner,
 } from "../src/lib/awards";
-
-const here = dirname(fileURLToPath(import.meta.url));
 
 function projectWinners(winners: AwardWinner[]) {
   return winners
@@ -61,6 +59,7 @@ function sortKeys(value: unknown): unknown {
 }
 
 async function main() {
+  const out = localGoldenPath("golden_awards.json");
   const matches = await getAwardMatches();
   const scopeNames = ["overall", ...matches.map((m) => `match:${m.id}`)];
 
@@ -69,7 +68,7 @@ async function main() {
     golden[scopeName] = await computeScope(scopeName);
   }
 
-  const out = join(here, "golden_awards.json");
+  mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, JSON.stringify(sortKeys(golden), null, 2) + "\n", "utf-8");
   console.log(`Wrote ${scopeNames.length} scopes to ${out}`);
 }

@@ -1,23 +1,23 @@
 /**
  * Golden-master + unit parity test for the scoring engine.
  *
- * Run with the same env the app uses (loads DATABASE_URL before imports):
+ * Run only with an explicitly approved non-production database and the
+ * ALLOW_GOLDEN_DB_TESTS / GOLDEN_DATABASE_HOST opt-ins described in README.md:
  *
  *   node --env-file=.env.local --import tsx tests/scoring.golden.test.ts
  *
  * It does two things:
  *   1. Unit-checks the pure primitives against hand-computed values that mirror
  *      the Python engine (protects the math even when live data is neutral).
- *   2. Runs getPlayerScores() against the live DB and diffs every field against
- *      tests/golden_scores.json (a dump of the Python get_player_scores()).
+ *   2. Runs getPlayerScores() against that DB and diffs every field against the
+ *      ignored local baseline in tests/.local/golden_scores.json.
  *
  * Fields must match within TOLERANCE (absorbs round-half-to-even vs float diffs).
  */
 
 import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
 import assert from "node:assert/strict";
+import { localGoldenPath } from "./golden-db";
 import {
   getPlayerScores,
   statMetric,
@@ -32,7 +32,6 @@ import {
 } from "../src/lib/scoring";
 
 const TOLERANCE = 0.01;
-const here = dirname(fileURLToPath(import.meta.url));
 
 let failures = 0;
 function check(name: string, fn: () => void) {
@@ -117,13 +116,11 @@ check("filterOutlierVotes IQR filtering", () => {
 // ---------------------------------------------------------------------------
 console.log("\nGolden-master parity:");
 
-const goldenPath = join(here, "golden_scores.json");
-const golden = JSON.parse(readFileSync(goldenPath, "utf-8")) as Record<
-  string,
-  ScorePayload
->;
-
 async function main() {
+  const golden = JSON.parse(readFileSync(localGoldenPath("golden_scores.json"), "utf-8")) as Record<
+    string,
+    ScorePayload
+  >;
   const scores = await getPlayerScores();
 
   check("player set matches golden", () => {

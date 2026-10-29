@@ -1,0 +1,20 @@
+{
+  "900001": {
+    "final": 50,
+    "has_stats": false,
+    "match_count": 0,
+    "peer": 50,
+    "stat": null,
+    "tier": "unrated",
+    "valid_votes": 0
+  },
+  "900002": {
+    "final": 72.5,
+    "has_stats": true,
+    "match_count": 4,
+    "peer": 70,
+    "stat": 80,
+    "tier": "rated",
+    "valid_votes": 16
+  }
+}
