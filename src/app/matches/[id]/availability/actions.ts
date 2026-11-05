@@ -15,6 +15,8 @@ import {
   moveWaitlistPlayer,
   getWaitlist,
   promoteWaitlistCandidate,
+  respondToMatch,
+  assertPlayerResponse,
 } from "@/lib/availability";
 import { setAvailabilityOpen, setMaxPlayers } from "@/lib/match-admin";
 import { deleteGuestsForHost, countGuests } from "@/lib/guests";
@@ -127,7 +129,7 @@ async function runWaitlistPromotion(matchId: number): Promise<void> {
 
     const nextId = list[0];
     const promoted = await promoteWaitlistCandidate(matchId, nextId);
-    await removeFromWaitlist(matchId, nextId);
+    if (!promoted) break;
     if (promoted) {
       try {
         await addMoments([{ playerId: nextId, kind: "waitlist_promoted", matchId, payload: {} }]);
@@ -177,7 +179,7 @@ export async function setAvailabilityAction(
     if (!match) {
       return { ok: false, message: "Match not found." };
     }
-    if (!match.availabilityOpen) {
+    if (!match.availabilityOpen && !(match.automated && match.coreResponsesOpen)) {
       return { ok: false, message: "Availability is closed for this match." };
     }
 
@@ -185,7 +187,7 @@ export async function setAvailabilityAction(
     // within 24 hours of kickoff. Admins can still change it via the admin
     // controls, which use a separate action.
     if (
-      (await isAvailabilityLockEnabled()) &&
+      (match.automated || await isAvailabilityLockEnabled()) &&
       isWithinAvailabilityLock(match.kickoffAt)
     ) {
       return {
@@ -194,6 +196,7 @@ export async function setAvailabilityAction(
           "Availability is locked within 24 hours of kickoff. Please contact an admin to change it.",
       };
     }
+    await assertPlayerResponse(matchId, playerId);
 
     // If the player is already IN (e.g. an admin added them to the lineup),
     // marking IN again is a no-op — never waitlist a player who is already in
@@ -229,40 +232,13 @@ export async function setAvailabilityAction(
     // shows). A player moving to IN is always transitioning from out/pending
     // (the IN button is disabled when they are already in), so it always adds
     // one to the count.
-    if (status === "in") {
-      const [inCount, guestCount] = await Promise.all([
-        countInPlayers(matchId),
-        countGuests(matchId),
-      ]);
-      if (inCount + guestCount >= match.maxPlayers) {
-        // Match is full. If the admin has enabled auto-promotion, add the
-        // player to the waitlist instead of turning them away; otherwise keep
-        // the existing "ask an admin" behaviour.
-        if (await isWaitlistAutoPromoteEnabled()) {
-          const spot = await addToWaitlist(matchId, playerId);
-          revalidateAvailability(matchId);
-          return {
-            ok: true,
-            message: `Match is full — you're #${spot} on the waitlist. We'll add you automatically if a spot opens.`,
-          };
-        }
-        return {
-          ok: false,
-          message: `Match is full (${match.maxPlayers} players). Ask an admin if you need in.`,
-        };
-      }
-    }
-
-    await setPlayerAvailability(matchId, playerId, status);
-    if (status === "in") {
-      // Now in the lineup — drop from the waitlist if they were queued.
-      await removeFromWaitlist(matchId, playerId);
+    const result = await respondToMatch(matchId, playerId, status, match.automated || await isWaitlistAutoPromoteEnabled());
+    if (result.startsWith("waitlist:")) {
+      revalidateAvailability(matchId);
+      return { ok: true, message: `Match is full - you're #${result.slice(9)} on the waitlist.` };
     }
     if (status === "out") {
       // Guests follow their host — if the host is out, so are their guests.
-      await deleteGuestsForHost(matchId, playerId);
-      // Drop them from the waitlist (if present) and fill the freed spot.
-      await removeFromWaitlist(matchId, playerId);
       await runWaitlistPromotion(matchId);
     }
     revalidateAvailability(matchId);
@@ -277,7 +253,7 @@ export async function setAvailabilityAction(
 
 /**
  * Admin override: set any player's availability. Bypasses the open/closed
- * switch and the per-match cap — the admin is in full control.
+ * switch and lock. Automated matches still enforce their capacity.
  */
 export async function adminSetAvailabilityAction(
   _prev: AvailabilityActionState,

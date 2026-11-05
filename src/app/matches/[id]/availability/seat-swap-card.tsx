@@ -27,12 +27,14 @@ function SeatActionButton({
   label,
   pendingLabel,
   variant = "primary",
+  disabled = false,
 }: {
   action: SeatAction;
   fields: Record<string, number>;
   label: string;
   pendingLabel: string;
   variant?: ButtonVariant;
+  disabled?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(action, INITIAL);
   return (
@@ -40,7 +42,7 @@ function SeatActionButton({
       {Object.entries(fields).map(([name, value]) => (
         <input key={name} type="hidden" name={name} value={value} />
       ))}
-      <Button type="submit" size="sm" variant={variant} pending={pending} pendingLabel={pendingLabel}>
+      <Button type="submit" size="sm" variant={variant} disabled={disabled} pending={pending} pendingLabel={pendingLabel}>
         {label}
       </Button>
       {state.ok ? null : <FeedbackMessage ok={false} message={state.message} className="text-xs" />}
@@ -78,6 +80,7 @@ function SubscriberView({ data }: { data: SeatSwapCardData }) {
           fields={{ matchId: data.matchId }}
           label="Offer seat"
           pendingLabel="Offering…"
+          disabled={!data.canPost}
         />
       </div>
     );
@@ -109,6 +112,7 @@ function SubscriberView({ data }: { data: SeatSwapCardData }) {
           label="Withdraw"
           pendingLabel="Withdrawing…"
           variant="secondary"
+          disabled={!data.windowOpen}
         />
       </div>
       {offer.requests.length > 0 ? (
@@ -187,6 +191,7 @@ export function SeatSwapCard({ data }: { data: SeatSwapCardData }) {
   return (
     <section className="mt-4 rounded-2xl border border-sky-500/30 bg-sky-50/60 p-4 dark:bg-sky-950/20">
       <h2 className="mb-3 text-sm font-semibold">Seat swap</h2>
+      {!data.windowOpen ? <p className="mb-3 text-xs text-neutral-500">Seat changes are unavailable while public signup is closed or within 24 hours of kickoff.</p> : null}
       {data.role === "subscriber" ? <SubscriberView data={data} /> : null}
       {data.role === "waitlisted" ? <WaitlistView data={data} /> : null}
       {data.role === "replacement" ? <ReplacementView data={data} /> : null}

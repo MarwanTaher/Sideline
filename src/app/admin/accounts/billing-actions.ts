@@ -18,6 +18,7 @@ import { formatMinor } from "@/lib/format-money";
 import { getSubscriptionSeason } from "@/lib/season-subscriptions";
 import { sqlClient } from "@/lib/db";
 import { sendSeasonInvoiceReminder } from "@/lib/season-reminders";
+import { logAppError } from "@/lib/error-log";
 
 export type BillingActionState = { ok: boolean; message: string };
 
@@ -277,7 +278,12 @@ export async function setPlayingDaysAction(
     return { ok: false, message: "Playing days must be between 0 and 6." };
   }
 
-  await setInvoicePlayingDays(invoiceId, days);
+  try {
+    await setInvoicePlayingDays(invoiceId, days);
+  } catch (error) {
+    await logAppError(error, "season.invoice-days");
+    return { ok: false, message: error instanceof Error ? error.message : "Could not correct billed days." };
+  }
   revalidateBilling();
   return { ok: true, message: "Amount recalculated." };
 }

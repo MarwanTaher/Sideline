@@ -1,4 +1,4 @@
-import { pgTable, index, uniqueIndex, check, integer, bigint, text, doublePrecision, timestamp, unique, foreignKey, primaryKey, boolean, jsonb } from "drizzle-orm/pg-core"
+import { pgTable, index, uniqueIndex, check, integer, bigint, text, doublePrecision, timestamp, date, unique, foreignKey, primaryKey, boolean, jsonb } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
 
@@ -32,6 +32,11 @@ export const matches = pgTable("matches", {
 	extended: boolean().default(false).notNull(),
 	teamColors: text("team_colors"),
 	paymentCurrency: text("payment_currency").default("PLN").notNull(),
+	signupOpensAt: timestamp("signup_opens_at", { withTimezone: true, mode: "string" }),
+	availabilityOverride: text("availability_override"),
+	baseMinutes: integer("base_minutes").default(90).notNull(),
+	extensionMinutes: integer("extension_minutes").default(30).notNull(),
+	extensionThreshold: integer("extension_threshold"),
 }, (table) => [
 	index("idx_matches_status_played_on").using("btree", table.status.asc().nullsLast().op("text_ops"), table.playedOn.asc().nullsLast().op("text_ops")),
 	check("matches_num_teams_check", sql`num_teams >= 2 AND num_teams <= 5`),
@@ -586,6 +591,79 @@ export const seasons = pgTable("seasons", {
 	check("seasons_status_check", sql`${table.status} = ANY (ARRAY['active'::text, 'archived'::text])`),
 	check("seasons_reset_mode_check", sql`${table.resetMode} = ANY (ARRAY['soft'::text, 'hard'::text])`),
 ]);
+
+export const seasonMatchAutomation = pgTable("season_match_automation", {
+	seasonId: integer("season_id").primaryKey().references(() => seasons.id, { onDelete: "restrict" }),
+	enabled: boolean().default(false).notNull(),
+	activatedAt: timestamp("activated_at", { withTimezone: true, mode: "string" }),
+	paused: boolean().default(false).notNull(),
+	weekday: integer().default(0).notNull(),
+	kickoffTime: text("kickoff_time").default("21:00").notNull(),
+	openingWeekday: integer("opening_weekday").default(5).notNull(),
+	openingTime: text("opening_time").default("15:00").notNull(),
+	baseMinutes: integer("base_minutes").default(90).notNull(),
+	extensionMinutes: integer("extension_minutes").default(30).notNull(),
+	maxPlayers: integer("max_players").default(18).notNull(),
+	extensionThreshold: integer("extension_threshold").default(18).notNull(),
+	numTeams: integer("num_teams").default(3).notNull(),
+	statsScoringEnabled: boolean("stats_scoring_enabled").default(true).notNull(),
+	locationName: text("location_name").default("Fame Sport Club, Krakow").notNull(),
+	locationLat: doublePrecision("location_lat"),
+	locationLng: doublePrecision("location_lng"),
+	venue: text().default("indoor").notNull(),
+	revision: integer().default(1).notNull(),
+	needsGeneration: boolean("needs_generation").default(false).notNull(),
+	scheduledDates: jsonb("scheduled_dates").$type<string[]>(),
+	lastError: text("last_error"),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+}, (table) => [
+	check("season_match_automation_weekday_check", sql`${table.weekday} BETWEEN 0 AND 6`),
+	check("season_match_automation_opening_weekday_check", sql`${table.openingWeekday} BETWEEN 0 AND 6`),
+	check("season_match_automation_kickoff_time_check", sql`${table.kickoffTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`),
+	check("season_match_automation_opening_time_check", sql`${table.openingTime} ~ '^([01][0-9]|2[0-3]):[0-5][0-9]$'`),
+	check("season_match_automation_base_minutes_check", sql`${table.baseMinutes} BETWEEN 30 AND 300`),
+	check("season_match_automation_extension_minutes_check", sql`${table.extensionMinutes} BETWEEN 0 AND 120`),
+	check("season_match_automation_max_players_check", sql`${table.maxPlayers} BETWEEN 1 AND 60`),
+	check("season_match_automation_extension_threshold_check", sql`${table.extensionThreshold} BETWEEN 1 AND 60`),
+	check("season_match_automation_num_teams_check", sql`${table.numTeams} BETWEEN 2 AND 5`),
+	check("season_match_automation_venue_check", sql`${table.venue} IN ('indoor','outdoor')`),
+]);
+
+export const seasonMatchOccurrences = pgTable("season_match_occurrences", {
+	id: integer().primaryKey().generatedByDefaultAsIdentity(),
+	seasonId: integer("season_id").notNull().references(() => seasonMatchAutomation.seasonId, { onDelete: "restrict" }),
+	localDate: date("local_date").notNull(),
+	matchId: integer("match_id").unique().references(() => matches.id, { onDelete: "restrict" }),
+	state: text().default("scheduled").notNull(),
+	waiveCost: boolean("waive_cost").default(false).notNull(),
+	revision: integer().notNull(),
+	kickoffAt: timestamp("kickoff_at", { withTimezone: true, mode: "string" }).notNull(),
+	opensAt: timestamp("opens_at", { withTimezone: true, mode: "string" }).notNull(),
+	baseCostMinor: integer("base_cost_minor").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+	announcedAt: timestamp("announced_at", { withTimezone: true, mode: "string" }),
+	openingNotifiedAt: timestamp("opening_notified_at", { withTimezone: true, mode: "string" }),
+	notificationClaimedUntil: timestamp("notification_claimed_until", { withTimezone: true, mode: "string" }),
+	notificationError: text("notification_error"),
+}, (table) => [
+	unique().on(table.seasonId, table.localDate),
+	check("season_match_occurrences_state_check", sql`${table.state} IN ('scheduled','cancelled','skipped')`),
+]);
+
+export const matchWaitlist = pgTable("match_waitlist", {
+	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
+	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
+	position: bigint({ mode: "number" }).notNull(),
+}, (table) => [primaryKey({ columns: [table.matchId, table.playerId] }), index("match_waitlist_order").on(table.matchId, table.position, table.playerId)]);
+
+export const matchAutomationAudit = pgTable("match_automation_audit", {
+	id: integer().primaryKey().generatedByDefaultAsIdentity(),
+	seasonId: integer("season_id").notNull().references(() => seasons.id, { onDelete: "restrict" }),
+	matchId: integer("match_id").references(() => matches.id, { onDelete: "set null" }),
+	event: text().notNull(),
+	actor: text().notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).defaultNow().notNull(),
+});
 
 export const playerAchievements = pgTable("player_achievements", {
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),

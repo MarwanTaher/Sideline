@@ -6,6 +6,11 @@ import { generateMatchMoments } from "@/lib/moments";
 import { getMatchDigest } from "@/lib/match-digest";
 import { digestPushBody } from "@/lib/digest-push";
 import { logAppError } from "@/lib/error-log";
+import { generateNextAutomatedMatch, processMatchAutomation } from "./match-automation";
+import { publicSignupSql } from "./availability-policy-sql";
+import { getAutomation } from "./match-automation";
+import { calendarDates, occurrenceTimes } from "./match-recurrence";
+import { getSubscriptionSeason } from "./season-subscriptions";
 import {
   captureScoreSnapshot,
   getRatingChangesForMatch,
@@ -131,8 +136,8 @@ export async function getMatchAdmin(matchId: number): Promise<MatchAdmin | null>
             stats_scoring_enabled, status, matchday_status,
             location_name, location_lat, location_lng, venue,
             COALESCE(max_players, ${DEFAULT_MAX_PLAYERS}) AS max_players,
-            COALESCE(availability_open, 1) AS availability_open
-       FROM matches WHERE id = $1`,
+            (${publicSignupSql()}::int) AS availability_open
+       FROM matches m WHERE id = $1`,
     [matchId],
   );
   const rows = raw as MatchAdminRow[];
@@ -229,7 +234,29 @@ export async function updateMatchSettings(
   matchId: number,
   input: UpdateMatchInput,
 ): Promise<void> {
-  await sqlClient.query(
+  const occurrences = await sqlClient.query(`SELECT o.season_id,o.local_date::text AS date,m.match_time
+    FROM season_match_occurrences o JOIN matches m ON m.id=o.match_id WHERE o.match_id=$1`, [matchId]);
+  const occurrence = occurrences[0];
+  let schedule: ReturnType<typeof occurrenceTimes> | null = null;
+  if (occurrence) {
+    if (input.seasonId !== Number(occurrence.season_id)) throw new Error("An automated match cannot be detached from its season. Cancel it from Automation instead.");
+    const timeChanged = normalizeMatchTime(input.matchTime) !== occurrence.match_time;
+    if (input.playedOn !== occurrence.date || timeChanged) {
+      const [config, season] = await Promise.all([getAutomation(Number(occurrence.season_id)), getSubscriptionSeason(Number(occurrence.season_id))]);
+      if (!season?.endDate || !calendarDates(season.startDate, season.endDate, config.weekday).includes(input.playedOn)) {
+        throw new Error("Choose a recurring match date inside the season.");
+      }
+      const normalized = normalizeMatchTime(input.matchTime);
+      const [clock, period] = normalized.split(" ");
+      const [hour, minute] = clock.split(":").map(Number);
+      const kickoffTime = `${String(hour % 12 + (period === "pm" ? 12 : 0)).padStart(2,"0")}:${String(minute).padStart(2,"0")}`;
+      schedule = occurrenceTimes(input.playedOn, { ...config, kickoffTime });
+      if (Date.parse(schedule.locksAt) <= Date.now()) throw new Error("Rescheduling cannot open signup inside the 24-hour lock.");
+    }
+  }
+  const writes = [
+    sqlClient.query(`SELECT id FROM matches WHERE id=$1 FOR UPDATE`, [matchId]),
+    sqlClient.query(
     `UPDATE matches
         SET played_on = $1,
             match_time = $2,
@@ -254,7 +281,9 @@ export async function updateMatchSettings(
       input.venue ?? null,
       input.seasonId ?? null,
     ],
-  );
+    ),
+  ];
+  await sqlClient.transaction(writes);
 }
 
 /**
@@ -266,9 +295,15 @@ export async function setAvailabilityOpen(
   open: boolean,
 ): Promise<void> {
   await sqlClient.query(
-    `UPDATE matches SET availability_open = $1 WHERE id = $2`,
+    `UPDATE matches SET availability_open = $1,
+       availability_override=CASE WHEN EXISTS(SELECT 1 FROM season_match_occurrences WHERE match_id=$2)
+         THEN CASE WHEN $1=1 THEN 'open' ELSE 'closed' END ELSE availability_override END
+     WHERE id = $2`,
     [open ? 1 : 0, matchId],
   );
+  await sqlClient.query(`INSERT INTO match_automation_audit(season_id,match_id,event,actor)
+    SELECT season_id,$1,$2,'admin' FROM season_match_occurrences WHERE match_id=$1`,
+  [matchId, open ? "Availability opened manually" : "Availability closed manually"]);
 
   if (open) {
     // Opening availability asks everyone to respond — link straight to the
@@ -298,10 +333,12 @@ export async function setAvailabilityOpen(
 
 /** Set the maximum number of players that can mark themselves IN. */
 export async function setMaxPlayers(matchId: number, maxPlayers: number): Promise<void> {
-  await sqlClient.query(`UPDATE matches SET max_players = $1 WHERE id = $2`, [
+  const rows = await sqlClient.query(`UPDATE matches SET max_players = $1 WHERE id = $2
+    AND (NOT EXISTS(SELECT 1 FROM season_match_occurrences WHERE match_id=$2) OR sideline_squad_count($2) <= $1) RETURNING id`, [
     maxPlayers,
     matchId,
   ]);
+  if (!rows.length) throw new Error("Capacity cannot be below the current squad size.");
 }
 
 /**
@@ -333,6 +370,15 @@ export async function setMatchdayStatus(
   if (updated.length === 0) return;
 
   if (status === "closed") {
+    let generationFailed = false;
+    const occurrence = await sqlClient.query(`SELECT season_id FROM season_match_occurrences WHERE match_id=$1`, [matchId]);
+    if (occurrence.length) {
+      try { await generateNextAutomatedMatch(Number(occurrence[0].season_id)); }
+      catch (error) {
+        await logAppError(error, "matches.close-automation");
+        generationFailed = true;
+      }
+    }
     // Guests are temporary — remove them when the matchday is closed.
     await deleteGuestsForMatch(matchId);
     // Snapshot the leaderboard and pull people back with "results are in" +
@@ -343,6 +389,8 @@ export async function setMatchdayStatus(
     } catch (err) {
       await logAppError(err, "matches.close-notifications");
     }
+    if (generationFailed) throw new Error("Matchday closed, but next match creation failed. Retry from Season Automation.");
+    if (occurrence.length) await processMatchAutomation();
   }
 
   if (status === "active") {
@@ -374,6 +422,8 @@ export async function setMatchStatus(
 
 /** Delete a match. All match-scoped data is removed via ON DELETE CASCADE. */
 export async function deleteMatch(matchId: number): Promise<void> {
+  const occurrence = await sqlClient.query(`SELECT id FROM season_match_occurrences WHERE match_id=$1`, [matchId]);
+  if (occurrence.length) throw new Error("Automated bookings cannot be deleted. Cancel the occurrence from Season Automation.");
   await sqlClient.query(`DELETE FROM matches WHERE id = $1`, [matchId]);
 }
 

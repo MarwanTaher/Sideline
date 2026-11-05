@@ -41,7 +41,7 @@ export default function FundAdmin({
       <h2 className="text-sm font-semibold">Group fund</h2>
       <p className="mt-1 text-xs text-neutral-500">
         Built from extra players&apos; session fees and the rounding on monthly
-        bills, less what the 2-hour extensions cost. It exists to absorb an
+        bills, less what the optional pitch extensions cost. It exists to absorb an
         unfilled core place or a session the group still has to pay for.
       </p>
 
@@ -57,7 +57,7 @@ export default function FundAdmin({
       <ul className="mt-3 divide-y divide-black/5 text-sm dark:divide-white/10">
         <Line label="Extra players' fees (paid)" value={balance.guestFeesMinor} />
         <Line label="Rounding on paid bills" value={balance.roundingMinor} />
-        <Line label="2-hour extensions" value={-balance.extensionCostMinor} />
+        <Line label="Pitch extensions" value={-balance.extensionCostMinor} />
         <Line label="Manual adjustments" value={balance.adjustmentsMinor} />
       </ul>
 

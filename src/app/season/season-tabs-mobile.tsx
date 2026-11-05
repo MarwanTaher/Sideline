@@ -58,7 +58,7 @@ const TABS = [
  * Mobile bottom bar for the season sections, matching the per-match bar. The
  * global bar is suppressed on /season so the two never stack.
  */
-export default function SeasonTabsMobile() {
+export default function SeasonTabsMobile({ isAdmin = false }: { isAdmin?: boolean }) {
   const params = useSearchParams();
   const active = params.get("tab") ?? "";
 
@@ -74,7 +74,7 @@ export default function SeasonTabsMobile() {
         <HomeIcon className="h-6 w-6" />
         Home
       </Link>
-      {TABS.map(({ key, label, href, Icon }) => {
+      {[...TABS, ...(isAdmin ? [{ key: "automation", label: "Automation", href: "/season?tab=automation", Icon: OverviewIcon }] : [])].map(({ key, label, href, Icon }) => {
         const isActive = active === key;
         return (
           <Link

@@ -27,6 +27,7 @@ import { getMatchPhase } from "@/lib/match-phase";
 import { MatchPageHeader } from "../match-page-header";
 import { loadSeatSwapCard } from "@/lib/seat-offers";
 import { SeatSwapCard } from "./seat-swap-card";
+import { SignupWindow } from "@/components/signup-window";
 
 export const metadata = {
   title: "Availability · Sideline",
@@ -89,8 +90,8 @@ export default async function AvailabilityPage({
   // 24h availability lock (admin-toggled). Players can't change within 24h of
   // kickoff; admins always can.
   const availabilityLocked =
-    availabilityLockEnabled && isWithinAvailabilityLock(match.kickoffAt);
-  const msToLock = availabilityLockEnabled ? msUntilLock(match.kickoffAt) : null;
+    (match.automated || availabilityLockEnabled) && isWithinAvailabilityLock(match.kickoffAt);
+  const msToLock = match.automated || availabilityLockEnabled ? msUntilLock(match.kickoffAt) : null;
 
   const inPlayers = players.filter((p) => p.status === "in");
   const outPlayers = players.filter((p) => p.status === "out");
@@ -140,6 +141,9 @@ export default async function AvailabilityPage({
         phase={phase}
       />
       <MatchNav matchId={matchId} isAdmin={isAdmin} />
+      {match.signupOpensAt ? <SignupWindow opensAt={match.signupOpensAt} kickoffAt={match.kickoffAt}
+        open={open && !availabilityLocked} serverNow={nowMs}
+        durationMinutes={match.baseMinutes+(match.extended ? match.extensionMinutes : 0)} /> : null}
 
       <div className="flex flex-wrap items-center gap-2">
         {seasonMatch ? (
@@ -152,7 +156,7 @@ export default async function AvailabilityPage({
       {isAdmin && match.matchdayStatus !== "closed" ? (
         <AdminActionBar
           matchId={matchId}
-          open={open}
+          open={open || (iAmSubscriber && match.coreResponsesOpen)}
           pendingCount={pendingPlayers.length}
           pendingGuestCount={pendingGuests.length}
           squadReady={full || (!open && squadCount >= 10)}
@@ -240,13 +244,13 @@ export default async function AvailabilityPage({
             Request up to {MAX_GUESTS_PER_HOST} guests. An admin approves them before they join the draft.
           </p>
           <div className="mt-3">
-            <GuestList matchId={matchId} guests={myGuests} canRemove={open} />
+            <GuestList matchId={matchId} guests={myGuests} canRemove={open && !availabilityLocked} />
           </div>
           <div className="mt-4">
             <AddGuestForm
               matchId={matchId}
               remaining={MAX_GUESTS_PER_HOST - myGuests.length}
-              open={open}
+              open={open && !availabilityLocked}
             />
           </div>
         </details>

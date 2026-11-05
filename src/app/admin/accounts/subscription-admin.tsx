@@ -9,6 +9,7 @@ import type {
 } from "@/lib/season-subscriptions";
 import type { SeasonGoLiveChecklist } from "@/lib/season-billing";
 import { SEASON_PAYMENT_REMINDER_COPY } from "@/lib/season-calculations";
+import Link from "next/link";
 import {
   saveSubscriptionSettingsAction,
   addSubscriberAction,
@@ -55,6 +56,7 @@ export default function SubscriptionAdmin({
   return (
     <section className="mt-8 rounded-2xl border border-black/[0.06] bg-white p-4 shadow-sm dark:border-white/10 dark:bg-neutral-900">
       <h2 className="text-sm font-semibold">Season subscription — {season.name}</h2>
+      <Link href="/season?tab=automation" className="mt-2 inline-block text-sm underline">Configure weekly match automation</Link>
       <p className="mt-1 text-xs text-neutral-500">
         Core subscribers are marked IN automatically for every match inside the
         season dates. Accepting the terms secures a place; payment is tracked

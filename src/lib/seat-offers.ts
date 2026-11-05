@@ -31,13 +31,11 @@ export type SeatResult<T extends object = object> =
   | ({ ok: true } & T)
   | { ok: false; reason: string };
 
-// Must match the per-match waitlist key in src/lib/availability.ts.
-const WAITLIST_KEY_SQL = (matchIdExpr: string) => `('waitlist_' || (${matchIdExpr})::text)`;
-
-/** Before kickoff and the matchday is not closed. */
+/** Public signup and the 24-hour transfer deadline are checked in SQL too. */
 function upcomingSql(alias: string): string {
   const kickoff = kickoffAtSql(alias);
-  return `((${kickoff}) IS NULL OR (${kickoff}) > NOW())
+  return `((${kickoff}) > NOW() + interval '24 hours')
+          AND sideline_public_signup_open(${alias}.id)
           AND COALESCE(${alias}.matchday_status, 'draft') <> 'closed'`;
 }
 
@@ -53,9 +51,8 @@ function activeSubscriberSql(playerExpr: string, matchIdExpr: string): string {
 
 function onWaitlistSql(playerExpr: string, matchIdExpr: string): string {
   return `EXISTS (
-    SELECT 1 FROM app_settings wa, unnest(string_to_array(wa.value, ',')) AS w(x)
-     WHERE wa.key = ${WAITLIST_KEY_SQL(matchIdExpr)}
-       AND btrim(w.x) = (${playerExpr})::text)`;
+    SELECT 1 FROM match_waitlist w
+     WHERE w.match_id = ${matchIdExpr} AND w.player_id = ${playerExpr})`;
 }
 
 function hasStatusSql(playerExpr: string, matchIdExpr: string, status: "in" | "out"): string {
@@ -90,7 +87,7 @@ async function loadSwapState(matchId: number): Promise<SwapState | null> {
   return {
     match,
     seasonId: season?.id ?? null,
-    windowOpen: isSeatSwapWindowOpen({
+    windowOpen: match.availabilityOpen && isSeatSwapWindowOpen({
       kickoffAt: match.kickoffAt,
       matchdayStatus: match.matchdayStatus,
     }),
@@ -224,6 +221,8 @@ export async function withdrawSeatOffer(
 ): Promise<SeatResult<{ matchId: number }>> {
   const offer = await getSeatOffer(offerId);
   if (!offer) return { ok: false, reason: "Offer not found." };
+  const state = await loadSwapState(offer.matchId);
+  if (!state?.windowOpen) return { ok: false, reason: "Seat changes close 24 hours before kickoff or while signup is closed." };
   const decision = canWithdrawSeat({
     isOwner: offer.subscriberId === subscriberId,
     offerStatus: offer.status,
@@ -233,6 +232,7 @@ export async function withdrawSeatOffer(
   const updated = (await sqlClient.query(
     `UPDATE seat_offers SET status = 'withdrawn'
       WHERE id = $1::int AND subscriber_id = $2::int AND status = 'open'
+        AND EXISTS(SELECT 1 FROM matches m WHERE m.id=seat_offers.match_id AND ${upcomingSql("m")})
       RETURNING id`,
     [offerId, subscriberId],
   )) as unknown[];
@@ -313,6 +313,8 @@ export async function cancelSeatRequest(
 ): Promise<SeatResult<{ matchId: number }>> {
   const offer = await getSeatOffer(offerId);
   if (!offer) return { ok: false, reason: "Offer not found." };
+  const state = await loadSwapState(offer.matchId);
+  if (!state?.windowOpen) return { ok: false, reason: "Seat changes close 24 hours before kickoff or while signup is closed." };
   const decision = canCancelRequest({
     hasRequested: await hasRequest(offerId, playerId),
     offerStatus: offer.status,
@@ -324,6 +326,7 @@ export async function cancelSeatRequest(
       USING seat_offers so
       WHERE r.offer_id = $1::int AND r.player_id = $2::int
         AND so.id = r.offer_id AND so.status = 'open'
+        AND EXISTS(SELECT 1 FROM matches m WHERE m.id=so.match_id AND ${upcomingSql("m")})
       RETURNING r.offer_id`,
     [offerId, playerId],
   )) as unknown[];
@@ -391,6 +394,7 @@ export async function approveSeatRequest(
   let results: unknown[][];
   try {
     results = (await sqlClient.transaction([
+      sqlClient.query(`SELECT id FROM matches WHERE id=$1 FOR UPDATE`, [matchId]),
       // 1. Fill the offer — every invariant is re-checked here.
       sqlClient.query(
         `UPDATE seat_offers so
@@ -414,22 +418,22 @@ export async function approveSeatRequest(
       // 2. Subscriber OUT, replacement IN.
       sqlClient.query(
         `INSERT INTO match_availability (match_id, player_id, status, updated_at)
-         SELECT $4::int, v.player_id, v.status, CURRENT_TIMESTAMP
-           FROM (VALUES ($3::int, 'out'::text), ($2::int, 'in'::text)) AS v(player_id, status)
+         SELECT $4::int, $3::int, 'out', CURRENT_TIMESTAMP
           WHERE ${filledHere}
          ON CONFLICT (match_id, player_id)
          DO UPDATE SET status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP`,
         [offerId, requesterId, subscriberId, matchId],
       ),
+      sqlClient.query(
+        `INSERT INTO match_availability (match_id, player_id, status, updated_at)
+         SELECT $4::int, $2::int, 'in', CURRENT_TIMESTAMP WHERE ${filledHere}
+         ON CONFLICT (match_id,player_id) DO UPDATE SET status='in',updated_at=now()`,
+        [offerId, requesterId, subscriberId, matchId],
+      ),
       // 3. Take the replacement off the match waitlist, keeping everyone's order.
       sqlClient.query(
-        `UPDATE app_settings a
-            SET value = COALESCE((
-              SELECT string_agg(btrim(w.x), ',' ORDER BY w.ord)
-                FROM unnest(string_to_array(a.value, ',')) WITH ORDINALITY AS w(x, ord)
-               WHERE btrim(w.x) <> '' AND btrim(w.x) <> $2::int::text
-            ), '')
-          WHERE a.key = ${WAITLIST_KEY_SQL("$3::int")}
+        `DELETE FROM match_waitlist
+          WHERE match_id=$3::int AND player_id=$2::int
             AND ${filledHere}`,
         [offerId, requesterId, matchId],
       ),
@@ -463,7 +467,7 @@ export async function approveSeatRequest(
     throw err;
   }
 
-  if ((results[0] ?? []).length === 0) {
+  if ((results[1] ?? []).length === 0) {
     const again = await check();
     return again.ok ? { ok: false, reason: STALE } : again;
   }

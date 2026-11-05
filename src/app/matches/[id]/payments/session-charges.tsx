@@ -60,15 +60,21 @@ export default function SessionCharges({
           variant={context.extended ? "secondary" : "primary"}
           pending={extPending}
           pendingLabel="…"
+          disabled={!context.extended && (context.extensionMinutes === 0 || (context.extensionThreshold != null && context.squadCount < context.extensionThreshold))}
         >
-          {context.extended ? "Remove 2-hour extension" : "Extend to 2 hours"}
+          {context.extended ? "Remove optional extension" : `Extend to ${context.baseMinutes + context.extensionMinutes} minutes`}
         </Button>
         <span className="text-xs text-neutral-500">
-          Costs {formatMinor(context.extensionCostMinor)} · needs{" "}
+          Base {context.baseMinutes} min; optional +{context.extensionMinutes} min.
+          {" "}Costs {formatMinor(context.extensionCostMinor)} · needs{" "}
           {context.extensionMinExtra}+ extra players
+          {context.extensionThreshold != null ? `; ${context.squadCount}/${context.extensionThreshold} participants confirmed` : ""}
         </span>
       </form>
       <FeedbackMessage ok={extState.ok} message={extState.message} className="mt-2" />
+      {context.extended && context.extensionThreshold != null && context.squadCount < context.extensionThreshold ? (
+        <p className="mt-2 text-sm text-amber-700 dark:text-amber-300">Attendance dropped after confirmation. Review the booking; its cost has not been automatically reversed.</p>
+      ) : null}
 
       {tooFewForExtension ? (
         <p className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">

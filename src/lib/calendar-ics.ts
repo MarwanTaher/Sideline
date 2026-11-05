@@ -1,5 +1,6 @@
 import "server-only";
 import { sqlClient } from "./db";
+import { effectiveDuration } from "./match-recurrence";
 
 /**
  * Minimal iCalendar (.ics) generation so players can add the next match to
@@ -11,6 +12,9 @@ type IcsMatch = {
   id: number;
   playedOn: string;
   matchTime: string;
+  kickoffAt: string;
+  durationMinutes: number;
+  locationName: string | null;
 };
 
 /** Parse a "hh:mm am/pm" (or "HH:MM") label into { h, m } 24-hour, or null. */
@@ -38,7 +42,7 @@ function eventTimes(match: IcsMatch): { start: string; end: string } | null {
   const [, y, mo, d] = dm;
   const t = parseTime(match.matchTime) ?? { h: 21, m: 0 };
   const startDate = new Date(Number(y), Number(mo) - 1, Number(d), t.h, t.m);
-  const endDate = new Date(startDate.getTime() + 90 * 60 * 1000);
+  const endDate = new Date(startDate.getTime() + match.durationMinutes * 60 * 1000);
   const fmt = (dt: Date) =>
     `${dt.getFullYear()}${pad(dt.getMonth() + 1)}${pad(dt.getDate())}T${pad(dt.getHours())}${pad(dt.getMinutes())}00`;
   return { start: fmt(startDate), end: fmt(endDate) };
@@ -50,16 +54,24 @@ function fold(line: string): string {
 
 export async function buildMatchIcs(matchId: number, baseUrl: string): Promise<string | null> {
   const rows = (await sqlClient.query(
-    `SELECT id, played_on, COALESCE(match_time, '') AS match_time FROM matches WHERE id = $1`,
+    `SELECT id, played_on, COALESCE(match_time, '') AS match_time, kickoff_at::text,
+      base_minutes,extension_minutes,extended,location_name FROM matches WHERE id = $1`,
     [matchId],
-  )) as Array<{ id: number; played_on: string; match_time: string }>;
+  )) as Array<{ id: number; played_on: string; match_time: string; kickoff_at: string; base_minutes: number; extension_minutes: number; extended: boolean; location_name: string | null }>;
   if (rows.length === 0) return null;
   const match: IcsMatch = {
     id: Number(rows[0].id),
     playedOn: String(rows[0].played_on),
     matchTime: String(rows[0].match_time),
+    kickoffAt: rows[0].kickoff_at,
+    durationMinutes: effectiveDuration(rows[0].base_minutes, rows[0].extension_minutes, rows[0].extended),
+    locationName: rows[0].location_name,
   };
-  const times = eventTimes(match);
+  const utc = (ms: number) => new Date(ms).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+  const kickoff = Date.parse(match.kickoffAt);
+  const times = Number.isFinite(kickoff)
+    ? { start: utc(kickoff), end: utc(kickoff + match.durationMinutes * 60000) }
+    : eventTimes(match);
   if (!times) return null;
 
   const now = new Date();
@@ -81,6 +93,7 @@ export async function buildMatchIcs(matchId: number, baseUrl: string): Promise<s
     `DTEND:${times.end}`,
     fold(`SUMMARY:Football \u2014 Match ${match.id}`),
     fold(`DESCRIPTION:Sideline match ${match.id}. Set your availability and check teams.`),
+    ...(match.locationName ? [fold(`LOCATION:${match.locationName.replace(/[\r\n]/g, " ")}`)] : []),
     ...(url ? [fold(`URL:${url}`)] : []),
     "BEGIN:VALARM",
     "TRIGGER:-PT2H",

@@ -237,9 +237,12 @@ async function getTypeConfig(
 export async function notify(
   typeKey: NotificationTypeKey,
   payload: PushPayload,
-  opts: { playerIds?: number[] } = {},
+  opts: { playerIds?: number[]; throwOnFailure?: boolean } = {},
 ): Promise<void> {
-  if (!ensureConfigured()) return;
+  if (!ensureConfigured()) {
+    if (opts.throwOnFailure) throw new Error("Push notifications are not configured.");
+    return;
+  }
   if (!(await isPushEnabled())) return;
 
   const type = getNotificationType(typeKey);
@@ -268,7 +271,7 @@ export async function notify(
       : await queryPlayerSubs(ids);
   }
 
-  await dispatch(await rowsToSubscriptions(raw), payload);
+  await dispatch(await rowsToSubscriptions(raw), payload, opts.throwOnFailure);
 }
 
 // ---------------------------------------------------------------------------
@@ -406,9 +409,11 @@ export async function getPlayersNotificationMatrix(): Promise<
 async function dispatch(
   subs: { endpoint: string; keys: { p256dh: string; auth: string } }[],
   payload: PushPayload,
+  throwOnFailure = false,
 ): Promise<void> {
   const body = JSON.stringify(payload);
   const stale: string[] = [];
+  let failures = 0;
 
   await Promise.all(
     subs.map(async (sub) => {
@@ -422,7 +427,7 @@ async function dispatch(
         // 404/410 mean the subscription is gone — prune it.
         if (status === 404 || status === 410) {
           stale.push(sub.endpoint);
-        }
+        } else failures++;
       }
     }),
   );
@@ -433,4 +438,5 @@ async function dispatch(
       [stale],
     );
   }
+  if (throwOnFailure && failures > 0) throw new Error(`Push delivery failed for ${failures} device(s).`);
 }

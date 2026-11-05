@@ -1,6 +1,5 @@
 import "server-only";
 import { sqlClient } from "./db";
-import { setPlayerAvailability } from "./availability";
 import { notify } from "./push";
 import { logAppError } from "./error-log";
 
@@ -492,15 +491,7 @@ export async function applySubscriberToUpcomingMatches(
 ): Promise<number> {
   const matchIds = await upcomingSeasonMatchIds(seasonId);
   let applied = 0;
-  for (const matchId of matchIds) {
-    const rows = (await sqlClient.query(
-      `SELECT status FROM match_availability WHERE match_id = $1 AND player_id = $2`,
-      [matchId, playerId],
-    )) as Array<{ status: string }>;
-    if (rows.length > 0) continue;
-    await setPlayerAvailability(matchId, playerId, "in");
-    applied += 1;
-  }
+  for (const matchId of matchIds) applied += await seedSubscribers(matchId, playerId);
   return applied;
 }
 
@@ -513,22 +504,12 @@ export async function applySubscribersToMatch(matchId: number): Promise<number> 
   const season = await getSubscriptionSeasonForMatch(matchId);
   if (!season) return 0;
 
-  const subscribers = await listSubscribers(season.id);
-  if (subscribers.length === 0) return 0;
+  return seedSubscribers(matchId, null);
+}
 
-  const answered = (await sqlClient.query(
-    `SELECT player_id FROM match_availability WHERE match_id = $1`,
-    [matchId],
-  )) as Array<{ player_id: number }>;
-  const alreadyAnswered = new Set(answered.map((r) => Number(r.player_id)));
-
-  let applied = 0;
-  for (const sub of subscribers) {
-    if (alreadyAnswered.has(sub.playerId)) continue;
-    await setPlayerAvailability(matchId, sub.playerId, "in");
-    applied += 1;
-  }
-  return applied;
+async function seedSubscribers(matchId: number, playerId: number | null): Promise<number> {
+  const rows = await sqlClient.query(`SELECT sideline_seed_subscribers($1,$2) AS count`, [matchId, playerId]);
+  return Number(rows[0].count);
 }
 
 /** Player ids committed for the season a match belongs to. */

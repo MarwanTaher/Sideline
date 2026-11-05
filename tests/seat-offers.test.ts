@@ -14,20 +14,22 @@ import {
 const KICKOFF = "2026-11-06T20:00:00.000Z";
 const kickoffMs = Date.parse(KICKOFF);
 
-test("swap window is open until kickoff and ignores the 24h lock", () => {
+test("swap window closes exactly 24 elapsed hours before kickoff", () => {
   const open = (nowMs: number, matchdayStatus = "draft") =>
     isSeatSwapWindowOpen({ kickoffAt: KICKOFF, matchdayStatus, nowMs });
   assert.equal(open(kickoffMs - 3 * 24 * 3600_000), true);
-  assert.equal(open(kickoffMs - 60_000), true, "inside the 24h lock the swap still works");
+  assert.equal(open(kickoffMs - 24 * 3600_000 - 1), true);
+  assert.equal(open(kickoffMs - 24 * 3600_000), false);
+  assert.equal(open(kickoffMs - 60_000), false);
   assert.equal(open(kickoffMs), false, "closes at kickoff");
   assert.equal(open(kickoffMs + 60_000), false);
-  assert.equal(open(kickoffMs - 60_000, "active"), true);
+  assert.equal(open(kickoffMs - 60_000, "active"), false);
   assert.equal(open(kickoffMs - 60_000, "closed"), false, "closed matchday");
   assert.equal(open(kickoffMs - 60_000, "CLOSED"), false);
   assert.equal(
     isSeatSwapWindowOpen({ kickoffAt: null, matchdayStatus: null, nowMs: kickoffMs }),
-    true,
-    "no kickoff instant means no deadline",
+    false,
+    "missing kickoff fails closed",
   );
 });
 
@@ -101,7 +103,7 @@ test("approval needs the owner, an open offer and a still-waitlisted requester",
     [{ isOwner: false }, /Only the subscriber/],
     [{ offerStatus: "filled" }, /already been taken/],
     [{ offerStatus: "withdrawn" }, /no longer open/],
-    [{ windowOpen: false }, /started/],
+    [{ windowOpen: false }, /24 hours/],
     [{ subscriberIsActive: false }, /season place/],
     [{ subscriberStatus: "out" }, /OUT/],
     [{ requesterRequested: false }, /hasn't requested/],
@@ -116,13 +118,13 @@ test("approval needs the owner, an open offer and a still-waitlisted requester",
   }
 });
 
-test("approval inside the 24h lock is allowed (window is only kickoff-bound)", () => {
+test("approval inside the 24h lock is denied", () => {
   const windowOpen = isSeatSwapWindowOpen({
     kickoffAt: KICKOFF,
     matchdayStatus: "active",
     nowMs: kickoffMs - 2 * 3600_000,
   });
-  assert.deepEqual(canApproveSeat({ ...approveBase, windowOpen }), { ok: true });
+  assert.equal(canApproveSeat({ ...approveBase, windowOpen }).ok, false);
 });
 
 test("card role: season match only, subscriber first, then replacement, then waitlist", () => {

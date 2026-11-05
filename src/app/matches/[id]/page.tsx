@@ -26,6 +26,7 @@ import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
 import { MatchPageHeader } from "./match-page-header";
 import { getMatchPredictionView } from "@/lib/predictions";
 import { PredictionsCard } from "./predictions-card";
+import { SignupWindow } from "@/components/signup-window";
 
 export const metadata = {
   title: "Match · Sideline",
@@ -97,7 +98,7 @@ export default async function MatchDetailPage({
     matchdayStatus: match.matchdayStatus,
     availabilityOpen: availMeta?.availabilityOpen ?? true,
     kickoffAt: availMeta?.kickoffAt ?? null,
-    lockEnabled,
+    lockEnabled: lockEnabled || availMeta?.automated === true,
     hasRoster,
   });
   const nextStep = phaseAction(phase, matchId, {
@@ -120,6 +121,9 @@ export default async function MatchDetailPage({
         phase={phase}
         overview
       />
+      {availMeta?.signupOpensAt ? <SignupWindow opensAt={availMeta.signupOpensAt} kickoffAt={availMeta.kickoffAt}
+        open={availMeta.availabilityOpen} serverNow={new Date().getTime()}
+        durationMinutes={availMeta.baseMinutes+(availMeta.extended ? availMeta.extensionMinutes :0)} /> : null}
 
       <div className="mt-3 rounded-2xl border border-black/[0.06] bg-white p-5 shadow-sm dark:border-white/10 dark:bg-neutral-900">
         <div className="flex flex-wrap items-center gap-2.5">

@@ -125,6 +125,35 @@ flowchart TB
 
 ### 5.1 Layering rules
 
+#### Weekly season automation (migration 0037 applied 2026-11-05)
+
+`match-recurrence.ts` is client-safe calendar logic and reuses the Warsaw kickoff
+conversion. `match-automation.ts` owns validated configuration, generation,
+exceptions, notification leases and audit queries. The existing Season page
+adds an admin-only Automation tab using shared navigation and the match location
+picker. Existing subscription, billing and fund modules remain the source of
+membership and money; there is no second season/member/invoice system.
+
+Migration `0037` adds `season_match_automation`, `season_match_occurrences`,
+`match_waitlist` and `match_automation_audit`, with match opening/duration snapshots.
+PostgreSQL functions lock the match row for capacity/queue changes, and capacity
+triggers also cover admin/guest writers. A matchday-close trigger durably sets
+`needs_generation` in the same transaction as closure. Generation locks its
+season configuration and creates the occurrence, match and core IN atomically.
+Unique season/date and match constraints prevent duplicate successors.
+
+Effective public signup is computed by `sideline_public_signup_open`, including
+manual overrides, pause, season visibility and the opening instant. Player
+mutations re-check the opening/24-hour lock in SQL. Core pre-opening responses
+are an explicit exception; guest/seat request paths are not. Match queues are
+relational; whole-season reserve queues retain their existing implementation.
+
+The existing daily cron retries pending generation and opening notifications;
+timestamp-based signup works even when no job runs at the boundary. Notification
+leases avoid concurrent dispatch attempts, with stable browser tags and visible
+errors; external push delivery is not exactly-once. No new scheduler is assumed.
+PGlite tests execute the migration in isolated memory without deployment writes.
+
 1. **Routes (`src/app`)** compose data and render. Mutations are **Server Actions** in a
    co-located `actions.ts`, which validate input (Zod), **re-check authorisation**, call `src/lib`,
    then `revalidatePath` / `revalidateScores()`.

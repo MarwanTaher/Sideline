@@ -89,6 +89,10 @@ export type MatchChargeContext = {
   /** Non-core players who should be charged but have no row yet. */
   uncharged: number;
   extraCount: number;
+  squadCount: number;
+  extensionThreshold: number | null;
+  baseMinutes: number;
+  extensionMinutes: number;
 };
 
 /**
@@ -102,9 +106,10 @@ export async function getMatchChargeContext(
   if (!season) return null;
 
   const metaRows = (await sqlClient.query(
-    `SELECT COALESCE(extended, false) AS extended FROM matches WHERE id = $1`,
+    `SELECT COALESCE(m.extended, false) AS extended, sideline_squad_count(m.id) AS squad_count,
+      m.extension_threshold,m.base_minutes,m.extension_minutes FROM matches m WHERE m.id = $1`,
     [matchId],
-  )) as Array<{ extended: boolean }>;
+  )) as Array<{ extended: boolean; squad_count: number; extension_threshold: number | null; base_minutes: number; extension_minutes: number }>;
   const meta = metaRows[0];
   if (!meta) return null;
 
@@ -136,6 +141,10 @@ export async function getMatchChargeContext(
     extensionMinExtra: Number(s?.extension_min_extra ?? 4),
     uncharged,
     extraCount: charges.filter((c) => c.kind === "extra").length + uncharged,
+    squadCount: Number(meta.squad_count),
+    extensionThreshold: meta.extension_threshold,
+    baseMinutes: Number(meta.base_minutes),
+    extensionMinutes: Number(meta.extension_minutes),
   };
 }
 
@@ -260,9 +269,9 @@ export async function deleteCharge(chargeId: number): Promise<void> {
 }
 
 export async function setMatchExtended(matchId: number, extended: boolean): Promise<void> {
-  await sqlClient.query(`UPDATE matches SET extended = $1 WHERE id = $2`, [
-    extended,
-    matchId,
+  await sqlClient.transaction([
+    sqlClient.query(`SELECT id FROM matches WHERE id=$1 FOR UPDATE`, [matchId]),
+    sqlClient.query(`SELECT sideline_confirm_extension($1,$2)`, [matchId, extended]),
   ]);
 }
 

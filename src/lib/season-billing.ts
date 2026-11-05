@@ -1,4 +1,5 @@
 import "server-only";
+import { z } from "zod";
 import { sqlClient } from "./db";
 import { invoiceAmountMinor, roundUpToPlnMinor } from "./format-money";
 import { dueDateFor, playingDaysInPeriod } from "./season-calculations";
@@ -517,10 +518,14 @@ export async function generateInvoices(
   }
   const season = seasonRows[0];
 
+  const configs = await sqlClient.query(`SELECT weekday,scheduled_dates FROM season_match_automation WHERE season_id=$1 AND (enabled OR activated_at IS NOT NULL)`, [seasonId]);
+  const waived = configs.length ? await sqlClient.query(`SELECT local_date::text AS date FROM season_match_occurrences WHERE season_id=$1 AND waive_cost`, [seasonId]) : [];
   const playingDays = playingDaysInPeriod(
     period,
     String(season.start_date),
     season.end_date == null ? null : String(season.end_date),
+    configs.length ? { weekday: Number(configs[0].weekday), waivedDates: waived.map((row) => String(row.date)),
+      scheduledDates: configs[0].scheduled_dates == null ? undefined : z.array(z.string()).parse(configs[0].scheduled_dates) } : undefined,
   );
   const splitBetween = Number(season.subscriber_cap);
   const dayRate = Number(season.day_rate_minor);
@@ -628,11 +633,14 @@ export async function setInvoicePlayingDays(
       `UPDATE season_invoices
           SET playing_days = $1::int,
               gross_minor = ROUND(($1::int::numeric * day_rate_minor) / GREATEST(split_between, 1))
-        WHERE id = $2::int`,
+        WHERE id = $2::int AND paid_at IS NULL
+        RETURNING id`,
       [playingDays, invoiceId],
     ),
     ...reallocateCreditQueries(invoiceId),
-  ]);
+  ]).then((results) => {
+    if (!results[0].length) throw new Error("Paid invoices cannot be recalculated. Use a reviewed adjustment.");
+  });
 }
 
 /**

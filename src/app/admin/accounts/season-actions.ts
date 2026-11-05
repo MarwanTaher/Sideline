@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/auth";
+import { logAppError } from "@/lib/error-log";
 import {
   createSeason,
   deleteSeason,
@@ -87,7 +88,12 @@ export async function deleteSeasonAction(
   if (!Number.isInteger(id) || id <= 0) return { ok: false, message: "Invalid season." };
 
   // Matches are matched to a season by date, so deleting one loses no history.
-  await deleteSeason(id);
+  try {
+    await deleteSeason(id);
+  } catch (error) {
+    await logAppError(error, "season.delete");
+    return { ok: false, message: error instanceof Error ? error.message : "Could not delete the season." };
+  }
   revalidatePath("/admin/accounts");
   revalidatePath("/leaderboard");
   return { ok: true, message: "Season deleted." };

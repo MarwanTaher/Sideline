@@ -26,6 +26,9 @@ import {
 import { MultisportReporter } from "./billing-panels";
 import PaymentsTab from "./payments-tab";
 import SeasonTabsMobile from "./season-tabs-mobile";
+import AutomationPanel from "./automation-panel";
+import { getAutomation, listAutomationOccurrences, getAutomationAudit } from "@/lib/match-automation";
+import { getSeasonRates, getSeasonGoLiveChecklist } from "@/lib/season-billing";
 
 export const metadata = {
   title: "Season subscription · Sideline",
@@ -74,7 +77,12 @@ export default async function SeasonPage({
   const playerId = session.user.playerId;
   const pid = playerId == null ? null : Number(playerId);
   const activeTab =
-    tab === "payments" || tab === "multisport" || tab === "fund" ? tab : "overview";
+    tab === "automation" && isAdmin ? "automation" :
+      tab === "payments" || tab === "multisport" || tab === "fund" ? tab : "overview";
+  const automationData = activeTab === "automation" ? await Promise.all([
+    getAutomation(season.id), listAutomationOccurrences(season.id), getAutomationAudit(season.id),
+    getSeasonRates(season.id), getSeasonGoLiveChecklist(season.id), listSubscribers(season.id),
+  ]) : null;
 
   const mine = pid == null ? null : await getSubscription(season.id, pid);
   const isSubscriber = mine?.status === "active";
@@ -150,6 +158,7 @@ export default async function SeasonPage({
     { href: "/season?tab=payments", label: "Payments" },
     { href: "/season?tab=multisport", label: "MultiSport" },
     { href: "/season?tab=fund", label: "Group fund" },
+    ...(isAdmin ? [{ href: "/season?tab=automation", label: "Automation" }] : []),
   ];
 
   return (
@@ -182,10 +191,16 @@ export default async function SeasonPage({
         activeHref={activeTab === "overview" ? "/season" : `/season?tab=${activeTab}`}
       />
       <Suspense fallback={null}>
-        <SeasonTabsMobile />
+        <SeasonTabsMobile isAdmin={isAdmin} />
       </Suspense>
 
-      {tab === "payments" ? (
+      {automationData ? (
+        <AutomationPanel seasonId={season.id} startDate={season.startDate} endDate={season.endDate}
+          coreCap={season.subscriberCap} coreCount={automationData[5].length}
+          config={automationData[0]} occurrences={automationData[1]} audit={automationData[2]}
+          baseRate={automationData[3]?.dayRateMinor ?? 0} extensionRate={automationData[3]?.extensionCostMinor ?? 0}
+          ready={automationData[4]?.complete === true} isSuper={session.user.role === "super"} serverNow={new Date().getTime()} />
+      ) : tab === "payments" ? (
         isSubscriber && pid != null ? (
           <div className="mt-5">
             <PaymentsTab

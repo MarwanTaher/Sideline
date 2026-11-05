@@ -315,7 +315,7 @@ function RatesForm({
         <Field name="guestRate" label="Extra player (PLN)" defaultValue={pln(rates.guestRateMinor)} />
         <Field
           name="extensionCost"
-          label="2-hour extension (PLN)"
+          label="Optional pitch extension (PLN)"
           defaultValue={pln(rates.extensionCostMinor)}
         />
         <Field

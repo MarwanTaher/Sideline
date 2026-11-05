@@ -20,6 +20,9 @@ export interface HomeMatch {
   kickoffAt: string | null;
   matchdayStatus: MatchdayStatus;
   availabilityOpen: boolean;
+  signupOpensAt: string | null;
+  coreResponsesOpen: boolean;
+  automated: boolean;
   maxPlayers: number;
   locationName: string;
   venue: "indoor" | "outdoor" | null;
@@ -44,6 +47,9 @@ interface Row {
   kickoff_at: string | Date | null;
   matchday_status: string;
   availability_open: number;
+  signup_opens_at: string | Date | null;
+  core_responses_open: boolean;
+  automated: boolean;
   max_players: number;
   location_name: string;
   venue: string | null;
@@ -81,7 +87,14 @@ export async function getHomeMatch(playerId: number | null): Promise<HomeMatch |
            COALESCE(m.match_time, '') AS match_time,
            ${kickoffAtSql("m")} AS kickoff_at,
            COALESCE(m.matchday_status, 'draft') AS matchday_status,
-           COALESCE(m.availability_open, 1) AS availability_open,
+           COALESCE(sideline_public_signup_open(m.id),false)::int AS availability_open,
+           m.signup_opens_at,
+           EXISTS(SELECT 1 FROM season_match_occurrences WHERE match_id=m.id) AS automated,
+           EXISTS(SELECT 1 FROM season_match_occurrences o JOIN season_match_automation a ON a.season_id=o.season_id
+             JOIN seasons s ON s.id=o.season_id JOIN season_subscriptions ss ON ss.season_id=s.id AND ss.player_id=$1 AND ss.status='active'
+             WHERE o.match_id=m.id AND o.state='scheduled' AND a.enabled AND NOT a.paused AND s.status='active'
+               AND s.subscription_enabled AND s.visible_to_players AND m.availability_override IS DISTINCT FROM 'closed'
+               AND m.matchday_status <> 'closed') AS core_responses_open,
            COALESCE(m.max_players, ${DEFAULT_MAX_PLAYERS}) AS max_players,
            COALESCE(m.location_name, '') AS location_name,
            m.venue, m.team_names,
@@ -97,8 +110,8 @@ export async function getHomeMatch(playerId: number | null): Promise<HomeMatch |
            (SELECT COUNT(*) FROM match_players mp WHERE mp.match_id = m.id) AS roster_count,
            (SELECT ma.status FROM match_availability ma
              WHERE ma.match_id = m.id AND ma.player_id = $1) AS my_status,
-           (SELECT s.value FROM app_settings s
-             WHERE s.key = 'waitlist_' || m.id::text) AS waitlist,
+           (SELECT string_agg(w.player_id::text,',' ORDER BY w.position,w.player_id)
+             FROM match_waitlist w WHERE w.match_id=m.id) AS waitlist,
            (SELECT mp.team_no FROM match_players mp
              WHERE mp.match_id = m.id AND mp.player_id = $1 LIMIT 1) AS my_team_no
       FROM matches m
@@ -151,6 +164,9 @@ export async function getHomeMatch(playerId: number | null): Promise<HomeMatch |
           : String(r.kickoff_at),
     matchdayStatus: ms === "active" || ms === "closed" ? ms : "draft",
     availabilityOpen: Number(r.availability_open) === 1,
+    signupOpensAt: r.signup_opens_at == null ? null : new Date(r.signup_opens_at).toISOString(),
+    automated: r.automated,
+    coreResponsesOpen: r.core_responses_open,
     maxPlayers: Number(r.max_players ?? DEFAULT_MAX_PLAYERS),
     locationName: String(r.location_name ?? ""),
     venue: r.venue === "indoor" || r.venue === "outdoor" ? r.venue : null,
