@@ -16,6 +16,7 @@ export type MatchListDisplayItem = {
   statsScoringEnabled: boolean;
   dateLabel: string;
   locationName?: string;
+  signupLabel?: string;
   phase: MatchPhase;
   myStatus?: "in" | "out" | "pending";
   onRoster?: boolean;
@@ -75,6 +76,7 @@ export function MatchesList({ items }: { items: MatchListDisplayItem[] }) {
                     <YouChip phase={m.phase} myStatus={m.myStatus} onRoster={m.onRoster} />
                   </div>
                   <div className="mt-1 text-sm text-neutral-500">{m.dateLabel}</div>
+                  {m.signupLabel ? <p className="mt-1 text-xs text-sky-700 dark:text-sky-300">{m.signupLabel}</p> : null}
                   {m.locationName ? (
                     <div className="mt-0.5 truncate text-xs text-neutral-400">
                       {m.locationName.split(",")[0]}

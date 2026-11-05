@@ -13,6 +13,7 @@ import {
 } from "@/lib/guests";
 import { notify } from "@/lib/push";
 import { POSITIONS, type Position } from "@/lib/positions";
+import { assertPublicResponse } from "@/lib/availability";
 
 export interface GuestActionState {
   ok: boolean;
@@ -81,7 +82,8 @@ export async function addGuestAction(
     // admin confirms it with the Approve action — so the approval workflow is
     // always visible and auditable, and pending guests never reserve a spot or
     // hit the full-match check here.
-    await addGuest({ matchId, hostPlayerId, name, position, skillKey, status: "pending" });
+    if (!isAdmin) await assertPublicResponse(matchId, hostPlayerId);
+    await addGuest({ matchId, hostPlayerId, name, position, skillKey, status: "pending", selfService: !isAdmin });
     revalidateGuestPaths(matchId);
 
     const cleanName = name.trim() || "a guest";
@@ -200,6 +202,7 @@ export async function removeGuestAction(
 
     // Admins can remove any guest; players only their own.
     const ownerId = isAdmin ? null : session.user.playerId ?? -1;
+    if (ownerId != null) await assertPublicResponse(matchId, ownerId);
     await removeGuest(matchId, guestId, ownerId);
     revalidateGuestPaths(matchId);
     return { ok: true, message: "Guest removed." };

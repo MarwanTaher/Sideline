@@ -37,6 +37,7 @@ import { AvailabilityControls } from "./matches/[id]/availability/availability-c
 import { StoriesRow } from "@/components/stories-row";
 import { getPlayerPhoto, listActiveStories } from "@/lib/stories";
 import { WelcomeGuide } from "@/components/welcome-guide";
+import { SignupWindow } from "@/components/signup-window";
 
 export const dynamic = "force-dynamic";
 
@@ -72,9 +73,9 @@ export default async function Home() {
   const phase: MatchPhase | null = match
     ? getMatchPhase({
         matchdayStatus: match.matchdayStatus,
-        availabilityOpen: match.availabilityOpen,
+        availabilityOpen: match.availabilityOpen || match.coreResponsesOpen,
         kickoffAt: match.kickoffAt,
-        lockEnabled,
+        lockEnabled: lockEnabled || match.automated,
         hasRoster: match.hasRoster,
       })
     : null;
@@ -194,7 +195,7 @@ export default async function Home() {
           phase={phase}
           playerId={playerId ?? null}
           isSubscriber={playerId != null && subscriberIds.has(Number(playerId))}
-          msToLock={lockEnabled ? msUntilLock(match.kickoffAt) : null}
+          msToLock={lockEnabled || match.automated ? msUntilLock(match.kickoffAt) : null}
           voteHref={voteObligation?.matchId === match.id ? `/matches/${match.id}/vote` : null}
         />
       ) : (
@@ -368,6 +369,8 @@ function NextMatchCard({
       </div>
 
       {phase !== "done" ? <KickoffCountdown kickoffAt={match.kickoffAt} /> : null}
+      {match.signupOpensAt ? <SignupWindow opensAt={match.signupOpensAt} kickoffAt={match.kickoffAt}
+        open={match.availabilityOpen && phase !== "locked"} serverNow={new Date().getTime()} /> : null}
       <PhaseStrip phase={phase} className="mt-3" />
 
       {playerId != null && (phase === "open" || phase === "locked") ? (
@@ -380,7 +383,7 @@ function NextMatchCard({
           <AvailabilityControls
             matchId={match.id}
             currentStatus={match.myStatus}
-            open={match.availabilityOpen}
+            open={match.availabilityOpen || match.coreResponsesOpen}
             locked={phase === "locked"}
             msToLock={msToLock}
             isSubscriber={isSubscriber}

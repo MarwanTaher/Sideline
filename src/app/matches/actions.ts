@@ -170,10 +170,15 @@ export async function setMatchdayStatusAction(
     const matchId = matchIdSchema.parse(formData.get("matchId"));
     const status = matchdaySchema.parse(String(formData.get("matchdayStatus")));
 
-    await setMatchdayStatus(matchId, status);
-    revalidateScores();
-    revalidatePath(`/matches/${matchId}`);
-    revalidatePath("/matches");
+    try {
+      await setMatchdayStatus(matchId, status);
+    } finally {
+      revalidateScores();
+      revalidatePath("/");
+      revalidatePath("/season");
+      revalidatePath(`/matches/${matchId}`, "layout");
+      revalidatePath("/matches");
+    }
     return { ok: true, message: `Matchday set to ${status}.` };
   } catch (err) {
     const activeMatch = errorMessage(err).match(/^Match (\d+) is already active\./);

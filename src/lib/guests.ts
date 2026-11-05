@@ -83,6 +83,7 @@ interface AddGuestInput {
   skillKey?: string | null;
   /** Approval state to insert with. Player requests default to "pending". */
   status?: GuestStatus;
+  selfService?: boolean;
 }
 
 /**
@@ -122,13 +123,18 @@ export async function addGuest(input: AddGuestInput): Promise<number> {
   const skill = skillScoreFromKey(input.skillKey);
   const status: GuestStatus = input.status === "pending" ? "pending" : "approved";
 
-  const inserted = (await sqlClient.query(
+  const [, inserted] = await sqlClient.transaction([
+    input.selfService
+      ? sqlClient.query(`SELECT sideline_assert_response($1,$2,true)`, [input.matchId, input.hostPlayerId])
+      : sqlClient.query(`SELECT id FROM matches WHERE id=$1 FOR UPDATE`, [input.matchId]),
+    sqlClient.query(
     `INSERT INTO match_guests(match_id, host_player_id, name, position, skill, status)
      VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING id`,
     [input.matchId, input.hostPlayerId, name, position, skill, status],
-  )) as unknown as { id: number }[];
-  return inserted[0].id;
+    ),
+  ]);
+  return Number(inserted[0].id);
 }
 
 /** Fetch a single guest by id within a match (or null). */
@@ -170,10 +176,13 @@ export async function removeGuest(
       matchId,
     ]);
   } else {
-    await sqlClient.query(
+    await sqlClient.transaction([
+      sqlClient.query(`SELECT sideline_assert_response($1,$2,true)`, [matchId, hostPlayerId]),
+      sqlClient.query(
       `DELETE FROM match_guests WHERE id = $1 AND match_id = $2 AND host_player_id = $3`,
       [guestId, matchId, hostPlayerId],
-    );
+      ),
+    ]);
   }
 }
 

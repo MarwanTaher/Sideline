@@ -78,6 +78,7 @@ reflect the deployed baseline. **Local / Preview verified** items still need rel
 | FR-MAT-6 | Weather forecast for outdoor matches (Open-Meteo). | C | Done |
 | FR-MAT-7 | Matches are labelled by date (not "Match N"). | S | Done |
 | FR-MAT-8 | Add-to-calendar (.ics) per match; share page `/share/match/[id]` viewable without login. | C | Done |
+| FR-MAT-9 | Admins configure recurring season matches using existing season/core/rates. Enable creates or explicitly links the first future occurrence; closing matchday creates one next future occurrence, with durable retries and no backfill beyond season end. | M | Local implementation; migration 0037 pending |
 
 ### 4.3 Availability, waitlist, guests and the 24-hour lock
 
@@ -91,6 +92,8 @@ reflect the deployed baseline. **Local / Preview verified** items still need rel
 | FR-AV-6 | A countdown to the lock is shown on the match and dashboard; a warning appears when the lock is near. | S | Done |
 | FR-AV-7 | Global availability defaults (cap, lock hours) are separate from per-match overrides. | S | Done |
 | FR-AV-8 | On season matches, active season subscribers are **automatically IN**. | M | Done |
+| FR-AV-9 | Automated bookings gate public signup, guest requests and waitlists until the configured opening (default Friday 15:00 Warsaw); core subscribers can mark OUT earlier. Server timestamps, not cron, enforce opening. | M | Local implementation; migration 0037 pending |
+| FR-AV-10 | Automated capacity and queue edits are serialized in PostgreSQL, include approved guests, and preserve explicit OUT during subscriber synchronization. Seat swaps now also close 24 elapsed hours before kickoff; no automatic promotion after lock. | M | Local implementation; migration 0037 pending |
 
 ### 4.4 Team draft
 
@@ -163,6 +166,8 @@ Based on the group's written rules (season 08/11/2026 – 30/03/2027).
 | FR-SE-11 | Group fund balance is **derived** (fees + rounding surplus − extensions ± manual adjustments), never stored. Visible to players. | M | Done |
 | FR-SE-12 | All rates (pitch, extra fee, extension, MultiSport credit, due day, min extras) are configurable by admin. | M | Done |
 | FR-SE-13 | Withdrawal of a subscriber does not auto-void invoices (admin judgement, rules §7). | S | Done (manual) |
+| FR-SE-14 | Keep the existing 500 PLN guaranteed 90-minute base and optional 100 PLN extension/fund model. For automated winter bookings, extension requires admin confirmation with 18 participants by default; calendar duration reflects confirmation. | M | Local implementation; migration 0037 pending |
+| FR-SE-15 | Explicit skip/cancel records retain or waive base cost. Invoice generation uses recurrence/waivers without rewriting issued invoices; paid billed-day corrections are rejected. Season reserve lists remain independent of match waitlists. | M | Local implementation; migration 0037 pending |
 
 ### 4.10 Notifications
 

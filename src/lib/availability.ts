@@ -1,5 +1,6 @@
 import { sqlClient } from "@/lib/db";
 import { kickoffAtSql } from "@/lib/kickoff-sql";
+import { publicSignupSql } from "./availability-policy-sql";
 
 export type AvailabilityStatus = "in" | "out" | "pending";
 export type MatchdayStatus = "draft" | "active" | "closed";
@@ -28,6 +29,12 @@ export interface AvailabilityMatch {
   matchdayStatus: MatchdayStatus;
   maxPlayers: number;
   availabilityOpen: boolean;
+  signupOpensAt: string | null;
+  automated: boolean;
+  coreResponsesOpen: boolean;
+  baseMinutes: number;
+  extensionMinutes: number;
+  extended: boolean;
 }
 
 function normMatchday(value: unknown): MatchdayStatus {
@@ -46,6 +53,12 @@ interface MatchMetaRow {
   matchday_status: string | null;
   max_players: number | null;
   availability_open: number | null;
+  signup_opens_at: string | Date | null;
+  automated: boolean;
+  core_responses_open: boolean;
+  base_minutes: number;
+  extension_minutes: number;
+  extended: boolean;
 }
 
 /** Load the minimal match meta needed by the availability screen, or null. */
@@ -55,8 +68,16 @@ export async function getAvailabilityMatch(
   const raw = await sqlClient.query(
     `SELECT id, played_on, match_time, ${kickoffAtSql()} AS kickoff_at, matchday_status,
             COALESCE(max_players, ${DEFAULT_MAX_PLAYERS}) AS max_players,
-            COALESCE(availability_open, 1) AS availability_open
-       FROM matches WHERE id = $1`,
+            (${publicSignupSql()}::int) AS availability_open, signup_opens_at,base_minutes,extension_minutes,extended,
+            EXISTS(SELECT 1 FROM season_match_occurrences WHERE match_id=m.id) AS automated,
+            EXISTS(SELECT 1 FROM season_match_occurrences o
+              JOIN season_match_automation a ON a.season_id=o.season_id
+              JOIN seasons s ON s.id=o.season_id
+              WHERE o.match_id=m.id AND o.state='scheduled' AND a.enabled AND NOT a.paused
+                AND s.status='active' AND s.subscription_enabled AND s.visible_to_players
+                AND m.availability_override IS DISTINCT FROM 'closed'
+                AND m.matchday_status <> 'closed') AS core_responses_open
+       FROM matches m WHERE id = $1`,
     [matchId],
   );
   const rows = raw as MatchMetaRow[];
@@ -75,6 +96,12 @@ export async function getAvailabilityMatch(
     matchdayStatus: normMatchday(m.matchday_status),
     maxPlayers: Number(m.max_players ?? DEFAULT_MAX_PLAYERS),
     availabilityOpen: Number(m.availability_open ?? 1) === 1,
+    signupOpensAt: m.signup_opens_at == null ? null : new Date(m.signup_opens_at).toISOString(),
+    automated: m.automated,
+    coreResponsesOpen: m.core_responses_open,
+    baseMinutes: m.base_minutes,
+    extensionMinutes: m.extension_minutes,
+    extended: m.extended,
   };
 }
 
@@ -194,46 +221,26 @@ export async function getPlayerAvailabilityStatus(
 }
 
 // ── Waitlist (#9) ──────────────────────────────────────────────────────────
-// The match_availability.status CHECK constraint only allows 'in'/'out', so the
-// waitlist is kept as an ordered list of player ids in app_settings, keyed per
-// match. Order = join order, which gives a fair first-in promotion rule.
-
-const WAITLIST_PREFIX = "waitlist_";
-
 export async function getWaitlist(matchId: number): Promise<number[]> {
   const rows = (await sqlClient.query(
-    `SELECT value FROM app_settings WHERE key = $1`,
-    [`${WAITLIST_PREFIX}${matchId}`],
-  )) as Array<{ value: string | null }>;
-  const raw = rows[0]?.value ?? "";
-  return raw
-    .split(",")
-    .map((s) => Number(s.trim()))
-    .filter((n) => Number.isInteger(n) && n > 0);
-}
-
-async function saveWaitlist(matchId: number, ids: number[]): Promise<void> {
-  const clean = Array.from(new Set(ids.filter((n) => Number.isInteger(n) && n > 0)));
-  await sqlClient.query(
-    `INSERT INTO app_settings(key, value) VALUES ($1, $2)
-     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
-    [`${WAITLIST_PREFIX}${matchId}`, clean.join(",")],
-  );
+    `SELECT w.player_id FROM match_waitlist w JOIN players p ON p.id=w.player_id
+     WHERE w.match_id=$1 AND p.active=1 AND p.deleted_at IS NULL
+       AND NOT EXISTS(SELECT 1 FROM match_availability a WHERE a.match_id=$1 AND a.player_id=w.player_id AND a.status='in')
+     ORDER BY w.position,w.player_id`,
+    [matchId],
+  )) as Array<{ player_id: number }>;
+  return rows.map((row) => Number(row.player_id));
 }
 
 /** Append a player to the waitlist (idempotent). Returns their 1-based spot. */
 export async function addToWaitlist(matchId: number, playerId: number): Promise<number> {
-  const list = await getWaitlist(matchId);
-  if (!list.includes(playerId)) list.push(playerId);
-  await saveWaitlist(matchId, list);
-  return list.indexOf(playerId) + 1;
+  const rows = await sqlClient.query(`SELECT sideline_waitlist_edit($1,$2,'join') AS spot`, [matchId, playerId]);
+  return Number(rows[0].spot);
 }
 
 /** Remove a player from the waitlist if present. */
 export async function removeFromWaitlist(matchId: number, playerId: number): Promise<void> {
-  const list = await getWaitlist(matchId);
-  const next = list.filter((id) => id !== playerId);
-  if (next.length !== list.length) await saveWaitlist(matchId, next);
+  await sqlClient.query(`SELECT sideline_waitlist_edit($1,$2,'leave')`, [matchId, playerId]);
 }
 
 /** Move a waitlisted player one place up (-1) or down (+1). No-op at the edges. */
@@ -242,13 +249,7 @@ export async function moveWaitlistPlayer(
   playerId: number,
   direction: -1 | 1,
 ): Promise<void> {
-  const list = await getWaitlist(matchId);
-  const i = list.indexOf(playerId);
-  if (i < 0) return;
-  const j = i + direction;
-  if (j < 0 || j >= list.length) return;
-  [list[i], list[j]] = [list[j], list[i]];
-  await saveWaitlist(matchId, list);
+  await sqlClient.query(`SELECT sideline_waitlist_edit($1,$2,$3)`, [matchId, playerId, direction === -1 ? "up" : "down"]);
 }
 
 /** The waitlisted players (id, name) in join order — for the admin view. */
@@ -275,16 +276,19 @@ export async function promoteWaitlistCandidate(
   matchId: number,
   playerId: number,
 ): Promise<boolean> {
-  const rows = (await sqlClient.query(
-    `SELECT p.active, COALESCE(ma.status, 'pending') AS status
-       FROM players p
-       LEFT JOIN match_availability ma ON ma.match_id = $1 AND ma.player_id = p.id
-      WHERE p.id = $2`,
-    [matchId, playerId],
-  )) as Array<{ active: number; status: string }>;
-  if (rows.length === 0) return false;
-  if (Number(rows[0].active) !== 1) return false;
-  if (rows[0].status === "in") return false;
-  await setPlayerAvailability(matchId, playerId, "in");
-  return true;
+  const rows = await sqlClient.query(`SELECT sideline_promote_waitlist($1,$2) AS promoted`, [matchId, playerId]);
+  return rows[0].promoted === true;
+}
+
+export async function respondToMatch(matchId: number, playerId: number, status: "in" | "out", waitlist: boolean): Promise<string> {
+  const rows = await sqlClient.query(`SELECT sideline_respond($1,$2,$3,$4) AS result`, [matchId, playerId, status, waitlist]);
+  return String(rows[0].result);
+}
+
+export async function assertPublicResponse(matchId: number, playerId: number): Promise<void> {
+  await sqlClient.query(`SELECT sideline_assert_response($1,$2,true)`, [matchId, playerId]);
+}
+
+export async function assertPlayerResponse(matchId: number, playerId: number): Promise<void> {
+  await sqlClient.query(`SELECT sideline_assert_response($1,$2,false)`, [matchId, playerId]);
 }

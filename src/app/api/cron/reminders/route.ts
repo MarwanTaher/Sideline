@@ -11,6 +11,7 @@ import { getWaitlist } from "@/lib/availability";
 import { isAvailabilityLockPushDue } from "@/lib/reminder-scheduling";
 import { sendSeasonPaymentReminders } from "@/lib/season-reminders";
 import { logAppError } from "@/lib/error-log";
+import { processMatchAutomation } from "@/lib/match-automation";
 
 /**
  * Scheduled nudges. Everything else in the app fires because an admin pressed a
@@ -49,12 +50,13 @@ export async function GET(request: Request) {
   if (!secret || auth !== `Bearer ${secret}`) return unauthorized();
 
   const now = Date.now();
+  const automation = await processMatchAutomation();
   const sent: string[] = [];
   const locked: string[] = [];
 
   const matches = (await sqlClient.query(
     `SELECT id, played_on, COALESCE(num_teams, 0) AS num_teams, ${kickoffAtSql()} AS kickoff_at,
-            COALESCE(availability_open, 1) AS availability_open
+            COALESCE(sideline_public_signup_open(matches.id),false)::int AS availability_open
        FROM matches
       WHERE played_on IS NOT NULL
         AND ${kickoffAtSql()} > NOW()
@@ -239,5 +241,6 @@ export async function GET(request: Request) {
     locked,
     seasonReminders,
     storiesPurged,
+    automation,
   });
 }

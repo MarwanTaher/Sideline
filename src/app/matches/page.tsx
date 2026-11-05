@@ -86,11 +86,14 @@ export default async function MatchesPage() {
             statsScoringEnabled: m.statsScoringEnabled,
             dateLabel: `${fmtDate(m.playedOn)} at ${fmtMatchTime(m.matchTime)}`,
             locationName: m.locationName || undefined,
+            signupLabel: m.signupOpensAt && m.matchdayStatus !== "closed" && !m.availabilityOpen
+              ? `Public signup: ${new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Warsaw",weekday:"long",hour:"2-digit",minute:"2-digit"}).format(new Date(m.signupOpensAt))} Warsaw time`
+              : undefined,
             phase: getMatchPhase({
               matchdayStatus: m.matchdayStatus,
               availabilityOpen: m.availabilityOpen,
               kickoffAt: m.kickoffAt,
-              lockEnabled,
+              lockEnabled: lockEnabled || m.signupOpensAt != null,
               hasRoster: m.playerCount > 0,
             }),
             myStatus: m.myStatus,

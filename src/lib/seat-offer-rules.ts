@@ -5,7 +5,7 @@
 // one of them. The server repeats every check as guarded SQL — these helpers
 // exist to give clear messages, drive the UI and be unit-tested.
 
-import { kickoffMs, type KickoffInput } from "./match-schedule";
+import { kickoffMs, AVAILABILITY_LOCK_MS, type KickoffInput } from "./match-schedule";
 
 export type SeatOfferStatus = "open" | "filled" | "withdrawn";
 export type SeatAvailability = "in" | "out" | "pending";
@@ -21,8 +21,7 @@ export function normalizeSeatOfferStatus(value: unknown): SeatOfferStatus {
 }
 
 /**
- * Seats can change hands until kickoff, as long as the matchday is not closed.
- * The 24h availability lock does not apply: a swap keeps the squad size.
+ * Seat offers and transfers share the 24-hour attendance deadline.
  */
 export function isSeatSwapWindowOpen(input: {
   kickoffAt: KickoffInput;
@@ -31,7 +30,7 @@ export function isSeatSwapWindowOpen(input: {
 }): boolean {
   if (String(input.matchdayStatus ?? "draft").toLowerCase() === "closed") return false;
   const start = kickoffMs(input.kickoffAt);
-  return start == null || (input.nowMs ?? Date.now()) < start;
+  return start != null && (input.nowMs ?? Date.now()) < start - AVAILABILITY_LOCK_MS;
 }
 
 export function canPostSeat(input: {
@@ -41,7 +40,7 @@ export function canPostSeat(input: {
   windowOpen: boolean;
 }): SeatDecision {
   if (!input.isSubscriber) return no("Only season subscribers can offer a seat.");
-  if (!input.windowOpen) return no("This match has already started.");
+  if (!input.windowOpen) return no("Seat changes close 24 hours before kickoff.");
   if (input.hasLiveOffer) return no("You have already offered your seat.");
   if (input.subscriberStatus === "out") {
     return no("You're already marked OUT, so there is no seat to hand over.");
@@ -76,7 +75,7 @@ export function canRequestSeat(input: {
   if (input.offerStatus !== "open" || input.subscriberStatus === "out") {
     return no("This seat is no longer available.");
   }
-  if (!input.windowOpen) return no("This match has already started.");
+  if (!input.windowOpen) return no("Seat changes close 24 hours before kickoff.");
   if (input.alreadyRequested) return no("You've already requested this seat.");
   return OK;
 }
@@ -104,7 +103,7 @@ export function canApproveSeat(input: {
   if (!input.isOwner) return no("Only the subscriber can approve their seat.");
   if (input.offerStatus === "filled") return no("Your seat has already been taken.");
   if (input.offerStatus !== "open") return no("This offer is no longer open.");
-  if (!input.windowOpen) return no("This match has already started.");
+  if (!input.windowOpen) return no("Seat changes close 24 hours before kickoff.");
   if (!input.subscriberIsActive) return no("You no longer hold a season place.");
   if (input.subscriberStatus === "out") {
     return no("You're already marked OUT, so there is no seat to hand over.");

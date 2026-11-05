@@ -16,6 +16,7 @@ export interface MatchListItem {
   statsScoringEnabled: boolean;
   playerCount: number;
   availabilityOpen: boolean;
+  signupOpensAt: string | null;
   locationName: string;
   /** The viewer's own availability; only set when a viewer id is passed. */
   myStatus?: "in" | "out" | "pending";
@@ -107,7 +108,8 @@ export async function getMatchList(
            COALESCE(m.matchday_status, 'draft') AS matchday_status,
            COALESCE(m.status, 'open') AS status,
            COALESCE(m.stats_scoring_enabled, 1) AS stats_scoring_enabled,
-           COALESCE(m.availability_open, 1) AS availability_open,
+           COALESCE(sideline_public_signup_open(m.id),false)::int AS availability_open,
+           m.signup_opens_at,
            COALESCE(m.location_name, '') AS location_name,
            COUNT(mp.player_id) AS player_count,
            COALESCE(BOOL_OR(mp.player_id = $2::int), false) AS on_roster,
@@ -129,6 +131,7 @@ export async function getMatchList(
     status: string;
     stats_scoring_enabled: number;
     availability_open: number;
+    signup_opens_at: string | Date | null;
     location_name: string;
     player_count: number;
     on_roster: boolean | null;
@@ -150,6 +153,7 @@ export async function getMatchList(
     statsScoringEnabled: Number(r.stats_scoring_enabled) === 1,
     playerCount: Number(r.player_count),
     availabilityOpen: Number(r.availability_open) === 1,
+    signupOpensAt: r.signup_opens_at == null ? null : new Date(r.signup_opens_at).toISOString(),
     locationName: String(r.location_name ?? ""),
     ...(viewerId != null
       ? {

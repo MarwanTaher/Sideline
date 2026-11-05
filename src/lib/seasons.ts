@@ -98,6 +98,8 @@ export async function setSeasonStatus(id: number, status: SeasonStatus): Promise
 }
 
 export async function deleteSeason(id: number): Promise<void> {
+  const automation = await sqlClient.query(`SELECT season_id FROM season_match_automation WHERE season_id=$1`, [id]);
+  if (automation.length) throw new Error("Archive a season with automation instead of deleting its booking history.");
   await sqlClient.query(`DELETE FROM seasons WHERE id = $1`, [id]);
 }
 

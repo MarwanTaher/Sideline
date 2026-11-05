@@ -1,4 +1,5 @@
 /** Pure calendar and amount calculations for season billing. */
+import { calendarDates } from "./match-recurrence";
 
 export const SEASON_PAYMENT_REMINDER_COPY = {
   threeDays: "Your season invoice is due in 3 days. Check the amount and payment details.",
@@ -10,6 +11,7 @@ export function playingDaysInPeriod(
   period: string,
   startDate: string,
   endDate: string | null,
+  options?: { weekday: number; waivedDates: string[]; scheduledDates?: string[] },
 ): number {
   const match = /^(\d{4})-(\d{2})$/.exec(period);
   if (!match) return 0;
@@ -20,6 +22,16 @@ export function playingDaysInPeriod(
   const start = Date.parse(`${startDate}T00:00:00Z`);
   const end = endDate ? Date.parse(`${endDate}T00:00:00Z`) : Number.POSITIVE_INFINITY;
   if (!Number.isFinite(start) || (endDate != null && !Number.isFinite(end))) return 0;
+
+  if (options) {
+    const monthStart = `${period}-01`;
+    const monthEnd = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+    const from = startDate > monthStart ? startDate : monthStart;
+    const to = endDate && endDate < monthEnd ? endDate : monthEnd;
+    if (to < from) return 0;
+    return (options.scheduledDates ?? calendarDates(from, to, options.weekday))
+      .filter((date) => date >= from && date <= to && !options.waivedDates.includes(date)).length;
+  }
 
   let count = 0;
   const cursor = new Date(Date.UTC(year, month - 1, 1));

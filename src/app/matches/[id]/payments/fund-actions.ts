@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { logAppError } from "@/lib/error-log";
 import {
   addAdjustment,
   deleteAdjustment,
@@ -24,6 +25,8 @@ function revalidateMatch(matchId: number): void {
   revalidatePath(`/matches/${matchId}/payments`);
   revalidatePath("/admin/accounts");
   revalidatePath("/season");
+  revalidatePath(`/matches/${matchId}`);
+  revalidatePath(`/matches/${matchId}/availability`);
 }
 
 export async function generateChargesAction(
@@ -58,11 +61,16 @@ export async function setExtendedAction(
   if (!Number.isInteger(matchId)) return { ok: false, message: "Invalid match." };
   const extended = formData.get("extended") === "true";
 
-  await setMatchExtended(matchId, extended);
+  try {
+    await setMatchExtended(matchId, extended);
+  } catch (error) {
+    await logAppError(error, "matches.extension");
+    return { ok: false, message: error instanceof Error ? error.message : "Could not update the extension." };
+  }
   revalidateMatch(matchId);
   return {
     ok: true,
-    message: extended ? "Marked as extended to 2 hours." : "Extension removed.",
+    message: extended ? "Optional extension confirmed." : "Extension removed.",
   };
 }
 

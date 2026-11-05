@@ -30,7 +30,7 @@ See the [project roadmap](ROADMAP.md) for planned features and improvements.
 
 - Node.js 20.9 or newer and npm.
 - For the running application: a dedicated development Neon database
-  with the reviewed schema and SQL migrations through `0036` already applied.
+  with the reviewed schema and SQL migrations through `0037` already applied.
 - An existing development admin account. Registration creates an inactive player
   who needs admin approval; there is no automatic first-admin bootstrap or bundled
   demo password. An empty database requires maintainer provisioning first.
@@ -96,6 +96,9 @@ It also checks local payment-QR payloads and score-snapshot revision/completenes
 `npm run build` runs this gate before compiling Next.js, including on Vercel.
 The separate `test:scoring` and `test:awards` golden suites require database
 configuration and are deliberately not run by the database-free gate.
+Match automation SQL tests run in an isolated in-memory PGlite database with
+fictional fixtures; they do not load environment files, use `DATABASE_URL`, or
+contact Neon.
 
 ### Golden Parity Tests and Fictional Samples
 
@@ -126,7 +129,7 @@ The local snapshot directory is ignored and must never be committed or shared.
 ### Preview integration tests
 
 Use an explicitly approved Preview database with the reviewed migrations through
-`0036` already applied. Point the local `.env.local` at **Preview, never
+`0037` already applied. Point the local `.env.local` at **Preview, never
 production**, and ensure Preview has no registered push devices. The following
 PowerShell opt-ins must identify that same approved host:
 
@@ -149,6 +152,62 @@ configuration for development, preview, and production environments.
 The reminder schedule is configured in [vercel.json](vercel.json). Scheduled
 requests require `CRON_SECRET`. Check the effective environment configuration
 before running database-backed tests, builds, or a local production-mode server.
+
+### Weekly season match automation
+
+Migration [0037](./drizzle/0037_match_automation.sql) must be reviewed and applied
+to an explicitly approved database **before deploying this code**. It has not
+been applied by the implementation task. It migrates only match waitlists from
+CSV settings to relational rows; season reserve lists remain separate.
+Freeze attendance writes during the migration/deployment handoff so the old
+version cannot update legacy queues after their snapshot has been migrated.
+The migration contains PostgreSQL functions and statement breakpoints compatible
+with `scripts/apply-migration.mjs`; do not split function bodies on semicolons.
+
+Admins configure `/season?tab=automation` using the existing season, members,
+rates and release checklist. Existing seasons default to automation disabled.
+Complete the existing checklist before enabling; do not automatically certify
+an environment's readiness confirmations.
+Enabling creates the first future match (or requires explicit linking of a
+conflicting draft match). Closing its matchday creates the next future occurrence;
+closing submissions does not. Generation failures are durable and recoverable
+through Retry and the authenticated daily reminders cron.
+Calendar dates are retained for historical and already-created bookings when
+the template weekday changes. Disabling generation does not waive those contract
+costs or revert the invoicing calendar. Rescheduling is limited to draft bookings
+before their original 24-hour lock; existing invoices still need explicit review.
+Late-created matches inside the lock are flagged for admin attendance review.
+
+The winter defaults are Sunday 21:00 Warsaw, 18 total places, existing 14 core
+subscribers auto-IN, and public signup/waitlist opening Friday 15:00. Core players
+can go OUT earlier. All player changes, including season seat swaps, close
+24 elapsed hours before kickoff. Admin attendance overrides remain possible;
+automated bookings still enforce capacity.
+
+Reuse the saved 500 PLN/90-minute base booking, payable even without attendance,
+and optional 100 PLN/30-minute extension. Only an admin confirms the extension,
+with 18 confirmed participants by default; it continues to debit the existing
+fund rather than monthly base invoices. Cancelling a booking requires a
+keep-cost/waive-cost choice; issued invoices and confirmed extensions require
+explicit billing review. Paid invoices cannot be recalculated.
+
+Signup opens from server timestamps, independently of cron. Opening pushes and
+recovery still use the daily job and may arrive late; no exact-time notification
+delivery is promised. Notification errors appear per occurrence and are retried
+after a five-minute lease expires, on the next maintenance/manual run.
+Do not increase Vercel cron frequency without checking plan limits.
+See [the implementation plan](./docs/MATCH_AUTOMATION_PLAN.md).
+
+- Verify Vercel's daily reminders cron and separate Preview push configuration.
+  Lock notifications are daily, not exact-time, and are **off by default** (enable the
+  "Availability locked" type in Notifications settings to turn them on).
+- Configure and verify Neon recovery/pre-season snapshots separately. The Diagnostics
+  CSV exports are not a full database backup.
+- Payment QR uses the Polish ZBP field layout (26-digit NRB, zero-padded grosz amount,
+  UTF-8 recipient/reference) documented by
+  [pl-qr-payment](https://github.com/IonBazan/pl-qr-payment).
+  The encoder runs locally and never truncates payment details; manual transfer remains
+  available when the fields do not fit.
 
 ## License
 
