@@ -156,8 +156,8 @@ before running database-backed tests, builds, or a local production-mode server.
 ### Weekly season match automation
 
 Migration [0037](./drizzle/0037_match_automation.sql) must be reviewed and applied
-to an explicitly approved database **before deploying this code**. It has not
-been applied by the implementation task. It migrates only match waitlists from
+to an explicitly approved database **before deploying this code**. It was applied
+to Preview and production on 2026-11-05 (automation disabled for every season). It migrates only match waitlists from
 CSV settings to relational rows; season reserve lists remain separate.
 Freeze attendance writes during the migration/deployment handoff so the old
 version cannot update legacy queues after their snapshot has been migrated.

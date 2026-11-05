@@ -125,7 +125,7 @@ flowchart TB
 
 ### 5.1 Layering rules
 
-#### Weekly season automation (local implementation, migration 0037 pending)
+#### Weekly season automation (migration 0037 applied 2026-11-05)
 
 `match-recurrence.ts` is client-safe calendar logic and reuses the Warsaw kickoff
 conversion. `match-automation.ts` owns validated configuration, generation,

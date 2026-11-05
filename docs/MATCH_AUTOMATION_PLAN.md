@@ -1,7 +1,7 @@
 # Winter match automation implementation plan
 
-Status: local implementation added; migration 0037 and deployment activation
-remain pending explicit approval. Revised after a
+Status: implemented; migration 0037 applied to Preview and production on
+2026-11-05. Automation remains disabled until an admin enables it. Revised after a
 user-approved, read-only inspection of Preview on 5 November 2026.
 
 Implemented: existing-season Automation tab and location picker, recurring
