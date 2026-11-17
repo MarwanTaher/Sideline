@@ -67,8 +67,10 @@ flowchart LR
 flowchart TB
   subgraph GitHub
     dev[dev branch] -->|merge on 'ship'| main[main branch]
+    aidev[ai_dev branch] -->|PR + merge after review| main
   end
   dev -->|preview deploy| VP[Vercel Preview]
+  aidev -->|preview deploy| VP
   main -->|production deploy| VPROD[Vercel Production<br/>Serverless + Edge middleware]
   VPROD --> NEON[(Neon Postgres<br/>production branch)]
   VP --> PREVIEWDB[(Neon Postgres<br/>isolated Preview branch)]
@@ -76,6 +78,15 @@ flowchart TB
   CRON[Vercel Cron 0 17 * * *] --> VPROD
   ENV[[Env vars:<br/>DATABASE_URL, AUTH_SECRET,<br/>VAPID keys, CRON_SECRET,<br/>BLOB token]] -.-> VPROD
 ```
+
+Branches
+- `main` is the production branch; merging into it deploys Vercel Production.
+- `dev` and `ai_dev` are development branches; every push deploys a Vercel Preview
+  backed by the shared Preview Neon branch.
+- `ai_dev` is dedicated to AI-assisted development (Claude Code sessions). Work
+  happens on feature branches cut from `ai_dev`, is validated locally against the
+  Preview database (`scripts/db-guard.mjs` blocks unapproved hosts), lands on
+  `ai_dev` for Preview verification, and reaches `main` by reviewed PR.
 
 Notes
 - Preview uses a separate Neon branch and separate push configuration. Local migration/test
