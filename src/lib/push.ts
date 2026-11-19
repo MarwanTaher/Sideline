@@ -10,6 +10,7 @@ import {
   type NotificationType,
   type NotificationTypeKey,
 } from "./notification-types";
+import { FOUNDING_GROUP } from "@/lib/group-constants";
 
 let configured = false;
 
@@ -42,7 +43,8 @@ export type PushPayload = {
  */
 export async function isPushEnabled(): Promise<boolean> {
   const rows = (await sqlClient.query(
-    `SELECT value FROM app_settings WHERE key = 'push_enabled'`,
+    `SELECT value FROM app_settings WHERE group_id = $1 AND key = 'push_enabled'`,
+    [FOUNDING_GROUP.id],
   )) as Array<{ value: string | null }>;
   if (rows.length === 0) return true;
   return rows[0].value !== "0";
@@ -50,9 +52,9 @@ export async function isPushEnabled(): Promise<boolean> {
 
 export async function setPushEnabled(enabled: boolean): Promise<void> {
   await sqlClient.query(
-    `INSERT INTO app_settings(key, value) VALUES ('push_enabled', $1)
-     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
-    [enabled ? "1" : "0"],
+    `INSERT INTO app_settings(group_id, key, value) VALUES ($1, 'push_enabled', $2)
+     ON CONFLICT (group_id, key) DO UPDATE SET value = EXCLUDED.value`,
+    [FOUNDING_GROUP.id, enabled ? "1" : "0"],
   );
 }
 
@@ -172,8 +174,8 @@ export async function getNotificationTypeStatuses(): Promise<
     keys.push(typeEnabledSettingKey(t.key), typeAudienceSettingKey(t.key));
   }
   const rows = (await sqlClient.query(
-    `SELECT key, value FROM app_settings WHERE key = ANY($1)`,
-    [keys],
+    `SELECT key, value FROM app_settings WHERE group_id = $1 AND key = ANY($2)`,
+    [FOUNDING_GROUP.id, keys],
   )) as Array<{ key: string; value: string | null }>;
   const map = new Map(rows.map((r) => [r.key, r.value]));
 
@@ -193,9 +195,9 @@ export async function setNotificationTypeEnabled(
   enabled: boolean,
 ): Promise<void> {
   await sqlClient.query(
-    `INSERT INTO app_settings(key, value) VALUES ($1, $2)
-     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
-    [typeEnabledSettingKey(key), enabled ? "1" : "0"],
+    `INSERT INTO app_settings(group_id, key, value) VALUES ($1, $2, $3)
+     ON CONFLICT (group_id, key) DO UPDATE SET value = EXCLUDED.value`,
+    [FOUNDING_GROUP.id, typeEnabledSettingKey(key), enabled ? "1" : "0"],
   );
 }
 
@@ -204,9 +206,9 @@ export async function setNotificationTypeAudience(
   mode: AudienceMode,
 ): Promise<void> {
   await sqlClient.query(
-    `INSERT INTO app_settings(key, value) VALUES ($1, $2)
-     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
-    [typeAudienceSettingKey(key), mode],
+    `INSERT INTO app_settings(group_id, key, value) VALUES ($1, $2, $3)
+     ON CONFLICT (group_id, key) DO UPDATE SET value = EXCLUDED.value`,
+    [FOUNDING_GROUP.id, typeAudienceSettingKey(key), mode],
   );
 }
 
@@ -215,8 +217,8 @@ async function getTypeConfig(
 ): Promise<{ enabled: boolean; audienceMode: AudienceMode }> {
   const type = getNotificationType(key);
   const rows = (await sqlClient.query(
-    `SELECT key, value FROM app_settings WHERE key = ANY($1)`,
-    [[typeEnabledSettingKey(key), typeAudienceSettingKey(key)]],
+    `SELECT key, value FROM app_settings WHERE group_id = $1 AND key = ANY($2)`,
+    [FOUNDING_GROUP.id, [typeEnabledSettingKey(key), typeAudienceSettingKey(key)]],
   )) as Array<{ key: string; value: string | null }>;
   const map = new Map(rows.map((r) => [r.key, r.value]));
   const enabledVal = map.get(typeEnabledSettingKey(key));

@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { sqlClient } from "./db";
 import { SCORES_CACHE_TAG } from "./leaderboard";
+import { FOUNDING_GROUP } from "@/lib/group-constants";
 
 /**
  * Direct TypeScript port of the read/compute path of `src/awards.py`.
@@ -397,8 +398,10 @@ export async function getAwardsSettings(): Promise<AwardsSettings> {
     `
     SELECT key, value
     FROM app_settings
-    WHERE key IN ('scoring_awards_match_min_valid_votes', 'scoring_awards_overall_min_valid_votes')
+    WHERE group_id = $1
+      AND key IN ('scoring_awards_match_min_valid_votes', 'scoring_awards_overall_min_valid_votes')
     `,
+    [FOUNDING_GROUP.id],
   )) as Array<{ key: string; value: string | number | null }>;
   for (const r of rows) {
     const num = Number(r.value);

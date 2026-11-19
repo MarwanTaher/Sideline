@@ -2,6 +2,7 @@ import "server-only";
 import { sqlClient } from "./db";
 import { notify } from "./push";
 import { logAppError } from "./error-log";
+import { FOUNDING_GROUP } from "@/lib/group-constants";
 
 /**
  * Season subscriptions — the winter 2026/2027 contract model.
@@ -342,8 +343,8 @@ const SEASON_WAITLIST_OFFER_PREFIX = "season_waitlist_offer_";
 
 async function seasonWaitlistIds(seasonId: number): Promise<number[]> {
   const rows = (await sqlClient.query(
-    `SELECT value FROM app_settings WHERE key = $1`,
-    [`${SEASON_WAITLIST_PREFIX}${seasonId}`],
+    `SELECT value FROM app_settings WHERE group_id = $1 AND key = $2`,
+    [FOUNDING_GROUP.id, `${SEASON_WAITLIST_PREFIX}${seasonId}`],
   )) as Array<{ value: string | null }>;
   return (rows[0]?.value ?? "")
     .split(",")
@@ -360,13 +361,13 @@ export async function joinSeasonWaitlist(seasonId: number, playerId: number): Pr
   if (subscription?.status === "active") throw new Error("You already hold a season place.");
 
   const rows = await sqlClient.query(
-    `INSERT INTO app_settings(key, value) VALUES ($1, $2)
-     ON CONFLICT (key) DO UPDATE SET value = CASE
+    `INSERT INTO app_settings(group_id, key, value) VALUES ($3, $1, $2)
+     ON CONFLICT (group_id, key) DO UPDATE SET value = CASE
        WHEN $2 = ANY(string_to_array(app_settings.value, ',')) THEN app_settings.value
        ELSE concat_ws(',', NULLIF(app_settings.value, ''), $2)
      END
      RETURNING value`,
-    [`${SEASON_WAITLIST_PREFIX}${seasonId}`, String(playerId)],
+    [`${SEASON_WAITLIST_PREFIX}${seasonId}`, String(playerId), FOUNDING_GROUP.id],
   );
   return String(rows[0].value).split(",").indexOf(String(playerId)) + 1;
 }
@@ -378,12 +379,12 @@ export async function removeSeasonWaitlistPlayer(
   await sqlClient.query(
     `UPDATE app_settings
         SET value = array_to_string(array_remove(string_to_array(value, ','), $2), ',')
-      WHERE key = $1`,
-    [`${SEASON_WAITLIST_PREFIX}${seasonId}`, String(playerId)],
+      WHERE group_id = $3 AND key = $1`,
+    [`${SEASON_WAITLIST_PREFIX}${seasonId}`, String(playerId), FOUNDING_GROUP.id],
   );
   await sqlClient.query(
-    `DELETE FROM app_settings WHERE key = $1 AND value = $2`,
-    [`${SEASON_WAITLIST_OFFER_PREFIX}${seasonId}`, String(playerId)],
+    `DELETE FROM app_settings WHERE group_id = $3 AND key = $1 AND value = $2`,
+    [`${SEASON_WAITLIST_OFFER_PREFIX}${seasonId}`, String(playerId), FOUNDING_GROUP.id],
   );
 }
 
@@ -433,10 +434,10 @@ export async function offerNextSeasonWaitlistPlayer(seasonId: number): Promise<n
   if (playerId == null) return null;
 
   const claimed = (await sqlClient.query(
-    `INSERT INTO app_settings(key, value) VALUES ($1, $2)
-     ON CONFLICT (key) DO NOTHING
+    `INSERT INTO app_settings(group_id, key, value) VALUES ($3, $1, $2)
+     ON CONFLICT (group_id, key) DO NOTHING
      RETURNING key`,
-    [`${SEASON_WAITLIST_OFFER_PREFIX}${seasonId}`, String(playerId)],
+    [`${SEASON_WAITLIST_OFFER_PREFIX}${seasonId}`, String(playerId), FOUNDING_GROUP.id],
   )) as Array<{ key: string }>;
   if (claimed.length === 0) return null;
 

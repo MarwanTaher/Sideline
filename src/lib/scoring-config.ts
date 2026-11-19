@@ -1,6 +1,7 @@
 import { sqlClient } from "@/lib/db";
 import { getScoringPolicy } from "@/lib/scoring";
 import { getAwardsSettings } from "@/lib/awards";
+import { FOUNDING_GROUP } from "@/lib/group-constants";
 
 /**
  * Values shown in the admin scoring-configuration form. Mirrors the Streamlit
@@ -73,9 +74,9 @@ export async function getScoringConfig(): Promise<ScoringConfigView> {
 
 async function setSetting(key: string, value: number): Promise<void> {
   await sqlClient.query(
-    `INSERT INTO app_settings(key, value) VALUES ($1, $2)
-     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
-    [key, String(value)],
+    `INSERT INTO app_settings(group_id, key, value) VALUES ($1, $2, $3)
+     ON CONFLICT (group_id, key) DO UPDATE SET value = EXCLUDED.value`,
+    [FOUNDING_GROUP.id, key, String(value)],
   );
 }
 

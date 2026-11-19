@@ -1,5 +1,6 @@
 import "server-only";
 import { sqlClient } from "./db";
+import { FOUNDING_GROUP } from "@/lib/group-constants";
 
 /**
  * Admin-controlled feature switches, stored in `app_settings`. These gate the
@@ -17,17 +18,17 @@ const AVAILABILITY_LOCK_24H_KEY = "availability_lock_24h";
 
 export async function getSetting(key: string): Promise<string | null> {
   const rows = (await sqlClient.query(
-    `SELECT value FROM app_settings WHERE key = $1`,
-    [key],
+    `SELECT value FROM app_settings WHERE group_id = $1 AND key = $2`,
+    [FOUNDING_GROUP.id, key],
   )) as Array<{ value: string | null }>;
   return rows.length > 0 ? rows[0].value : null;
 }
 
 export async function setSetting(key: string, value: string): Promise<void> {
   await sqlClient.query(
-    `INSERT INTO app_settings(key, value) VALUES ($1, $2)
-     ON CONFLICT(key) DO UPDATE SET value = EXCLUDED.value`,
-    [key, value],
+    `INSERT INTO app_settings(group_id, key, value) VALUES ($1, $2, $3)
+     ON CONFLICT (group_id, key) DO UPDATE SET value = EXCLUDED.value`,
+    [FOUNDING_GROUP.id, key, value],
   );
 }
 

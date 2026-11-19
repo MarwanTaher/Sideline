@@ -1,9 +1,24 @@
 import { pgTable, index, uniqueIndex, check, integer, bigint, text, doublePrecision, timestamp, date, unique, foreignKey, primaryKey, boolean, jsonb } from "drizzle-orm/pg-core"
 import { sql } from "drizzle-orm"
 
+// Tenants (migration 0040). See docs/platform/00-OVERVIEW.md.
+export const groups = pgTable("groups", {
+	id: integer().primaryKey().generatedByDefaultAsIdentity(),
+	slug: text().notNull(),
+	name: text().notNull(),
+	timezone: text().default("Europe/Warsaw").notNull(),
+	currency: text().default("PLN").notNull(),
+	locale: text().default("en-GB").notNull(),
+	status: text().default("active").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).default(sql`now()`).notNull(),
+}, (table) => [
+	unique("groups_slug_key").on(table.slug),
+]);
+
 
 
 export const matches = pgTable("matches", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "matches_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	playedOn: text("played_on").notNull(),
 	numTeams: integer("num_teams").notNull(),
@@ -49,6 +64,7 @@ export const matches = pgTable("matches", {
 ]);
 
 export const players = pgTable("players", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "players_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	name: text().notNull(),
 	preferredPosition: text("preferred_position").notNull(),
@@ -153,9 +169,14 @@ export const playerCredentials = pgTable("player_credentials", {
 ]);
 
 export const appSettings = pgTable("app_settings", {
-	key: text().primaryKey().notNull(),
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
+	key: text().notNull(),
 	value: text().default("").notNull(),
-});
+}, (table) => [
+	primaryKey({ columns: [table.groupId, table.key], name: "app_settings_pkey" }),
+	// Transitional (0041): dropped in M2 with the DEFAULT 1.
+	uniqueIndex("app_settings_key_transitional").on(table.key),
+]);
 
 export const playerKudos = pgTable("player_kudos", {
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "player_kudos_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
@@ -223,6 +244,7 @@ export const passwordResetRequests = pgTable("password_reset_requests", {
 ]);
 
 export const legacyScoreSnapshots = pgTable("legacy_score_snapshots", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "legacy_score_snapshots_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	snapshotKey: text("snapshot_key").notNull(),
 	playerId: integer("player_id").notNull(),
@@ -262,6 +284,7 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
 ]);
 
 export const admins = pgTable("admins", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "admins_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	username: text().notNull(),
 	passwordSalt: text("password_salt").notNull(),
@@ -292,17 +315,6 @@ export const adminTabLocks = pgTable("admin_tab_locks", {
 			foreignColumns: [admins.id],
 			name: "admin_tab_locks_admin_id_fkey"
 		}).onDelete("cascade"),
-]);
-
-export const adminSessions = pgTable("admin_sessions", {
-	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "admin_sessions_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
-	token: text().notNull(),
-	username: text().notNull(),
-	role: text().notNull(),
-	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
-	expiresAt: timestamp("expires_at", { mode: 'string' }).notNull(),
-}, (table) => [
-	unique("admin_sessions_token_key").on(table.token),
 ]);
 
 export const statsAudit = pgTable("stats_audit", {
@@ -336,6 +348,7 @@ export const statsAudit = pgTable("stats_audit", {
 ]);
 
 export const awardOverrides = pgTable("award_overrides", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "award_overrides_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	scopeKey: text("scope_key").notNull(),
 	scopeType: text("scope_type").notNull(),
@@ -353,6 +366,7 @@ export const awardOverrides = pgTable("award_overrides", {
 ]);
 
 export const awardOverrideAudit = pgTable("award_override_audit", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "award_override_audit_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	scopeKey: text("scope_key").notNull(),
 	scopeType: text("scope_type").notNull(),
@@ -475,6 +489,7 @@ export const stats = pgTable("stats", {
 ]);
 
 export const legacyDefensiveStats = pgTable("legacy_defensive_stats", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	sourceTable: text("source_table").notNull(),
 	matchId: integer("match_id").notNull(),
 	playerId: integer("player_id").notNull(),
@@ -560,6 +575,7 @@ export const matchGuests = pgTable("match_guests", {
 ]);
 
 export const seasons = pgTable("seasons", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	name: text().notNull(),
 	startDate: text("start_date").notNull(),
@@ -968,6 +984,7 @@ export const appErrors = pgTable("app_errors", {
 ]);
 
 export const scoreCacheState = pgTable("score_cache_state", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey(),
 	revision: bigint({ mode: "bigint" }).notNull(),
 }, (table) => [
@@ -975,6 +992,7 @@ export const scoreCacheState = pgTable("score_cache_state", {
 ]);
 
 export const scoreCacheSnapshots = pgTable("score_cache_snapshots", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	snapshotKey: text("snapshot_key").primaryKey(),
 	revision: bigint({ mode: "bigint" }).notNull(),
 	playerCount: integer("player_count").notNull(),

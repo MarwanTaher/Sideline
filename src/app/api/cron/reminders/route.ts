@@ -14,6 +14,7 @@ import { createMonthlyDraftInvoices } from "@/lib/season-billing";
 import { clubToday } from "@/lib/dues-summary";
 import { logAppError } from "@/lib/error-log";
 import { processMatchAutomation } from "@/lib/match-automation";
+import { FOUNDING_GROUP } from "@/lib/group-constants";
 
 /**
  * Scheduled nudges. Everything else in the app fires because an admin pressed a
@@ -92,9 +93,9 @@ export async function GET(request: Request) {
       const lockKey = `reminder_sent_lock_${matchId}`;
       // Claim before push so an unavailable push service cannot cause a storm.
       const claimed = await sqlClient.query(
-        `INSERT INTO app_settings(key, value) VALUES ($1, '1')
-         ON CONFLICT (key) DO NOTHING RETURNING key`,
-        [lockKey],
+        `INSERT INTO app_settings(group_id, key, value) VALUES ($1, $2, '1')
+         ON CONFLICT (group_id, key) DO NOTHING RETURNING key`,
+        [FOUNDING_GROUP.id, lockKey],
       );
       if (claimed.length === 0) continue;
       try {

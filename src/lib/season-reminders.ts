@@ -7,6 +7,7 @@ import {
 } from "./season-calculations";
 import { notify } from "./push";
 import { logAppError } from "./error-log";
+import { FOUNDING_GROUP } from "@/lib/group-constants";
 
 type ReminderInvoiceRow = {
   id: number;
@@ -51,11 +52,11 @@ export async function sendSeasonPaymentReminders(
   for (const invoice of invoices) {
     const daysBeforeDue = invoice.due_date === dates.today ? 0 : 3;
     const claimed = (await sqlClient.query(
-      `INSERT INTO app_settings(key, value)
-       VALUES ($1, '1')
-       ON CONFLICT (key) DO NOTHING
+      `INSERT INTO app_settings(group_id, key, value)
+       VALUES ($1, $2, '1')
+       ON CONFLICT (group_id, key) DO NOTHING
        RETURNING key`,
-      [`season_invoice_reminder_${invoice.id}_${daysBeforeDue}`],
+      [FOUNDING_GROUP.id, `season_invoice_reminder_${invoice.id}_${daysBeforeDue}`],
     )) as Array<{ key: string }>;
     if (claimed.length === 0) continue;
     const group = groups.get(daysBeforeDue) ?? { rows: [], playerIds: new Set<number>() };

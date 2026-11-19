@@ -71,12 +71,13 @@ radius:
 | File | Content |
 |---|---|
 | `0040_groups.sql` | `groups` table + seed |
-| `0041_group_id_roots.sql` | Add `group_id integer NOT NULL DEFAULT 1 REFERENCES groups` to root tables. Add `UNIQUE (group_id, id)`. |
-| `0042_group_id_match_children.sql` | Same for match children. Add composite FKs `NOT VALID`, then `VALIDATE CONSTRAINT`. |
-| `0043_group_id_season_money.sql` | Season, money, and ledger tables (`dues`/`fund_entries` triggers from `0039` must copy `group_id`). |
-| `0044_group_id_social_identity.sql` | Player children and identity tables |
-| `0045_group_scoped_uniques.sql` | Per-group uniques and singletons (§6) |
-| `0046_group_aware_triggers.sql` | Revision triggers and functions (§7) |
+| `0041_group_id_roots.sql` | ✅ `group_id integer NOT NULL DEFAULT 1 REFERENCES groups` on root tables; `(group_id, id)` unique indexes; `app_settings` keyed by `(group_id, key)` with a transitional `(key)` index (§6). |
+| `0042_drop_admin_sessions.sql` | ✅ Drops the unused `admin_sessions` table. |
+| `0043_group_id_match_children.sql` | Match children. Add composite FKs `NOT VALID`, then `VALIDATE CONSTRAINT`. |
+| `0044_group_id_season_money.sql` | Season, money, and ledger tables (`dues`/`fund_entries` triggers from `0039` must copy `group_id`). |
+| `0045_group_id_social_identity.sql` | Player children and identity tables |
+| `0046_group_scoped_uniques.sql` | Per-group uniques and singletons (§6) |
+| `0047_group_aware_triggers.sql` | Revision triggers and functions (§7) |
 
 Notes:
 
@@ -98,15 +99,15 @@ Notes:
 |---|---|
 | `players_name_key UNIQUE(name)` | `UNIQUE (group_id, name)` (consider `lower(name)`) |
 | `admins_username_key UNIQUE(username)` | `UNIQUE (group_id, username)`. `admins` itself is reshaped in M3. |
-| `app_settings (key) PRIMARY KEY` | `PRIMARY KEY (group_id, key)`. Every `ON CONFLICT(key)` in `feature-settings.ts` and the other `*-settings.ts` modules changes with it, in the same PR. |
+| `app_settings (key) PRIMARY KEY` | ✅ `PRIMARY KEY (group_id, key)` (0041). Every `ON CONFLICT(key)` writer now uses `(group_id, key)`. A transitional unique index on `(key)` keeps the previously deployed code working; M2 drops it with the `DEFAULT 1`. |
 | `score_cache_state (id = 1)` | `PRIMARY KEY (group_id)`. One revision per group. |
 | `award_overrides UNIQUE(award_type, scope_key)` | `UNIQUE (group_id, award_type, scope_key)` |
 | `legacy_score_snapshots UNIQUE(player_id, snapshot_key)` | Unchanged; already player-scoped |
 | Token uniques (`player_access_tokens.token`, `password_reset_tokens.token`, `admin_sessions.token`, `push_subscriptions.endpoint`) | Stay global. Tokens must be unique platform-wide. |
 
-Because `ON CONFLICT` targets must match the new constraint exactly, deploy order matters.
-Ship the code change that writes `ON CONFLICT (group_id, key)` together with, or right after,
-`0045`, and test the ordering on Preview first.
+Because `ON CONFLICT` targets must match a unique constraint exactly, `0041` keeps both: the
+new primary key for the new code and the transitional `(key)` index for the code deployed
+before it. Apply `0041` before deploying the M1.2 code.
 
 ## 7. Group-aware triggers and functions
 
@@ -194,11 +195,11 @@ manual, as today.
 
 1. ✅ Inventory script + this classification committed as a test fixture
 2. ✅ `0040` groups + `group-constants.ts` / `group-context.ts` (not applied to any database yet)
-3. `0041` roots + per-group `app_settings` key + settings modules
-4. `0042` match children
-5. `0043` season/money/ledger (+ trigger updates)
-6. `0044` social/identity
-7. `0045`/`0046` uniques + revision triggers + score-cache code
+3. ✅ `0041` roots + per-group `app_settings` key + all `app_settings` readers/writers; `0042` drops `admin_sessions`
+4. `0043` match children
+5. `0044` season/money/ledger (+ trigger updates)
+6. `0045` social/identity
+7. `0046`/`0047` uniques + revision triggers + score-cache code
 8. RLS spike report (a markdown write-up in this folder; no production change)
 
 ## 12. Exit criteria

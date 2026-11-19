@@ -1,4 +1,5 @@
 import { sqlClient } from "./db";
+import { FOUNDING_GROUP } from "@/lib/group-constants";
 
 /**
  * Direct TypeScript port of `src/scoring.py` from the Streamlit app.
@@ -166,7 +167,8 @@ export async function getScoringPolicy(): Promise<Record<string, number>> {
   let rows: Array<Record<string, unknown>>;
   try {
     rows = (await sqlClient.query(
-      "SELECT key, value FROM app_settings WHERE key LIKE 'scoring_%'",
+      "SELECT key, value FROM app_settings WHERE group_id = $1 AND key LIKE 'scoring_%'",
+      [FOUNDING_GROUP.id],
     )) as Array<Record<string, unknown>>;
   } catch {
     return policy;
@@ -217,7 +219,8 @@ async function getEffectiveStatMultipliers(): Promise<Multipliers> {
   let rows: Array<Record<string, unknown>>;
   try {
     rows = (await sqlClient.query(
-      "SELECT key, value FROM app_settings WHERE key LIKE 'scoring_mult_%'",
+      "SELECT key, value FROM app_settings WHERE group_id = $1 AND key LIKE 'scoring_mult_%'",
+      [FOUNDING_GROUP.id],
     )) as Array<Record<string, unknown>>;
   } catch {
     return multipliers;
