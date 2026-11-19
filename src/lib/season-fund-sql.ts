@@ -65,4 +65,45 @@ export const FUND_BALANCE_SQL = `SELECT
       FROM matches m JOIN seasons s ON s.id = m.season_id
      WHERE m.extended = true AND m.season_id = $1)::int AS extensions,
    (SELECT COALESCE(SUM(amount_minor), 0)
-      FROM fund_adjustments WHERE season_id = $1)::int AS adjustments`;
+      FROM fund_adjustments WHERE season_id = $1)::int AS adjustments,
+   -- P2.3: paying the facility less than expected leaves money with the
+   -- group (more: it costs the fund).
+   (SELECT COALESCE(SUM(ds.expected_minor - ds.paid_minor), 0)
+      FROM matchday_settlements ds JOIN matches m ON m.id = ds.match_id
+     WHERE m.season_id = $1)::int AS facility_difference`;
+
+/**
+ * P2.3: what the facility should be paid for a season matchday (`$1` = match
+ * id): the day rate, plus the extension if confirmed (snapshotted cost,
+ * P2.4), less the approved MultiSport scans' credit for that match.
+ */
+export const EXPECTED_FACILITY_BILL_SQL = `
+  SELECT s.day_rate_minor
+         + CASE WHEN COALESCE(m.extended, false)
+                THEN COALESCE(m.extension_cost_minor, s.extension_cost_minor) ELSE 0 END
+         - COALESCE(sc.credit, 0) AS expected_minor,
+         COALESCE(sc.scans, 0)::int AS approved_scans
+    FROM matches m
+    JOIN seasons s ON s.id = m.season_id AND s.subscription_enabled = true
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*) AS scans, SUM(ms.credit_minor) AS credit
+        FROM multisport_scans ms
+       WHERE ms.match_id = m.id AND ms.status = 'approved'
+    ) sc ON true
+   WHERE m.id = $1`;
+
+/**
+ * P2.3: record (or correct) what was actually paid, snapshotting the
+ * expected bill at that moment. `$1` match, `$2` paid, `$3` facility's scan
+ * count or NULL, `$4` note, `$5` actor.
+ */
+export const RECORD_SETTLEMENT_SQL = `
+  WITH expected AS (${EXPECTED_FACILITY_BILL_SQL})
+  INSERT INTO matchday_settlements
+    (match_id, expected_minor, paid_minor, approved_scans, facility_scans, note, recorded_by, recorded_at)
+  SELECT $1, e.expected_minor, $2, e.approved_scans, $3, $4, $5, CURRENT_TIMESTAMP FROM expected e
+  ON CONFLICT (match_id) DO UPDATE
+     SET expected_minor = EXCLUDED.expected_minor, paid_minor = EXCLUDED.paid_minor,
+         approved_scans = EXCLUDED.approved_scans, facility_scans = EXCLUDED.facility_scans,
+         note = EXCLUDED.note, recorded_by = EXCLUDED.recorded_by, recorded_at = CURRENT_TIMESTAMP
+  RETURNING expected_minor, paid_minor, approved_scans, facility_scans`;

@@ -58,6 +58,9 @@ export default function FundAdmin({
         <Line label="Extra players' fees (paid)" value={balance.guestFeesMinor} />
         <Line label="Rounding on paid bills" value={balance.roundingMinor} />
         <Line label="Pitch extensions" value={-balance.extensionCostMinor} />
+        {balance.facilityDifferenceMinor !== 0 ? (
+          <Line label="Facility bills vs expected" value={balance.facilityDifferenceMinor} />
+        ) : null}
         <Line label="Manual adjustments" value={balance.adjustmentsMinor} />
       </ul>
 

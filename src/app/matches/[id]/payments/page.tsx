@@ -18,6 +18,7 @@ import { PaymentsPlayerMatch } from "./payments-player";
 import { MatchNav } from "../match-nav";
 import {
   getMatchChargeContext,
+  getMatchdaySettlement,
   listGuestCharges,
   listPlayerCharges,
 } from "@/lib/season-fund";
@@ -27,6 +28,7 @@ import {
 } from "@/lib/season-subscriptions";
 import { getPaymentDetails } from "@/lib/season-billing";
 import SessionCharges from "./session-charges";
+import MatchdaySettlementCard from "./matchday-settlement";
 import { PlayerCharges } from "./player-charges";
 import { getMatchDetail } from "@/lib/matches";
 import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
@@ -131,19 +133,23 @@ async function SessionChargesSection({ matchId }: { matchId: number }) {
   const season = await getSubscriptionSeasonForMatch(matchId);
   if (!season) return null;
 
-  const [context, charges, subscribers] = await Promise.all([
+  const [context, charges, subscribers, settlement] = await Promise.all([
     getMatchChargeContext(matchId),
     listGuestCharges(matchId),
     listSubscribers(season.id),
+    getMatchdaySettlement(matchId),
   ]);
   if (!context) return null;
 
   return (
-    <SessionCharges
-      context={context}
-      charges={charges}
-      subscribers={subscribers.map((s) => ({ playerId: s.playerId, name: s.name }))}
-    />
+    <>
+      <SessionCharges
+        context={context}
+        charges={charges}
+        subscribers={subscribers.map((s) => ({ playerId: s.playerId, name: s.name }))}
+      />
+      {settlement ? <MatchdaySettlementCard matchId={matchId} settlement={settlement} /> : null}
+    </>
   );
 }
 

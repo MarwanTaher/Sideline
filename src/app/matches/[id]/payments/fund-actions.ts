@@ -11,6 +11,7 @@ import {
   setChargeKind,
   setChargePaid,
   setMatchExtended,
+  recordMatchdaySettlement,
 } from "@/lib/season-fund";
 
 export type FundActionState = { ok: boolean; message: string };
@@ -184,4 +185,35 @@ export async function deleteAdjustmentAction(
   revalidatePath("/admin/accounts");
   revalidatePath("/season");
   return { ok: true, message: "Adjustment removed." };
+}
+
+/** P2.3: record what the group actually paid the facility for this matchday. */
+export async function recordSettlementAction(
+  _prev: FundActionState,
+  formData: FormData,
+): Promise<FundActionState> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, message: denied };
+
+  const matchId = Number(formData.get("matchId"));
+  if (!Number.isInteger(matchId) || matchId <= 0) return { ok: false, message: "Invalid match." };
+  const paid = Number(String(formData.get("paid") ?? "").replace(",", "."));
+  if (!Number.isFinite(paid) || paid < 0) {
+    return { ok: false, message: "Enter the amount paid to the facility (PLN)." };
+  }
+  const scansRaw = String(formData.get("facilityScans") ?? "").trim();
+  const facilityScans = scansRaw === "" ? null : Number(scansRaw);
+  if (facilityScans != null && (!Number.isInteger(facilityScans) || facilityScans < 0)) {
+    return { ok: false, message: "Scan count must be a whole number, or leave it empty." };
+  }
+
+  const session = await auth();
+  const saved = await recordMatchdaySettlement(
+    matchId,
+    { paidMinor: Math.round(paid * 100), facilityScans, note: String(formData.get("note") ?? "") },
+    session?.user?.name ?? "admin",
+  );
+  if (!saved) return { ok: false, message: "Only season matches have a facility settlement." };
+  revalidateMatch(matchId);
+  return { ok: true, message: "Facility payment recorded." };
 }

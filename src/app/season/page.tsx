@@ -139,6 +139,7 @@ export default async function SeasonPage({
             guestFeesOutstandingMinor: 0,
             extensionCostMinor: 0,
             adjustmentsMinor: 0,
+            facilityDifferenceMinor: 0,
             balanceMinor: 0,
           }),
       activeTab === "overview" && pid != null

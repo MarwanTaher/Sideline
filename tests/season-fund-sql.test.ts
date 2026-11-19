@@ -98,6 +98,7 @@ test("fund balance: extensions use the snapshotted cost, falling back to the rat
       CREATE TABLE season_invoices(season_id integer, gross_minor integer, paid_at timestamptz);
       CREATE TABLE guest_charges(match_id integer, kind text, amount_minor integer, scan_credit_minor integer DEFAULT 0, paid_at timestamptz);
       CREATE TABLE fund_adjustments(season_id integer, amount_minor integer);
+      CREATE TABLE matchday_settlements(match_id integer, expected_minor integer, paid_minor integer);
       INSERT INTO seasons VALUES (1, 12000);
       INSERT INTO matches VALUES
         (1, 1, true, 10000),   -- confirmed at the old 100 PLN rate
@@ -106,6 +107,45 @@ test("fund balance: extensions use the snapshotted cost, falling back to the rat
     `);
     const r = (await db.query<{ extensions: number }>(FUND_BALANCE_SQL, [1])).rows[0];
     assert.equal(r.extensions, 22000);
+  } finally {
+    await db.close();
+  }
+});
+
+test("matchday settlement: expected bill, record, correct, and fund difference", async () => {
+  const sql = await import("../src/lib/season-fund-sql");
+  const db = new PGlite();
+  try {
+    await db.exec(`
+      CREATE TABLE seasons(id integer PRIMARY KEY, subscription_enabled boolean, day_rate_minor integer, extension_cost_minor integer);
+      CREATE TABLE matches(id integer PRIMARY KEY, season_id integer, extended boolean, extension_cost_minor integer);
+      CREATE TABLE multisport_scans(match_id integer, status text, credit_minor integer);
+      CREATE TABLE matchday_settlements(match_id integer PRIMARY KEY, expected_minor integer, paid_minor integer,
+        approved_scans integer, facility_scans integer, note text, recorded_by text, recorded_at timestamptz);
+      CREATE TABLE season_invoices(season_id integer, gross_minor integer, paid_at timestamptz);
+      CREATE TABLE guest_charges(match_id integer, kind text, amount_minor integer, scan_credit_minor integer DEFAULT 0, paid_at timestamptz);
+      CREATE TABLE fund_adjustments(season_id integer, amount_minor integer);
+      INSERT INTO seasons VALUES (1, true, 50000, 12000);
+      INSERT INTO matches VALUES (10, 1, true, 10000), (11, NULL, false, NULL);
+      INSERT INTO multisport_scans VALUES (10, 'approved', 1500), (10, 'approved', 1500), (10, 'pending', 1500);
+    `);
+    const expected = (await db.query<{ expected_minor: number; approved_scans: number }>(
+      sql.EXPECTED_FACILITY_BILL_SQL, [10])).rows[0];
+    // 500 + 100 (snapshotted, not today's 120) − 2 × 15
+    assert.deepEqual(expected, { expected_minor: 57000, approved_scans: 2 });
+    assert.equal((await db.query(sql.EXPECTED_FACILITY_BILL_SQL, [11])).rows.length, 0);
+
+    await db.query(sql.RECORD_SETTLEMENT_SQL, [10, 55500, 3, "", "admin"]);
+    await db.query(sql.RECORD_SETTLEMENT_SQL, [10, 56000, 3, "corrected", "admin"]);
+    const saved = (await db.query<{ paid_minor: number; note: string }>(
+      `SELECT paid_minor, note FROM matchday_settlements`)).rows;
+    assert.deepEqual(saved, [{ paid_minor: 56000, note: "corrected" }]);
+    assert.equal((await db.query(sql.RECORD_SETTLEMENT_SQL, [11, 100, null, "", "admin"])).rows.length, 0);
+
+    const fund = (await db.query<{ facility_difference: number; extensions: number }>(
+      sql.FUND_BALANCE_SQL, [1])).rows[0];
+    assert.equal(fund.facility_difference, 1000);
+    assert.equal(fund.extensions, 10000);
   } finally {
     await db.close();
   }

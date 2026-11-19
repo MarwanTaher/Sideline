@@ -3,7 +3,9 @@ import { sqlClient } from "./db";
 import { getSubscriptionSeasonForMatch, listSubscribers } from "./season-subscriptions";
 import {
   DELETE_STALE_CHARGES_SQL,
+  EXPECTED_FACILITY_BILL_SQL,
   FUND_BALANCE_SQL,
+  RECORD_SETTLEMENT_SQL,
   PLAYER_CHARGES_SQL,
 } from "./season-fund-sql";
 
@@ -342,6 +344,8 @@ export type FundBalance = {
   guestFeesOutstandingMinor: number;
   extensionCostMinor: number;
   adjustmentsMinor: number;
+  /** P2.3: expected facility bills minus what was actually paid. */
+  facilityDifferenceMinor: number;
   balanceMinor: number;
 };
 
@@ -361,6 +365,7 @@ export async function getFundBalance(seasonId: number): Promise<FundBalance> {
     fees_outstanding: number;
     extensions: number;
     adjustments: number;
+    facility_difference: number;
   }>;
 
   const r = rows[0];
@@ -368,6 +373,7 @@ export async function getFundBalance(seasonId: number): Promise<FundBalance> {
   const guestFeesMinor = Number(r?.fees_paid ?? 0);
   const extensionCostMinor = Number(r?.extensions ?? 0);
   const adjustmentsMinor = Number(r?.adjustments ?? 0);
+  const facilityDifferenceMinor = Number(r?.facility_difference ?? 0);
 
   return {
     roundingMinor,
@@ -375,8 +381,10 @@ export async function getFundBalance(seasonId: number): Promise<FundBalance> {
     guestFeesOutstandingMinor: Number(r?.fees_outstanding ?? 0),
     extensionCostMinor,
     adjustmentsMinor,
+    facilityDifferenceMinor,
     balanceMinor:
-      roundingMinor + guestFeesMinor - extensionCostMinor + adjustmentsMinor,
+      roundingMinor + guestFeesMinor - extensionCostMinor + adjustmentsMinor +
+      facilityDifferenceMinor,
   };
 }
 
@@ -417,4 +425,78 @@ export async function addAdjustment(
 
 export async function deleteAdjustment(id: number): Promise<void> {
   await sqlClient.query(`DELETE FROM fund_adjustments WHERE id = $1`, [id]);
+}
+
+export type MatchdaySettlement = {
+  /** What the facility should be paid now (rate + extension − approved scans). */
+  expectedMinor: number;
+  approvedScans: number;
+  /** What was recorded as paid, if anything yet. */
+  recorded: {
+    expectedMinor: number;
+    paidMinor: number;
+    approvedScans: number;
+    facilityScans: number | null;
+    note: string;
+    recordedBy: string;
+    recordedAt: string;
+  } | null;
+};
+
+/** P2.3: expected facility bill for a season match and what was recorded. Null outside a season. */
+export async function getMatchdaySettlement(matchId: number): Promise<MatchdaySettlement | null> {
+  const [expectedRows, recordedRows] = await Promise.all([
+    sqlClient.query(EXPECTED_FACILITY_BILL_SQL, [matchId]) as unknown as Promise<
+      Array<{ expected_minor: number; approved_scans: number }>
+    >,
+    sqlClient.query(
+      `SELECT expected_minor, paid_minor, approved_scans, facility_scans, note, recorded_by, recorded_at
+         FROM matchday_settlements WHERE match_id = $1`,
+      [matchId],
+    ) as unknown as Promise<
+      Array<{
+        expected_minor: number;
+        paid_minor: number;
+        approved_scans: number;
+        facility_scans: number | null;
+        note: string;
+        recorded_by: string;
+        recorded_at: string | Date;
+      }>
+    >,
+  ]);
+  const e = expectedRows[0];
+  if (!e) return null;
+  const r = recordedRows[0];
+  return {
+    expectedMinor: Number(e.expected_minor),
+    approvedScans: Number(e.approved_scans),
+    recorded: r
+      ? {
+          expectedMinor: Number(r.expected_minor),
+          paidMinor: Number(r.paid_minor),
+          approvedScans: Number(r.approved_scans),
+          facilityScans: r.facility_scans == null ? null : Number(r.facility_scans),
+          note: String(r.note ?? ""),
+          recordedBy: String(r.recorded_by ?? ""),
+          recordedAt: r.recorded_at instanceof Date ? r.recorded_at.toISOString() : String(r.recorded_at),
+        }
+      : null,
+  };
+}
+
+/** P2.3: record what the group paid the facility; re-recording corrects it. */
+export async function recordMatchdaySettlement(
+  matchId: number,
+  input: { paidMinor: number; facilityScans: number | null; note: string },
+  actor: string,
+): Promise<boolean> {
+  const rows = (await sqlClient.query(RECORD_SETTLEMENT_SQL, [
+    matchId,
+    input.paidMinor,
+    input.facilityScans,
+    input.note.trim().slice(0, 300),
+    actor,
+  ])) as unknown[];
+  return rows.length > 0;
 }
