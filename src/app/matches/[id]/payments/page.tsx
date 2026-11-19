@@ -19,12 +19,16 @@ import { MatchNav } from "../match-nav";
 import {
   getMatchChargeContext,
   listGuestCharges,
+  listPlayerCharges,
 } from "@/lib/season-fund";
 import {
   getSubscriptionSeasonForDate,
+  getSubscriptionSeasonForMatch,
   listSubscribers,
 } from "@/lib/season-subscriptions";
+import { getPaymentDetails } from "@/lib/season-billing";
 import SessionCharges from "./session-charges";
+import { PlayerCharges } from "./player-charges";
 import { getMatchDetail } from "@/lib/matches";
 import { isAvailabilityLockEnabled } from "@/lib/feature-settings";
 import { getMatchPhase } from "@/lib/match-phase";
@@ -83,10 +87,17 @@ export default async function MatchPaymentsPage({
           <SessionChargesSection matchId={matchId} playedOn={match.playedOn} />
           {seasonMatch ? <SeasonPotNotice admin /> : <AdminSection matchId={matchId} />}
         </>
-      ) : seasonMatch ? (
-        <SeasonPotNotice matchId={matchId} />
       ) : (
-        <PlayerSection matchId={matchId} playerId={session.user.playerId} />
+        <>
+          {seasonMatch ? (
+            <SeasonPotNotice matchId={matchId} />
+          ) : (
+            <PlayerSection matchId={matchId} playerId={session.user.playerId} />
+          )}
+          {session.user.playerId != null ? (
+            <PlayerChargesSection matchId={matchId} playerId={Number(session.user.playerId)} />
+          ) : null}
+        </>
       )}
     </main>
   );
@@ -138,6 +149,23 @@ async function SessionChargesSection({
       subscribers={subscribers.map((s) => ({ playerId: s.playerId, name: s.name }))}
     />
   );
+}
+
+/** The player's own session charges (and their guests') for this match. */
+async function PlayerChargesSection({
+  matchId,
+  playerId,
+}: {
+  matchId: number;
+  playerId: number;
+}) {
+  const [charges, season] = await Promise.all([
+    listPlayerCharges(playerId, { matchId }),
+    getSubscriptionSeasonForMatch(matchId),
+  ]);
+  if (charges.length === 0) return null;
+  const details = season ? await getPaymentDetails(season.id) : null;
+  return <PlayerCharges charges={charges} details={details} />;
 }
 
 async function AdminSection({ matchId }: { matchId: number }) {

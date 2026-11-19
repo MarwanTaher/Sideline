@@ -1,6 +1,7 @@
 import "server-only";
 import { sqlClient } from "./db";
 import { getSubscriptionSeasonForMatch, listSubscribers } from "./season-subscriptions";
+import { PLAYER_CHARGES_SQL } from "./season-fund-sql";
 
 /**
  * Session charges for non-core players, and the group fund they feed.
@@ -78,6 +79,24 @@ export async function listGuestCharges(matchId: number): Promise<GuestCharge[]> 
     [matchId],
   )) as ChargeRow[];
   return rows.map(toCharge);
+}
+
+export type PlayerCharge = GuestCharge & { playedOn: string };
+
+/**
+ * Session charges a player owes or has paid: their own and their guests'.
+ * Pass `matchId` for one match, `unpaidOnly` for what is still open.
+ */
+export async function listPlayerCharges(
+  playerId: number,
+  opts: { matchId?: number; unpaidOnly?: boolean } = {},
+): Promise<PlayerCharge[]> {
+  const rows = (await sqlClient.query(PLAYER_CHARGES_SQL, [
+    playerId,
+    opts.matchId ?? null,
+    Boolean(opts.unpaidOnly),
+  ])) as Array<ChargeRow & { played_on: string }>;
+  return rows.map((r) => ({ ...toCharge(r), playedOn: String(r.played_on) }));
 }
 
 export type MatchChargeContext = {

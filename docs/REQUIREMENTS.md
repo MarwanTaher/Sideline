@@ -145,7 +145,7 @@ reflect the deployed baseline. **Local / Preview verified** items still need rel
 |---|---|---|---|
 | FR-PAY-1 | Admin tracks per-match payments per player (paid / unpaid). The pot applies to normal matches only: on season matches (`matches.season_id` linked to a subscription season) it is hidden for admins and players, cannot be opened or edited, and is excluded from reminders and the all-matches change total. | S | Done |
 | FR-PAY-3 | Admin picks the currency per match (new matches inherit the last one). Players see one amount, Copy buttons for recipient, account, amount and reference, and a pay button that turns into a disabled "✓ Paid" once settled. | S | Local / Preview verified |
-| FR-PAY-2 | Guest/session charges per match. | S | Done |
+| FR-PAY-2 | Guest/session charges per match. The payer sees their own charges (and their guests') on Match ▸ Payments with payee and paid status, and unpaid charges appear as a Home to-do. | S | Done |
 
 ### 4.9 Winter season subscription (draft feature, hidden from players by default)
 

@@ -13,6 +13,7 @@ import {
   getSubscriberIdsForMatch,
 } from "@/lib/season-subscriptions";
 import { listPlayerInvoices } from "@/lib/season-billing";
+import { listPlayerCharges } from "@/lib/season-fund";
 import { monthLabel, summarizePlayerInvoices } from "@/lib/season-payment-summary";
 import { formatMinor } from "@/lib/format-money";
 import { getPlayerRank } from "@/lib/leaderboard";
@@ -82,7 +83,7 @@ export default async function Home() {
   const rankDelta = playerId != null ? (movement?.get(playerId)?.rankDelta ?? null) : null;
 
   const seasonVisible = season != null && (season.visibleToPlayers || isAdmin);
-  const [subscriberIds, mySubscription, takenSeats, invoices, adminCounts, statsCounts, playersAdmin] =
+  const [subscriberIds, mySubscription, takenSeats, invoices, adminCounts, statsCounts, playersAdmin, unpaidCharges] =
     await Promise.all([
       match && (phase === "open" || phase === "locked")
         ? getSubscriberIdsForMatch(match.id)
@@ -93,6 +94,9 @@ export default async function Home() {
       isAdmin ? getHomeAdminCounts(match?.id ?? null, seasonVisible ? season.id : null) : Promise.resolve(null),
       statsCountsP,
       playersAdminP,
+      playerId != null
+        ? listPlayerCharges(Number(playerId), { unpaidOnly: true })
+        : Promise.resolve([]),
     ]);
 
   // ── To do: at most three things the player actually has to act on. ──
@@ -114,6 +118,24 @@ export default async function Home() {
       href: "/season?tab=payments",
       title: `Season payment · ${formatMinor(seasonDue.toSendMinor)}`,
       sub: `For ${seasonDue.toSend.map((i) => monthLabel(i.period)).join(", ")}, due ${fmtDate(first.dueDate)}.`,
+      tone: "amber",
+    });
+  }
+  if (unpaidCharges.length > 0) {
+    // Newest first, so the link opens the most recent match with a charge.
+    const owedMinor = unpaidCharges.reduce((sum, c) => sum + c.amountMinor, 0);
+    const payees = [
+      ...new Set(
+        unpaidCharges.map((c) =>
+          c.kind === "replacement" ? (c.owedToName ?? "a subscriber") : "the group",
+        ),
+      ),
+    ];
+    todos.push({
+      key: "charges",
+      href: `/matches/${unpaidCharges[0].matchId}/payments`,
+      title: `Session charges · ${formatMinor(owedMinor)}`,
+      sub: `For ${[...new Set(unpaidCharges.map((c) => matchLabel(c.playedOn)))].join(", ")} · pay ${payees.join(" and ")}.`,
       tone: "amber",
     });
   }
