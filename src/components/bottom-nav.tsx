@@ -43,6 +43,15 @@ function SeasonIcon({ className }: IconProps) {
     </svg>
   );
 }
+function WalletIcon({ className }: IconProps) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="3.5" y="6" width="17" height="13" rx="2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M3.5 10h17" stroke="currentColor" strokeWidth="1.8" />
+      <circle cx="16.5" cy="14.5" r="1.2" fill="currentColor" />
+    </svg>
+  );
+}
 type Tab = {
   href: string;
   label: string;
@@ -58,7 +67,14 @@ const TABS: Tab[] = [
   { href: "/leaderboard", label: "Ranks", extra: ["/awards"], Icon: BarsIcon },
 ];
 
-export default function BottomNav({ showSeason = false }: { showSeason?: boolean }) {
+export default function BottomNav({
+  showSeason = false,
+  paymentsHref = null,
+}: {
+  showSeason?: boolean;
+  /** "/payments" for players, "/admin/payments" in admin view, null to hide. */
+  paymentsHref?: string | null;
+}) {
   const pathname = usePathname();
 
   // Inside a single match, on the season page, or in admin control, those
@@ -79,9 +95,11 @@ export default function BottomNav({ showSeason = false }: { showSeason?: boolean
         : "text-neutral-500 dark:text-neutral-400"
     }`;
 
-  const tabs: Tab[] = showSeason
-    ? [...TABS, { href: "/season", label: "Season", Icon: SeasonIcon }]
-    : TABS;
+  const tabs: Tab[] = [
+    ...TABS,
+    ...(paymentsHref ? [{ href: paymentsHref, label: "Payments", Icon: WalletIcon }] : []),
+    ...(showSeason ? [{ href: "/season", label: "Season", Icon: SeasonIcon }] : []),
+  ];
 
   return (
     <nav

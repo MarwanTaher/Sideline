@@ -54,6 +54,13 @@ export default async function SiteHeader() {
     await signOut({ redirectTo: "/login" });
   };
 
+  // Players go to My payments; in admin view the tab opens the Payments inbox.
+  const paymentsHref = adminView
+    ? "/admin/payments"
+    : user?.playerId != null
+      ? "/payments"
+      : null;
+
   const account = user ? (
     <AccountMenu
       name={user.name ?? "You"}
@@ -100,14 +107,14 @@ export default async function SiteHeader() {
           <div className="hidden items-center justify-between md:flex">
             {brand}
             <div className="flex items-center gap-4">
-              {user ? <MainNav signals={navSignals ?? undefined} /> : null}
+              {user ? <MainNav signals={navSignals ?? undefined} paymentsHref={paymentsHref} /> : null}
               {canToggle ? <ViewModePill mode={mode} /> : null}
               {account}
             </div>
           </div>
         </div>
       </header>
-      {user ? <BottomNav showSeason={showSeason} /> : null}
+      {user ? <BottomNav showSeason={showSeason} paymentsHref={paymentsHref} /> : null}
     </>
   );
 }

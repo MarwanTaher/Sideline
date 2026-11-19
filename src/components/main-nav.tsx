@@ -51,9 +51,12 @@ function useStoredValue(key: string): string | null {
 
 export default function MainNav({
   signals,
+  paymentsHref = null,
 }: {
   /** Per-section "is there something new" signals for the nav dots. */
   signals?: { matches: string; leaderboard: string };
+  /** "/payments" for players, "/admin/payments" in admin view, null to hide. */
+  paymentsHref?: string | null;
 }) {
   const pathname = usePathname();
 
@@ -67,6 +70,7 @@ export default function MainNav({
       show: true,
       signalKey: "leaderboard",
     },
+    { href: paymentsHref ?? "/payments", label: "Payments", show: paymentsHref != null },
   ];
 
   // Last-seen signals from localStorage, read as external state.
