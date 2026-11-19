@@ -472,7 +472,7 @@ date. Re-running stays safe because generation already skips existing invoices.
 | Baseline gates (`test:unit`, `lint`, `build`) green on `ai_dev` @ `f68714d` | ✅ verified 2026-11-17 |
 | `.env.local` → Preview database; `scripts/db-guard.mjs` approves the host | ✅ |
 | Local server (`npm run build && npm run start`, `AUTH_TRUST_HOST=true`) | ✅ |
-| Next migration number | `0038` (last applied: `0037`) |
+| Next migration number | `0039` (`0038` written in Phase 2, **not applied yet**; last applied: `0037`) |
 | Decisions 1–6 | ✅ all made (§7) |
 
 ### 9.3 Gates and tests for every item
@@ -506,13 +506,23 @@ date. Re-running stays safe because generation already skips existing invoices.
 | FR-SE-11 | Fund includes facility payments and snapshotted extension costs | P2.3, P2.4, P3.3 |
 | New | Matchday settlement; seat-cap gap warning; draft invoices; My payments; Payments inbox | P2.3, P0.7, P4.1, P1.2, P1.3 |
 
-### 9.6 Design points to settle at the start of Phase 2
+### 9.6 Design points settled for Phase 2
 
-1. `season_credits` shape and how the existing invoice credit allocator
-   (`generateInvoices`, `reallocateCreditQueries`) consumes both MultiSport and
-   replacement credits without double-spending.
-2. Refund path when a non-core scan is approved after the fee was paid.
-3. Cutover handling for seasons already in progress.
+1. **`season_credits` and the allocator.** MultiSport scans stay in
+   `multisport_scans`; `season_credits` holds only replacement credits (one per
+   paid replacement charge). Every allocator path (`generateInvoices`,
+   `REALLOCATE_CREDIT_SQL` for recalculate / show / unpaid, hide, delete) applies
+   scans first, then season credits of the same season into what is left, oldest
+   first. Deployed code never reads `season_credits`, so nothing is spent twice.
+2. **Refund path.** A scan approved after a non-core fee was paid in full puts
+   the credit on the charge (`scan_credit_minor`) and shows the admin a
+   "refund X" row with a **Refunded** button (`scan_refunded_at`).
+3. **Cutover.** `seasons.new_rules_from` (Admin ▸ Billing ▸ Rates & pricing),
+   empty by default. Matches on or after it use the new replacement and scan
+   rules; earlier matches, issued invoices and existing charges are unchanged.
+   **Set it only after production runs the Phase 2 code**: older code that
+   recalculates a bill would drop replacement credit from its total. The same
+   applies to switching a season's split to `active` (P2.6).
 
 ### 9.7 Recommended order
 
@@ -533,10 +543,16 @@ later item touches the same code first. Tick them off here when removed.
 | P1.1 | `listDues` reads season invoices regardless of `seasons.visible_to_players`; the old Home invoice to-do checked it. Fine while drafts use `hidden_at` (P4.1); add the check if a hidden season can have visible invoices |
 | P1.2 | The "Your session charges" box on Match ▸ Payments (P0.2) and `listPlayerCharges` overlap with My payments; fold them into a `dues` filter when P3.2 switches reads |
 | P1.2 | Session and replacement charges can't be declared by the player yet (no `declared` state on `guest_charges`); comes with the `dues` table in P3 |
-| P1.3 | The admin mobile tab bar (`admin-tabs-mobile.tsx`) has no Payments inbox tab (it's linked from Home and the desktop Admin nav) |
+| P1.3 | ~~The admin mobile tab bar has no Payments inbox tab~~ — done: Payments is in the main navigation and opens the inbox in admin view |
 | P1.3 | "Confirm all" marks dues paid one query per due; batch it once writes go through `dues` (P3.2) |
 | Status | Phase 0 accepted by the organiser on 2026-11-19 (tested locally) |
-| Status | Phase 1 implemented 2026-11-19, waiting for the organiser's review |
+| P2.1 | `generateInvoices`' credit CTE is still inline in `season-billing.ts` (the reallocation SQL moved to `season-billing-sql.ts` and is tested); move it too and test it in PGlite |
+| P2.2 | Scans for guests without an account (reported by the host, §8.4) are not supported; `multisport_scans` has no `guest_id` |
+| P2.2 | A scan refund (`refundDueMinor`) is not a due in the inbox / My payments yet; it shows on the charge rows only. Add it with the `dues` table (P3) |
+| P2.3 | The matchday settlement is per match; a facility invoice covering several Sundays has to be split by hand |
+| P2.5 | The player view of a finalized share doesn't say it's finalized |
+| Status | Phase 1 accepted by the organiser on 2026-11-19 (tested locally); Payments tab moved into the main navigation |
+| Status | Phase 2 implemented 2026-11-19, waiting for review; migration `0038` not applied to Preview or production |
 
 ## Appendix — files involved
 
