@@ -648,6 +648,20 @@ export async function generateInvoices(
   return { created, skipped, playingDays, amountMinor: gross };
 }
 
+/**
+ * Admin rejects a player's "I've sent it" (the money never arrived): the bill
+ * goes back to open. Confirmed bills are left alone.
+ */
+export async function clearInvoiceDeclaration(invoiceId: number): Promise<boolean> {
+  const rows = (await sqlClient.query(
+    `UPDATE season_invoices SET declared_paid_at = NULL, declared_note = ''
+      WHERE id = $1 AND paid_at IS NULL AND declared_paid_at IS NOT NULL
+      RETURNING id`,
+    [invoiceId],
+  )) as Array<{ id: number }>;
+  return rows.length > 0;
+}
+
 export async function setInvoicePaid(invoiceId: number, paid: boolean): Promise<void> {
   await sqlClient.query(
     `UPDATE season_invoices SET paid_at = ${paid ? "CURRENT_TIMESTAMP" : "NULL"} WHERE id = $1`,

@@ -200,8 +200,6 @@ export interface HomeAdminCounts {
   multisportPending: number;
   /** Unpaid session/replacement charges on the season's matches. */
   unpaidCharges: number;
-  /** Oldest match with an unpaid charge, for the counter's link. */
-  unpaidChargesMatchId: number | null;
 }
 
 /** Things waiting on an admin, in one round trip. */
@@ -217,17 +215,13 @@ export async function getHomeAdminCounts(
            AND hidden_at IS NULL) AS payments,
        (SELECT COUNT(*) FROM multisport_scans WHERE status = 'pending') AS scans,
        (SELECT COUNT(*) FROM guest_charges gc JOIN matches m ON m.id = gc.match_id
-         WHERE m.season_id = $2 AND gc.paid_at IS NULL) AS charges,
-       (SELECT gc.match_id FROM guest_charges gc JOIN matches m ON m.id = gc.match_id
-         WHERE m.season_id = $2 AND gc.paid_at IS NULL
-         ORDER BY m.played_on, m.id LIMIT 1) AS charges_match_id`,
+         WHERE m.season_id = $2 AND gc.paid_at IS NULL) AS charges`,
     [matchId ?? -1, seasonId ?? -1],
   )) as Array<{
     guests: number;
     payments: number;
     scans: number;
     charges: number;
-    charges_match_id: number | null;
   }>;
   const r = rows[0];
   return {
@@ -235,7 +229,6 @@ export async function getHomeAdminCounts(
     paymentsToConfirm: Number(r?.payments ?? 0),
     multisportPending: Number(r?.scans ?? 0),
     unpaidCharges: Number(r?.charges ?? 0),
-    unpaidChargesMatchId: r?.charges_match_id == null ? null : Number(r.charges_match_id),
   };
 }
 

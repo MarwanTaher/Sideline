@@ -128,3 +128,14 @@ test("clubToday uses Warsaw time", () => {
   assert.equal(clubToday(new Date("2026-11-19T23:30:00Z")), "2026-11-20");
   assert.equal(clubToday(new Date("2026-11-19T12:00:00Z")), "2026-11-19");
 });
+
+test("parseDueKey round-trips every key shape and rejects junk", async () => {
+  const { parseDueKey } = await import("../src/lib/dues-summary");
+  assert.deepEqual(parseDueKey("invoice:3"), { kind: "invoice", id: 3 });
+  assert.deepEqual(parseDueKey("charge:7"), { kind: "charge", id: 7 });
+  assert.deepEqual(parseDueKey("share:10:p2"), { kind: "share", matchId: 10, playerId: 2 });
+  assert.deepEqual(parseDueKey("share:10:g100"), { kind: "guest_share", matchId: 10, guestId: 100 });
+  for (const bad of ["", "invoice:0", "invoice:-1", "invoice:1;DROP", "share:10:x2", "charge:"]) {
+    assert.equal(parseDueKey(bad), null, bad);
+  }
+});

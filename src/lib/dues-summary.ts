@@ -162,3 +162,32 @@ export function clubToday(now: Date = new Date()): string {
     day: "2-digit",
   }).format(now);
 }
+
+export type DueRef =
+  | { kind: "invoice"; id: number }
+  | { kind: "charge"; id: number }
+  | { kind: "share"; matchId: number; playerId: number }
+  | { kind: "guest_share"; matchId: number; guestId: number };
+
+/** Parse a `due_key` from the dues read model; null for anything malformed. */
+export function parseDueKey(key: string): DueRef | null {
+  const pos = (v: string) => {
+    const n = Number(v);
+    return Number.isSafeInteger(n) && n > 0 ? n : null;
+  };
+  let m = /^(invoice|charge):(\d+)$/.exec(key);
+  if (m) {
+    const id = pos(m[2]);
+    return id == null ? null : { kind: m[1] as "invoice" | "charge", id };
+  }
+  m = /^share:(\d+):([pg])(\d+)$/.exec(key);
+  if (m) {
+    const matchId = pos(m[1]);
+    const other = pos(m[3]);
+    if (matchId == null || other == null) return null;
+    return m[2] === "p"
+      ? { kind: "share", matchId, playerId: other }
+      : { kind: "guest_share", matchId, guestId: other };
+  }
+  return null;
+}

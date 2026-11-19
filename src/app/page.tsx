@@ -143,11 +143,11 @@ export default async function Home() {
     }
     if (statsCounts) adminItems.push({ href: "/stats", label: "Stats to review", count: statsCounts.pending });
     if (adminCounts) {
-      adminItems.push({ href: "/admin/accounts?tab=billing", label: "Payments to confirm", count: adminCounts.paymentsToConfirm });
+      // Declared season bills are the only dues players can mark as sent
+      // today, so this already counts every due waiting for confirmation.
+      adminItems.push({ href: "/admin/payments", label: "Payments to confirm", count: adminCounts.paymentsToConfirm });
       adminItems.push({
-        href: adminCounts.unpaidChargesMatchId != null
-          ? `/matches/${adminCounts.unpaidChargesMatchId}/payments`
-          : "/admin/accounts?tab=billing",
+        href: "/admin/payments?source=charges",
         label: "Unpaid session charges",
         count: adminCounts.unpaidCharges,
       });

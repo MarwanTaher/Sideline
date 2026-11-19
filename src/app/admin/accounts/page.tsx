@@ -158,6 +158,7 @@ export default async function AccountsPage({
     { href: "/admin/accounts", label: "Admins" },
     { href: "/admin/accounts?tab=seasons", label: "Seasons" },
     { href: "/admin/accounts?tab=billing", label: "Billing" },
+    { href: "/admin/payments", label: "Payments inbox" },
     { href: "/admin/accounts?tab=messages", label: "Messages" },
     { href: "/admin/accounts?tab=other", label: "Other" },
   ];
