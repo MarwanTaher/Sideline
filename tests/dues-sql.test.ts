@@ -16,7 +16,7 @@ async function fixture(): Promise<PGlite> {
   const db = new PGlite();
   await db.exec(`
     CREATE TABLE players(id integer PRIMARY KEY, name text);
-    CREATE TABLE seasons(id integer PRIMARY KEY, subscription_enabled boolean);
+    CREATE TABLE seasons(id integer PRIMARY KEY, subscription_enabled boolean, new_rules_from text);
     CREATE TABLE matches(id integer PRIMARY KEY, played_on text, season_id integer,
       payments_active integer, total_payment double precision, payment_currency text,
       share_minor integer);
@@ -32,7 +32,7 @@ async function fixture(): Promise<PGlite> {
       paid_at timestamptz);
 
     INSERT INTO players VALUES (1, 'Adam'), (2, 'Ben'), (3, 'Cara');
-    INSERT INTO seasons VALUES (1, true);
+    INSERT INTO seasons VALUES (1, true, NULL);
     INSERT INTO matches VALUES
       (10, '2026-11-08', NULL, 1, 100, 'PLN', NULL),  -- normal match, pot open: 3 heads → 34 each
       (11, '2026-11-15', NULL, 0, 100, 'PLN', NULL),  -- normal match, pot closed

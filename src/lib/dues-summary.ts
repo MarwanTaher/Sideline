@@ -103,7 +103,10 @@ export function dueTitle(due: Due): string {
 
 /** Who the money goes to, in words. */
 export function duePayeeLabel(due: Due): string {
-  return due.payee === "player" ? `pay ${due.payeeName ?? "the subscriber"} directly` : "pay the group";
+  if (due.payee === "player") return `pay ${due.payeeName ?? "the subscriber"} directly`;
+  return due.source === "replacement" && due.payeeName
+    ? `pay the group (covering ${due.payeeName})`
+    : "pay the group";
 }
 
 /** Formats any currency; PLN matches formatMinor. */

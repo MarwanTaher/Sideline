@@ -4,6 +4,32 @@
  */
 
 /**
+ * True when a season match falls under the new season rules (review §8.7,
+ * Phase 2): on or after the season's cutover date, which stays NULL until an
+ * admin sets it. Before it, today's rules apply unchanged.
+ */
+export function newRulesSql(match = "m", season = "s"): string {
+  return `(${season}.new_rules_from IS NOT NULL AND ${match}.played_on >= ${season}.new_rules_from)`;
+}
+
+/**
+ * Charge rows with what the UI needs. `new_rules` = a replacement pays the
+ * group and the subscriber is credited on the next invoice (P2.1).
+ */
+export const CHARGE_SELECT_SQL = `
+  SELECT gc.id, gc.match_id, m.played_on, gc.player_id, gc.guest_id,
+         COALESCE(p.name, mg.name) AS name,
+         gc.amount_minor, gc.kind, gc.owed_to_player_id,
+         owed.name AS owed_to_name, gc.paid_at,
+         COALESCE(${newRulesSql()}, false) AS new_rules
+    FROM guest_charges gc
+    JOIN matches m ON m.id = gc.match_id
+    LEFT JOIN seasons s ON s.id = m.season_id
+    LEFT JOIN players p ON p.id = gc.player_id
+    LEFT JOIN match_guests mg ON mg.id = gc.guest_id
+    LEFT JOIN players owed ON owed.id = gc.owed_to_player_id`;
+
+/**
  * Charges a player has to pay: their own, plus those for guests they host
  * (guests have no account, so the host settles for them). A replacement owed
  * to the player themselves — e.g. their own guest covering their seat — is
@@ -12,21 +38,37 @@
  * `$1` = player id, `$2` = match id or NULL for every match,
  * `$3` = true to return unpaid charges only.
  */
-export const PLAYER_CHARGES_SQL = `
-  SELECT gc.id, gc.match_id, m.played_on, gc.player_id, gc.guest_id,
-         COALESCE(p.name, mg.name) AS name,
-         gc.amount_minor, gc.kind, gc.owed_to_player_id,
-         owed.name AS owed_to_name, gc.paid_at
-    FROM guest_charges gc
-    JOIN matches m ON m.id = gc.match_id
-    LEFT JOIN players p ON p.id = gc.player_id
-    LEFT JOIN match_guests mg ON mg.id = gc.guest_id
-    LEFT JOIN players owed ON owed.id = gc.owed_to_player_id
+export const PLAYER_CHARGES_SQL = `${CHARGE_SELECT_SQL}
    WHERE (gc.player_id = $1 OR (gc.guest_id IS NOT NULL AND mg.host_player_id = $1))
      AND gc.owed_to_player_id IS DISTINCT FROM $1
      AND ($2::int IS NULL OR gc.match_id = $2::int)
      AND (NOT $3::boolean OR gc.paid_at IS NULL)
    ORDER BY m.played_on DESC, gc.id`;
+
+/**
+ * P2.1: when a replacement charge on a new-rules match is paid (to the
+ * group), credit the subscriber whose seat it was on their next invoice.
+ * `$1` = charge id. Idempotent (one credit per charge).
+ */
+export const CREATE_REPLACEMENT_CREDIT_SQL = `
+  INSERT INTO season_credits (season_id, player_id, source, guest_charge_id, match_id, credit_minor)
+  SELECT m.season_id, gc.owed_to_player_id, 'replacement', gc.id, gc.match_id, gc.amount_minor
+    FROM guest_charges gc
+    JOIN matches m ON m.id = gc.match_id
+    JOIN seasons s ON s.id = m.season_id
+   WHERE gc.id = $1 AND gc.kind = 'replacement' AND gc.paid_at IS NOT NULL
+     AND gc.owed_to_player_id IS NOT NULL AND gc.amount_minor > 0
+     AND ${newRulesSql()}
+  ON CONFLICT (guest_charge_id) WHERE guest_charge_id IS NOT NULL DO NOTHING
+  RETURNING id`;
+
+/** The credit created for a charge, and whether it can still be withdrawn. `$1` = charge id. */
+export const CHARGE_CREDIT_STATE_SQL = `
+  SELECT sc.id, sc.applied_invoice_id, sc.settled_at IS NOT NULL AS settled,
+         si.paid_at IS NOT NULL AS invoice_paid
+    FROM season_credits sc
+    LEFT JOIN season_invoices si ON si.id = sc.applied_invoice_id
+   WHERE sc.guest_charge_id = $1`;
 
 /**
  * Remove a match's unpaid charges that no longer apply: players who are not a

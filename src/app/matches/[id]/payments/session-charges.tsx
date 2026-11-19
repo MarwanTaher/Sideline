@@ -48,8 +48,10 @@ export default function SessionCharges({
       <h2 className="text-sm font-semibold">Session charges (admin)</h2>
       <p className="mt-1 text-xs text-neutral-500">
         Core subscribers are covered by their monthly payment. Everyone else pays{" "}
-        {formatMinor(context.guestRateMinor)} — to the group if they&apos;re an
-        extra player, or to the subscriber they&apos;re covering for.
+        {formatMinor(context.guestRateMinor)}
+        {context.newRules
+          ? " to the group. A replacement from a seat swap credits that subscriber's next bill once paid."
+          : " — to the group if they're an extra player, or to the subscriber they're covering for."}
       </p>
 
       <form action={extAction} className="mt-3 flex flex-wrap items-center gap-2">
@@ -179,7 +181,9 @@ function ChargeRow({
           </p>
           <p className="text-xs text-neutral-500">
             {charge.kind === "replacement"
-              ? `Pays ${charge.owedToName ?? "a subscriber"} directly`
+              ? charge.newRules
+                ? `Pays the group · ${charge.owedToName ?? "the subscriber"} gets ${formatMinor(charge.amountMinor)} off their next bill once paid`
+                : `Pays ${charge.owedToName ?? "a subscriber"} directly`
               : "Pays the group fund"}
           </p>
         </div>

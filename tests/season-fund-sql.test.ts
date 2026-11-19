@@ -8,7 +8,8 @@ async function fixture(): Promise<PGlite> {
   const db = new PGlite();
   await db.exec(`
     CREATE TABLE players(id integer PRIMARY KEY, name text);
-    CREATE TABLE matches(id integer PRIMARY KEY, played_on text);
+    CREATE TABLE seasons(id integer PRIMARY KEY, new_rules_from text);
+    CREATE TABLE matches(id integer PRIMARY KEY, played_on text, season_id integer);
     CREATE TABLE match_guests(id integer PRIMARY KEY, match_id integer, name text, host_player_id integer);
     CREATE TABLE guest_charges(
       id integer PRIMARY KEY, match_id integer, player_id integer, guest_id integer,

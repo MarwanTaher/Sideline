@@ -489,8 +489,13 @@ export type SeatSwapCardData = {
   matchId: number;
   role: "subscriber" | "replacement" | "waitlisted";
   windowOpen: boolean;
-  /** The session fee a replacement pays the subscriber. */
+  /** The session fee a replacement pays. */
   rateMinor: number;
+  /**
+   * New season rules (P2.1): the replacement pays the group and the
+   * subscriber gets the fee off their next bill; otherwise it's paid directly.
+   */
+  paysGroup: boolean;
   /** Subscriber: whether they may offer their seat now. */
   canPost: boolean;
   /** Subscriber: their live (open or filled) offer. */
@@ -604,6 +609,7 @@ export async function loadSeatSwapCard(
       role,
       windowOpen: state.windowOpen,
       rateMinor,
+      paysGroup: ctx?.newRules ?? false,
       canPost: role === "subscriber" && post.ok,
       myOffer:
         role === "subscriber" && mine && mine.status !== "withdrawn"

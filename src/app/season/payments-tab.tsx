@@ -118,7 +118,7 @@ export default function PaymentsTab({
                     <span className="opacity-70">
                       {" · "}
                       {inv.playingDays} Sundays ÷ {inv.splitBetween}
-                      {inv.creditMinor > 0 ? ` · MultiSport −${formatMinor(inv.creditMinor)}` : ""}
+                      {inv.creditMinor > 0 ? ` · Credit −${formatMinor(inv.creditMinor)}` : ""}
                       {` · due ${inv.dueDate}`}
                     </span>
                   </span>
@@ -238,7 +238,7 @@ export default function PaymentsTab({
                     <p className="font-medium">{monthLabel(inv.period)}</p>
                     <p className="text-xs text-neutral-500">
                       {inv.playingDays} Sundays ÷ {inv.splitBetween}
-                      {inv.creditMinor > 0 ? ` · MultiSport −${formatMinor(inv.creditMinor)}` : ""}
+                      {inv.creditMinor > 0 ? ` · Credit −${formatMinor(inv.creditMinor)}` : ""}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2">

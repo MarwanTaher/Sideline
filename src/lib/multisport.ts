@@ -1,5 +1,6 @@
 import "server-only";
 import { sqlClient } from "./db";
+import { LEFTOVER_CREDITS_SQL, SETTLE_LEFTOVER_CREDIT_SQL } from "./multisport-sql";
 
 /**
  * MultiSport scans. A player reports their own scan, an admin approves it, and
@@ -150,34 +151,24 @@ export type LeftoverCredit = {
   name: string;
   creditMinor: number;
   scans: number;
+  /** P2.1: unused replacement credits (seat given up and paid for via the group). */
+  replacementCredits: number;
   withdrawn: boolean;
   /** Newest period this player was billed for in the season, if any. */
   lastBilledPeriod: string | null;
 };
 
-/** Approved, unused, unsettled credit per player from this season's matches. */
+/**
+ * Approved, unused, unsettled credit per player from this season: MultiSport
+ * scans on the season's matches plus replacement credits (P2.1).
+ */
 export async function listLeftoverCredits(seasonId: number): Promise<LeftoverCredit[]> {
-  const rows = (await sqlClient.query(
-    `SELECT ms.player_id, p.name,
-            SUM(ms.credit_minor)::int AS credit,
-            COUNT(*)::int AS scans,
-            COALESCE(MAX(ss.status), '') AS sub_status,
-            (SELECT MAX(si.period) FROM season_invoices si
-              WHERE si.season_id = $1::int AND si.player_id = ms.player_id) AS last_period
-       FROM multisport_scans ms
-       JOIN matches m ON m.id = ms.match_id AND m.season_id = $1::int
-       JOIN players p ON p.id = ms.player_id
-       LEFT JOIN season_subscriptions ss
-              ON ss.season_id = $1::int AND ss.player_id = ms.player_id
-      WHERE ms.status = 'approved' AND ms.applied_invoice_id IS NULL AND ms.settled_at IS NULL
-      GROUP BY ms.player_id, p.name
-      ORDER BY p.name`,
-    [seasonId],
-  )) as Array<{
+  const rows = (await sqlClient.query(LEFTOVER_CREDITS_SQL, [seasonId])) as Array<{
     player_id: number;
     name: string;
     credit: number;
     scans: number;
+    replacements: number;
     sub_status: string;
     last_period: string | null;
   }>;
@@ -186,16 +177,18 @@ export async function listLeftoverCredits(seasonId: number): Promise<LeftoverCre
     name: String(r.name),
     creditMinor: Number(r.credit),
     scans: Number(r.scans),
+    replacementCredits: Number(r.replacements),
     withdrawn: r.sub_status !== "active",
     lastBilledPeriod: r.last_period == null ? null : String(r.last_period),
   }));
 }
 
 /**
- * Settle a player's unused credit from this season's matches: refunded to them
- * outside the app, or moved into the group fund (as one fund adjustment). One
- * statement, so the scans and the fund entry can never disagree. Returns the
- * amount settled (0 if nothing was left, e.g. a bill just used it).
+ * Settle a player's unused credit from this season (scans and replacement
+ * credits): refunded to them outside the app, or moved into the group fund
+ * (as one fund adjustment). One statement, so the credits and the fund entry
+ * can never disagree. Returns the amount settled (0 if nothing was left,
+ * e.g. a bill just used it).
  */
 export async function settleLeftoverCredit(
   seasonId: number,
@@ -204,26 +197,12 @@ export async function settleLeftoverCredit(
   note: string,
   actor: string,
 ): Promise<number> {
-  const rows = (await sqlClient.query(
-    `WITH settled AS (
-       UPDATE multisport_scans ms
-          SET settled_at = CURRENT_TIMESTAMP, settled_as = $3::text
-         FROM matches m
-        WHERE m.id = ms.match_id AND m.season_id = $1::int AND ms.player_id = $2::int
-          AND ms.status = 'approved' AND ms.applied_invoice_id IS NULL AND ms.settled_at IS NULL
-        RETURNING ms.credit_minor
-     ),
-     total AS (
-       SELECT COALESCE(SUM(credit_minor), 0)::int AS amount FROM settled
-     ),
-     fund AS (
-       INSERT INTO fund_adjustments (season_id, amount_minor, note, created_by)
-       SELECT $1::int, amount, $4::text, $5::text FROM total
-        WHERE $3::text = 'fund' AND amount > 0
-       RETURNING id
-     )
-     SELECT amount FROM total`,
-    [seasonId, playerId, as, note, actor],
-  )) as Array<{ amount: number }>;
+  const rows = (await sqlClient.query(SETTLE_LEFTOVER_CREDIT_SQL, [
+    seasonId,
+    playerId,
+    as,
+    note,
+    actor,
+  ])) as Array<{ amount: number }>;
   return Number(rows[0]?.amount ?? 0);
 }

@@ -91,8 +91,10 @@ function SubscriberView({ data }: { data: SeatSwapCardData }) {
       <div className={rowClass}>
         <p>
           <span className="font-medium">{offer.replacementName ?? "Your replacement"}</span> has your
-          seat and pays you{" "}
-          <span className="font-medium">{formatMinor(offer.chargeMinor ?? data.rateMinor)}</span>.
+          seat{" "}
+          {data.paysGroup ? "and pays the group; you get " : "and pays you "}
+          <span className="font-medium">{formatMinor(offer.chargeMinor ?? data.rateMinor)}</span>
+          {data.paysGroup ? " off your next bill once they've paid." : "."}
         </p>
         <PaidBadge paid={offer.chargePaid} />
       </div>
@@ -141,7 +143,10 @@ function WaitlistView({ data }: { data: SeatSwapCardData }) {
   return (
     <div className="space-y-2">
       <p className="text-xs text-neutral-500">
-        The subscriber picks who gets it. Fee {formatMinor(data.rateMinor)}, paid to them directly.
+        The subscriber picks who gets it. Fee {formatMinor(data.rateMinor)}
+        {data.paysGroup
+          ? ", paid to the group; the subscriber gets it off their next bill."
+          : ", paid to them directly."}
       </p>
       <ul className="space-y-2">
         {data.openSeats.map((s) => (
@@ -179,8 +184,10 @@ function ReplacementView({ data }: { data: SeatSwapCardData }) {
   return (
     <div className={rowClass}>
       <p>
-        You have <span className="font-medium">{took.subscriberName}</span>&apos;s seat. Pay them{" "}
-        <span className="font-medium">{formatMinor(took.amountMinor)}</span> directly.
+        You have <span className="font-medium">{took.subscriberName}</span>&apos;s seat.{" "}
+        {data.paysGroup ? "Pay the group " : "Pay them "}
+        <span className="font-medium">{formatMinor(took.amountMinor)}</span>
+        {data.paysGroup ? ` — ${took.subscriberName} gets it off their next bill.` : " directly."}
       </p>
       <PaidBadge paid={took.paid} />
     </div>

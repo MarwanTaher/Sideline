@@ -1,4 +1,5 @@
 import { SEASON_MATCH_SQL } from "./payments-sql";
+import { newRulesSql } from "./season-fund-sql";
 
 /**
  * The `dues` read model (review §5.1, P1.1): every amount someone owes, from
@@ -80,7 +81,9 @@ UNION ALL
 SELECT 'charge:' || gc.id,
        CASE WHEN gc.kind = 'replacement' THEN 'replacement' ELSE 'session_fee' END, gc.id,
        COALESCE(gc.player_id, mg.host_player_id), payer.name, mg.name,
-       CASE WHEN gc.kind = 'replacement' THEN 'player' ELSE 'group' END,
+       -- New rules (P2.1): a replacement pays the group; the subscriber is credited.
+       CASE WHEN gc.kind = 'replacement' AND NOT COALESCE(${newRulesSql()}, false)
+            THEN 'player' ELSE 'group' END,
        gc.owed_to_player_id, owed.name,
        gc.match_id, m.played_on, m.season_id, NULL::text,
        gc.amount_minor, 'PLN',
@@ -89,6 +92,7 @@ SELECT 'charge:' || gc.id,
        m.played_on
   FROM guest_charges gc
   JOIN matches m ON m.id = gc.match_id
+  LEFT JOIN seasons s ON s.id = m.season_id
   LEFT JOIN match_guests mg ON mg.id = gc.guest_id
   JOIN players payer ON payer.id = COALESCE(gc.player_id, mg.host_player_id)
   LEFT JOIN players owed ON owed.id = gc.owed_to_player_id

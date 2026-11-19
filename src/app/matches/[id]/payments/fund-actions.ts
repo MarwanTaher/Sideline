@@ -90,9 +90,11 @@ export async function setChargePaidAction(
   const matchId = Number(formData.get("matchId"));
   if (!Number.isInteger(chargeId)) return { ok: false, message: "Invalid charge." };
 
-  await setChargePaid(chargeId, formData.get("paid") === "true");
+  const result = await setChargePaid(chargeId, formData.get("paid") === "true");
   revalidateMatch(matchId);
-  return { ok: true, message: "Updated." };
+  revalidatePath("/payments");
+  revalidatePath("/admin/payments");
+  return result.ok ? { ok: true, message: "Updated." } : { ok: false, message: result.message ?? "Not updated." };
 }
 
 export async function setChargeKindAction(
@@ -114,13 +116,18 @@ export async function setChargeKindAction(
     return { ok: false, message: "Pick which subscriber they are covering for." };
   }
 
-  await setChargeKind(chargeId, kind, owedTo);
+  if (!(await setChargeKind(chargeId, kind, owedTo))) {
+    return {
+      ok: false,
+      message: "This replacement already credited the subscriber. Mark it unpaid first, then change it.",
+    };
+  }
   revalidateMatch(matchId);
   return {
     ok: true,
     message:
       kind === "replacement"
-        ? "Marked as a replacement — settled between the two players."
+        ? "Marked as a replacement for that subscriber."
         : "Marked as an extra player — pays the group fund.",
   };
 }

@@ -14,7 +14,7 @@ export function PlayerCharges({
   details: SeasonPaymentDetails | null;
 }) {
   if (charges.length === 0) return null;
-  const hasGroupCharge = charges.some((c) => c.kind === "extra" && !c.paidAt);
+  const hasGroupCharge = charges.some((c) => (c.kind === "extra" || c.newRules) && !c.paidAt);
   const groupPayee = [details?.paymentName, details?.paymentAccount]
     .map((v) => v?.trim())
     .filter(Boolean)
@@ -39,7 +39,9 @@ export function PlayerCharges({
               </p>
               <p className="text-xs text-neutral-500">
                 {c.kind === "replacement"
-                  ? `Replacement · pay ${c.owedToName ?? "the subscriber"} directly`
+                  ? c.newRules
+                    ? `Replacement for ${c.owedToName ?? "a subscriber"} · pay the group`
+                    : `Replacement · pay ${c.owedToName ?? "the subscriber"} directly`
                   : "Session fee · pay the group"}
               </p>
             </div>

@@ -46,8 +46,7 @@ async function markPaid(ref: DueRef): Promise<boolean> {
       await setInvoicePaid(ref.id, true);
       return true;
     case "charge":
-      await setChargePaid(ref.id, true);
-      return true;
+      return (await setChargePaid(ref.id, true)).ok;
     case "share":
       if (await isSeasonMatch(ref.matchId)) return false;
       await setPaid(ref.matchId, ref.playerId, true);

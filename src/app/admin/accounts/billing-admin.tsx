@@ -247,7 +247,7 @@ export default function BillingAdmin({
 
       {leftoverCredits.length > 0 ? (
         <div className="mt-5 border-t border-black/5 pt-4 dark:border-white/5">
-          <h3 className="text-sm font-medium">Unused MultiSport credit</h3>
+          <h3 className="text-sm font-medium">Unused credit (MultiSport and replacements)</h3>
           <p className="mt-1 text-xs text-neutral-500">
             Approved credit comes off the player&apos;s next bill, only as much as the bill can
             take; the rest waits for the following one. When no bill is coming (withdrawn, or the
@@ -351,6 +351,21 @@ function RatesForm({
             <option value="cap">By seat cap — fixed price, empty seats come from the fund</option>
             <option value="active">By active subscribers — always covered, price varies</option>
           </select>
+        </label>
+        <label className={compact ? "col-span-2" : "sm:col-span-3"}>
+          <span className="block text-xs text-neutral-500">
+            New season rules from (replacements pay the group and credit the subscriber;
+            non-core scans reduce that session&apos;s fee). Empty = old rules.
+          </span>
+          <input
+            type="date"
+            name="newRulesFrom"
+            defaultValue={rates.newRulesFrom ?? ""}
+            className={`${inputCls} w-full`}
+          />
+          <span className="mt-1 block text-xs text-amber-700 dark:text-amber-300">
+            Set only after production runs this version. Earlier matches keep the old rules.
+          </span>
         </label>
         <p className={`text-xs text-neutral-500 ${compact ? "col-span-2" : "sm:col-span-3"}`}>
           Applies to invoices and charges raised from now on. Anything already
@@ -572,7 +587,7 @@ function InvoiceRow({
               ? ` → ${formatMinor(invoice.chargedMinor)} (+${formatMinor(invoice.roundingMinor)})`
               : ""}
             {invoice.creditMinor > 0
-              ? ` · MultiSport −${formatMinor(invoice.creditMinor)}`
+              ? ` · Credit −${formatMinor(invoice.creditMinor)}`
               : ""}
           </p>
           {ratesChangedAt &&
@@ -703,7 +718,15 @@ function LeftoverCreditRow({
             )}
           </p>
           <p className="text-xs text-neutral-500">
-            {credit.scans} scan{credit.scans === 1 ? "" : "s"} · {formatMinor(credit.creditMinor)}
+            {[
+              credit.scans > 0 ? `${credit.scans} scan${credit.scans === 1 ? "" : "s"}` : "",
+              credit.replacementCredits > 0
+                ? `${credit.replacementCredits} replacement${credit.replacementCredits === 1 ? "" : "s"}`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" + ")}{" "}
+            · {formatMinor(credit.creditMinor)}
           </p>
         </div>
         <div className="flex items-center gap-2">

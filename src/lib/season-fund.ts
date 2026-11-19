@@ -1,7 +1,12 @@
 import "server-only";
 import { sqlClient } from "./db";
 import { getSubscriptionSeasonForMatch, listSubscribers } from "./season-subscriptions";
+import { reallocateCreditQueries } from "./season-billing";
 import {
+  newRulesSql,
+  CHARGE_CREDIT_STATE_SQL,
+  CHARGE_SELECT_SQL,
+  CREATE_REPLACEMENT_CREDIT_SQL,
   DELETE_STALE_CHARGES_SQL,
   EXPECTED_FACILITY_BILL_SQL,
   FUND_BALANCE_SQL,
@@ -34,6 +39,11 @@ export type GuestCharge = {
   owedToPlayerId: number | null;
   owedToName: string | null;
   paidAt: string | null;
+  /**
+   * New season rules apply (P2.1): a replacement pays the group and the
+   * subscriber it covers is credited on their next invoice.
+   */
+  newRules: boolean;
 };
 
 type ChargeRow = {
@@ -47,6 +57,7 @@ type ChargeRow = {
   owed_to_player_id: number | null;
   owed_to_name: string | null;
   paid_at: string | Date | null;
+  new_rules?: boolean | null;
 };
 
 function toCharge(r: ChargeRow): GuestCharge {
@@ -66,22 +77,13 @@ function toCharge(r: ChargeRow): GuestCharge {
         : r.paid_at instanceof Date
           ? r.paid_at.toISOString()
           : String(r.paid_at),
+    newRules: Boolean(r.new_rules),
   };
 }
 
-const CHARGE_SELECT = `
-  SELECT gc.id, gc.match_id, gc.player_id, gc.guest_id,
-         COALESCE(p.name, mg.name) AS name,
-         gc.amount_minor, gc.kind, gc.owed_to_player_id,
-         owed.name AS owed_to_name, gc.paid_at
-    FROM guest_charges gc
-    LEFT JOIN players p ON p.id = gc.player_id
-    LEFT JOIN match_guests mg ON mg.id = gc.guest_id
-    LEFT JOIN players owed ON owed.id = gc.owed_to_player_id`;
-
 export async function listGuestCharges(matchId: number): Promise<GuestCharge[]> {
   const rows = (await sqlClient.query(
-    `${CHARGE_SELECT} WHERE gc.match_id = $1 ORDER BY gc.kind, name`,
+    `${CHARGE_SELECT_SQL} WHERE gc.match_id = $1 ORDER BY gc.kind, name`,
     [matchId],
   )) as ChargeRow[];
   return rows.map(toCharge);
@@ -120,6 +122,8 @@ export type MatchChargeContext = {
   extensionThreshold: number | null;
   baseMinutes: number;
   extensionMinutes: number;
+  /** New season rules apply to this match (P2.1 / P2.2). */
+  newRules: boolean;
 };
 
 /**
@@ -134,10 +138,11 @@ export async function getMatchChargeContext(
 
   const metaRows = (await sqlClient.query(
     `SELECT COALESCE(m.extended, false) AS extended, sideline_squad_count(m.id) AS squad_count,
-      m.extension_threshold,m.base_minutes,m.extension_minutes,m.extension_cost_minor
-      FROM matches m WHERE m.id = $1`,
+      m.extension_threshold,m.base_minutes,m.extension_minutes,m.extension_cost_minor,
+      COALESCE(${newRulesSql()}, false) AS new_rules
+      FROM matches m LEFT JOIN seasons s ON s.id = m.season_id WHERE m.id = $1`,
     [matchId],
-  )) as Array<{ extended: boolean; squad_count: number; extension_threshold: number | null; base_minutes: number; extension_minutes: number; extension_cost_minor: number | null }>;
+  )) as Array<{ extended: boolean; squad_count: number; extension_threshold: number | null; base_minutes: number; extension_minutes: number; extension_cost_minor: number | null; new_rules: boolean }>;
   const meta = metaRows[0];
   if (!meta) return null;
 
@@ -186,6 +191,7 @@ export async function getMatchChargeContext(
     extensionThreshold: meta.extension_threshold,
     baseMinutes: Number(meta.base_minutes),
     extensionMinutes: Number(meta.extension_minutes),
+    newRules: Boolean(meta.new_rules),
   };
 }
 
@@ -250,8 +256,9 @@ export async function syncGuestCharges(
 /**
  * Raise a charge for every non-core player without one.
  *
- * A guest whose host is a core subscriber marked OUT is defaulted to a
- * replacement owed to that host — the common case, and the admin can change it.
+ * Old rules: a guest whose host is a core subscriber marked OUT is defaulted
+ * to a replacement owed to that host (the admin can change it). New rules:
+ * guests are extras; replacements come only from approved seat swaps.
  * Existing charges are never touched, so this is safe to re-run.
  */
 export async function generateGuestCharges(matchId: number): Promise<number> {
@@ -288,7 +295,9 @@ export async function generateGuestCharges(matchId: number): Promise<number> {
   }
 
   for (const g of nonCore.guests) {
-    const replacesHost = absentCore.has(g.hostPlayerId);
+    // Under the new rules only an approved seat swap makes someone a
+    // replacement (review §8.3); everyone else is an extra paying the fund.
+    const replacesHost = !ctx.newRules && absentCore.has(g.hostPlayerId);
     const inserted = (await sqlClient.query(
       `INSERT INTO guest_charges (match_id, guest_id, amount_minor, kind, owed_to_player_id)
        VALUES ($1, $2, $3, $4, $5)
@@ -308,23 +317,72 @@ export async function generateGuestCharges(matchId: number): Promise<number> {
   return created;
 }
 
-export async function setChargePaid(chargeId: number, paid: boolean): Promise<void> {
-  await sqlClient.query(
-    `UPDATE guest_charges SET paid_at = ${paid ? "CURRENT_TIMESTAMP" : "NULL"} WHERE id = $1`,
-    [chargeId],
-  );
+/**
+ * Mark a charge paid or unpaid. Under the new season rules a paid
+ * replacement credits the covered subscriber (P2.1); un-marking takes that
+ * credit back, unless it is already on a paid invoice or settled.
+ */
+export async function setChargePaid(
+  chargeId: number,
+  paid: boolean,
+): Promise<{ ok: boolean; message?: string }> {
+  if (paid) {
+    await sqlClient.transaction([
+      sqlClient.query(
+        `UPDATE guest_charges SET paid_at = COALESCE(paid_at, CURRENT_TIMESTAMP) WHERE id = $1`,
+        [chargeId],
+      ),
+      sqlClient.query(CREATE_REPLACEMENT_CREDIT_SQL, [chargeId]),
+    ]);
+    return { ok: true };
+  }
+
+  const credits = (await sqlClient.query(CHARGE_CREDIT_STATE_SQL, [chargeId])) as Array<{
+    id: number;
+    applied_invoice_id: number | null;
+    settled: boolean;
+    invoice_paid: boolean;
+  }>;
+  const credit = credits[0];
+  if (credit && (credit.settled || credit.invoice_paid)) {
+    return {
+      ok: false,
+      message:
+        "The subscriber's credit for this replacement is already on a paid bill or settled, so it can't be marked unpaid. Record a fund adjustment instead.",
+    };
+  }
+  await sqlClient.transaction([
+    sqlClient.query(`UPDATE guest_charges SET paid_at = NULL WHERE id = $1`, [chargeId]),
+    sqlClient.query(`DELETE FROM season_credits WHERE guest_charge_id = $1 AND settled_at IS NULL`, [
+      chargeId,
+    ]),
+    ...(credit?.applied_invoice_id != null
+      ? reallocateCreditQueries(Number(credit.applied_invoice_id))
+      : []),
+  ]);
+  return { ok: true };
 }
 
-/** Switch a charge between paying the group and reimbursing a subscriber. */
+/**
+ * Switch a charge between an extra and a replacement. Refused (false) once a
+ * paid replacement has credited a subscriber (P2.1): mark it unpaid first.
+ */
 export async function setChargeKind(
   chargeId: number,
   kind: ChargeKind,
   owedToPlayerId: number | null,
-): Promise<void> {
-  await sqlClient.query(
-    `UPDATE guest_charges SET kind = $1, owed_to_player_id = $2 WHERE id = $3`,
+): Promise<boolean> {
+  const rows = (await sqlClient.query(
+    `UPDATE guest_charges SET kind = $1, owed_to_player_id = $2
+      WHERE id = $3
+        AND NOT EXISTS (SELECT 1 FROM season_credits sc WHERE sc.guest_charge_id = $3)
+      RETURNING id`,
     [kind, kind === "replacement" ? owedToPlayerId : null, chargeId],
-  );
+  )) as unknown[];
+  if (rows.length === 0) return false;
+  // A paid charge switched to a new-rules replacement credits the subscriber now.
+  await sqlClient.query(CREATE_REPLACEMENT_CREDIT_SQL, [chargeId]);
+  return true;
 }
 
 export async function deleteCharge(chargeId: number): Promise<void> {

@@ -78,9 +78,15 @@ export async function saveRatesAction(
   }
 
   const splitMode = formData.get("splitMode") === "active" ? "active" : "cap";
+  const newRulesRaw = String(formData.get("newRulesFrom") ?? "").trim();
+  if (newRulesRaw !== "" && !/^\d{4}-\d{2}-\d{2}$/.test(newRulesRaw)) {
+    return { ok: false, message: "New rules date must be a date, or empty for the old rules." };
+  }
+  const newRulesFrom = newRulesRaw === "" ? null : newRulesRaw;
 
   await updateSeasonRates(seasonId, {
     splitMode,
+    newRulesFrom,
     dayRateMinor,
     multisportCreditMinor,
     paymentDueDay,
