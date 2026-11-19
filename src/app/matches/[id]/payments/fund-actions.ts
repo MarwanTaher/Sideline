@@ -25,6 +25,8 @@ async function requireAdmin(): Promise<string | null> {
 
 function revalidateMatch(matchId: number): void {
   revalidatePath(`/matches/${matchId}/payments`);
+  revalidatePath("/admin/payments");
+  revalidatePath("/payments");
   revalidatePath("/admin/accounts");
   revalidatePath("/season");
   revalidatePath(`/matches/${matchId}`);

@@ -183,11 +183,11 @@ Based on the group's written rules (season 08/11/2026 – 30/03/2027).
 
 | ID | Requirement | Pri | Status |
 |---|---|---|---|
-| FR-AD-1 | Tabbed Admin control: **Admins · Seasons · Billing · Other** (mobile bottom bar + Home). | M | Done |
+| FR-AD-1 | Tabbed Admin control: **Admins · Seasons · Messages · Other**, plus a link to Payments (mobile bottom bar + Home). | M | Done |
 | FR-AD-2 | Diagnostics page for data-integrity checks. | S | Done |
 | FR-AD-3 | Feature settings stored in `app_settings`. | M | Done |
 | FR-AD-4 | Admin Home lists what needs attention: guest requests, no reply yet, stats to review, season payments to confirm, **unpaid session charges**; both payment counters open the Payments inbox, MultiSport scans and password resets. | S | Done |
-| FR-AD-5 | **Payments inbox** (`/admin/payments`, linked from Home and Admin): every unconfirmed due across match shares, season bills and session charges, split into To confirm / Overdue / Open, filterable by source. Confirm or mark paid per row, **Confirm all**, reject a declared season bill (back to open), remind an overdue season bill. | S | Done |
+| FR-AD-5 | **One Payments page for admins** (`/admin/payments`, Payments tab in admin view, Home counters): **Inbox** — every unconfirmed due from the ledger, To confirm / Overdue / Open, filter by source, Confirm / Mark paid per row, Confirm all, Reject a declared bill or charge, Remind an overdue bill; **Matches** — pick a recent match to see its dues, session charges, extension, facility payment and pot setup; **Season billing & fund** (super admins, as before) — rates, transfer details, invoices, MultiSport review, leftover credit and the fund with its history. Admin ▸ Billing and a match's Payments tab open this page. | S | Done |
 
 ### 4.12 Navigation
 

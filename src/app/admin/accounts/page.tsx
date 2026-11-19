@@ -12,25 +12,10 @@ import {
   listSubscribers,
 } from "@/lib/season-subscriptions";
 import { getActivePlayers } from "@/lib/awards";
-import {
-  listInvoices,
-  listInvoicePeriods,
-  getBillingSummary,
-  getRoundingLedger,
-  getSeasonRates,
-  getPaymentDetails,
-  getSeatCapGap,
-  getSeasonGoLiveChecklist,
-  listOutstandingInvoices,
-  listWithdrawnWithOpenInvoices,
-} from "@/lib/season-billing";
-import { listPendingScans, listLeftoverCredits } from "@/lib/multisport";
-import { getFundBalance, listAdjustments } from "@/lib/season-fund";
+import { getSeasonGoLiveChecklist } from "@/lib/season-billing";
 import PlayerAdmins from "./player-admins";
 import SeasonsAdmin from "./seasons-admin";
 import SubscriptionAdmin from "./subscription-admin";
-import BillingAdmin from "./billing-admin";
-import FundAdmin from "./fund-admin";
 import MessagesAdmin from "./messages-admin";
 import { getMomentCopy } from "@/lib/moment-copy-settings";
 import { getTapSpamConfig } from "@/lib/tap-spam-settings";
@@ -48,15 +33,17 @@ export const dynamic = "force-dynamic";
 export default async function AccountsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ period?: string; tab?: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
   if (!(await isAdminView(session.user.role === "super"))) redirect("/leaderboard");
 
-  const { period: periodParam, tab } = await searchParams;
+  const { tab } = await searchParams;
+  // Billing now lives on the one admin Payments page.
+  if (tab === "billing") redirect("/admin/payments?tab=billing");
   const activeTab =
-    tab === "seasons" || tab === "billing" || tab === "messages" || tab === "other"
+    tab === "seasons" || tab === "messages" || tab === "other"
       ? tab
       : "admins";
 
@@ -71,7 +58,7 @@ export default async function AccountsPage({
       : Promise.resolve({ celebration: [], bummer: [] }),
   ]);
 
-  const needsSeason = activeTab === "seasons" || activeTab === "billing";
+  const needsSeason = activeTab === "seasons";
   const subscriptionSeason = needsSeason ? await getActiveSubscriptionSeason() : null;
 
   const [seasons, subscribers, activePlayers, seasonWaitlist, goLiveChecklist] = await Promise.all([
@@ -95,80 +82,19 @@ export default async function AccountsPage({
     .filter((p) => !subscribed.has(p.id))
     .map((p) => ({ id: p.id, name: p.name }));
 
-  // Default to the current month, so the panel opens on what's being collected.
-  const billing =
-    activeTab === "billing" && subscriptionSeason
-      ? await (async () => {
-          const periods = await listInvoicePeriods(subscriptionSeason.id);
-          const period =
-            periodParam && /^\d{4}-\d{2}$/.test(periodParam)
-              ? periodParam
-              : (periods[0] ?? new Date().toISOString().slice(0, 7));
-          const [
-            invoices,
-            summary,
-            pendingScans,
-            rounding,
-            fund,
-            adjustments,
-            rates,
-            paymentDetails,
-            outstandingInvoices,
-            withdrawnWarnings,
-            leftoverCredits,
-            seatGap,
-          ] =
-            await Promise.all([
-              listInvoices(subscriptionSeason.id, period),
-              getBillingSummary(subscriptionSeason.id, period),
-              listPendingScans(),
-              getRoundingLedger(subscriptionSeason.id),
-              getFundBalance(subscriptionSeason.id),
-              listAdjustments(subscriptionSeason.id),
-              getSeasonRates(subscriptionSeason.id),
-              getPaymentDetails(subscriptionSeason.id),
-              listOutstandingInvoices(subscriptionSeason.id),
-              listWithdrawnWithOpenInvoices(subscriptionSeason.id),
-              listLeftoverCredits(subscriptionSeason.id),
-              getSeatCapGap(subscriptionSeason.id, period),
-            ]);
-          return {
-            periods,
-            period,
-            invoices,
-            summary,
-            pendingScans,
-            rounding,
-            fund,
-            adjustments,
-            rates,
-            paymentDetails,
-            outstandingInvoices,
-            withdrawnWarnings,
-            leftoverCredits,
-            seatGap,
-          };
-        })()
-      : null;
-
   const lockedByAdmin: Record<number, AdminTabKey[]> = {};
   for (const [adminId, keys] of tabLocks) lockedByAdmin[adminId] = keys;
 
   const sectionItems = [
     { href: "/admin/accounts", label: "Admins" },
     { href: "/admin/accounts?tab=seasons", label: "Seasons" },
-    { href: "/admin/accounts?tab=billing", label: "Billing" },
-    { href: "/admin/payments", label: "Payments inbox" },
+    { href: "/admin/payments", label: "Payments" },
     { href: "/admin/accounts?tab=messages", label: "Messages" },
     { href: "/admin/accounts?tab=other", label: "Other" },
   ];
 
   return (
-    <main
-      className={`mx-auto w-full max-w-3xl flex-1 px-4 py-10${
-        activeTab === "billing" ? " xl:max-w-none" : ""
-      }`}
-    >
+    <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
       <h1 className="text-2xl font-semibold tracking-tight">Admin control</h1>
 
       <SubNav
@@ -214,41 +140,6 @@ export default async function AccountsPage({
             />
           ) : null}
         </>
-      ) : null}
-
-      {activeTab === "billing" ? (
-        subscriptionSeason && billing ? (
-          <BillingAdmin
-            seasonId={subscriptionSeason.id}
-            seasonName={subscriptionSeason.name}
-            period={billing.period}
-            periods={billing.periods}
-            invoices={billing.invoices}
-            summary={billing.summary}
-            rates={billing.rates!}
-            paymentDetails={billing.paymentDetails}
-            pendingScans={billing.pendingScans}
-            outstandingInvoices={billing.outstandingInvoices}
-            withdrawnWarnings={billing.withdrawnWarnings}
-            leftoverCredits={billing.leftoverCredits}
-            seatGap={billing.seatGap}
-            fundBalanceMinor={billing.fund.balanceMinor}
-            seasonEndDate={subscriptionSeason.endDate}
-            fund={
-              <FundAdmin
-                seasonId={subscriptionSeason.id}
-                balance={billing.fund}
-                adjustments={billing.adjustments}
-                roundingLines={billing.rounding.lines}
-              />
-            }
-          />
-        ) : (
-          <p className="mt-4 rounded-xl bg-neutral-50 px-4 py-6 text-sm text-neutral-500 dark:bg-neutral-900">
-            Billing appears once a subscription season is set up on the Seasons
-            tab.
-          </p>
-        )
       ) : null}
 
       {activeTab === "messages" ? (

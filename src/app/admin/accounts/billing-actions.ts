@@ -36,6 +36,8 @@ async function actorName(): Promise<string> {
 
 function revalidateBilling(): void {
   revalidatePath("/admin/accounts");
+  revalidatePath("/admin/payments");
+  revalidatePath("/payments");
   revalidatePath("/season");
 }
 

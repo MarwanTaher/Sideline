@@ -154,7 +154,7 @@ export default function BillingAdmin({
           {periods.map((p) => (
             <a
               key={p}
-              href={`/admin/accounts?tab=billing&period=${p}`}
+              href={`/admin/payments?tab=billing&period=${p}`}
               className={`rounded-full px-3 py-1 text-xs font-medium transition ${
                 p === period
                   ? "bg-neutral-900 text-white dark:bg-white dark:text-neutral-900"

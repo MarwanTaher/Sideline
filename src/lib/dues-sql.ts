@@ -66,3 +66,17 @@ export const HOME_ADMIN_COUNTS_SQL = `SELECT
    (SELECT COUNT(*) FROM multisport_scans WHERE status = 'pending')::int AS scans,
    (SELECT COUNT(*) FROM dues
      WHERE status = 'open' AND source IN ('session_fee', 'replacement') AND season_id = $2)::int AS charges`;
+
+/**
+ * Admin ▸ Payments ▸ Matches: recent matches with what is still open or
+ * waiting for confirmation on each (`$1` = limit).
+ */
+export const PAYMENT_MATCHES_SQL = `
+  SELECT m.id, m.played_on, m.season_id IS NOT NULL AS in_season,
+         COUNT(d.due_key) FILTER (WHERE d.status = 'open')::int AS open,
+         COUNT(d.due_key) FILTER (WHERE d.status = 'declared')::int AS declared
+    FROM matches m
+    LEFT JOIN dues d ON d.match_id = m.id
+   GROUP BY m.id, m.played_on, m.season_id
+   ORDER BY m.played_on DESC, m.id DESC
+   LIMIT $1`;

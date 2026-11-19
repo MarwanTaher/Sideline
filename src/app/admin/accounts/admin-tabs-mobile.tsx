@@ -59,7 +59,8 @@ function MoreIcon({ className }: IconProps) {
 const TABS = [
   { key: "", label: "Admins", href: "/admin/accounts", Icon: PeopleIcon },
   { key: "seasons", label: "Seasons", href: "/admin/accounts?tab=seasons", Icon: CalendarIcon },
-  { key: "billing", label: "Billing", href: "/admin/accounts?tab=billing", Icon: MoneyIcon },
+  // Billing moved into the one admin Payments page.
+  { key: "payments", label: "Payments", href: "/admin/payments", Icon: MoneyIcon },
   { key: "messages", label: "Messages", href: "/admin/accounts?tab=messages", Icon: ChatIcon },
   { key: "other", label: "Other", href: "/admin/accounts?tab=other", Icon: MoreIcon },
 ] as const;

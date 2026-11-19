@@ -108,7 +108,7 @@ export async function sendPaymentReminderAction(
     {
       title: "Payment reminder \uD83D\uDCB0",
       body: `You have an outstanding payment for match ${matchId}. Please settle up.`,
-      url: `/matches/${matchId}/payments`,
+      url: `/payments?match=${matchId}`,
       tag: `payment-reminder-${matchId}`,
     },
     { playerIds: unpaid },

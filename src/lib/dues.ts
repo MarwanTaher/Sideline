@@ -2,6 +2,7 @@ import "server-only";
 import { sqlClient } from "./db";
 import {
   DECLARE_CHARGE_DUES_SQL,
+  PAYMENT_MATCHES_SQL,
   MATCH_DUES_SQL,
   OPEN_DUES_SQL,
   PLAYER_DUES_SQL,
@@ -62,4 +63,24 @@ export async function rejectChargeDeclaration(key: string): Promise<boolean> {
     [key],
   )) as unknown[];
   return rows.length > 0;
+}
+
+export type PaymentMatch = { id: number; playedOn: string; inSeason: boolean; open: number; declared: number };
+
+/** Recent matches for the admin's per-match payments view. */
+export async function listPaymentMatches(limit = 20): Promise<PaymentMatch[]> {
+  const rows = (await sqlClient.query(PAYMENT_MATCHES_SQL, [limit])) as Array<{
+    id: number;
+    played_on: string;
+    in_season: boolean;
+    open: number;
+    declared: number;
+  }>;
+  return rows.map((r) => ({
+    id: Number(r.id),
+    playedOn: String(r.played_on),
+    inSeason: Boolean(r.in_season),
+    open: Number(r.open),
+    declared: Number(r.declared),
+  }));
 }

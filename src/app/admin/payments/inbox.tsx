@@ -87,9 +87,9 @@ function InboxRow({ due, mode }: { due: Due; mode: "confirm" | "overdue" | "open
 
   const href =
     due.source === "season_invoice"
-      ? "/admin/accounts?tab=billing" + (due.period ? `&period=${due.period}` : "")
+      ? "/admin/payments?tab=billing" + (due.period ? `&period=${due.period}` : "")
       : due.matchId != null
-        ? `/matches/${due.matchId}/payments`
+        ? `/admin/payments?tab=matches&match=${due.matchId}`
         : null;
   const when =
     mode === "confirm" && due.declaredAt
