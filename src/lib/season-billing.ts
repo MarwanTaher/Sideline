@@ -6,7 +6,9 @@ import {
   dueDateFor,
   playingDaysInPeriod,
   seatCapGap,
+  splitBetween,
   type SeatCapGap,
+  type SplitMode,
 } from "./season-calculations";
 
 export { formatMinor, invoiceAmountMinor, roundUpToPlnMinor } from "./format-money";
@@ -123,6 +125,8 @@ export type SeasonRates = {
   guestRateMinor: number;
   extensionCostMinor: number;
   extensionMinExtra: number;
+  /** P2.6: split the monthly cost by seat cap (default) or active subscribers. */
+  splitMode: SplitMode;
   ratesChangedAt: string | null;
 };
 
@@ -130,7 +134,7 @@ export async function getSeasonRates(seasonId: number): Promise<SeasonRates | nu
   const rows = (await sqlClient.query(
     `SELECT day_rate_minor, multisport_credit_minor, payment_due_day,
             guest_rate_minor, extension_cost_minor, extension_min_extra,
-            rates_changed_at
+            split_mode, rates_changed_at
        FROM seasons WHERE id = $1`,
     [seasonId],
   )) as Array<Record<string, number | string | Date | null>>;
@@ -143,6 +147,7 @@ export async function getSeasonRates(seasonId: number): Promise<SeasonRates | nu
     guestRateMinor: Number(r.guest_rate_minor),
     extensionCostMinor: Number(r.extension_cost_minor),
     extensionMinExtra: Number(r.extension_min_extra),
+    splitMode: r.split_mode === "active" ? "active" : "cap",
     ratesChangedAt: toIso(r.rates_changed_at as string | Date | null),
   };
 }
@@ -158,7 +163,8 @@ export async function updateSeasonRates(
   const changed =
     "day_rate_minor IS DISTINCT FROM $1 OR multisport_credit_minor IS DISTINCT FROM $2 OR " +
     "payment_due_day IS DISTINCT FROM $3 OR guest_rate_minor IS DISTINCT FROM $4 OR " +
-    "extension_cost_minor IS DISTINCT FROM $5 OR extension_min_extra IS DISTINCT FROM $6";
+    "extension_cost_minor IS DISTINCT FROM $5 OR extension_min_extra IS DISTINCT FROM $6 OR " +
+    "split_mode IS DISTINCT FROM $8";
   await sqlClient.query(
     `UPDATE seasons
         SET day_rate_minor = $1,
@@ -167,6 +173,7 @@ export async function updateSeasonRates(
             guest_rate_minor = $4,
             extension_cost_minor = $5,
             extension_min_extra = $6,
+            split_mode = $8,
             rates_changed_at = CASE WHEN ${changed}
               THEN CURRENT_TIMESTAMP ELSE rates_changed_at END,
             rates_confirmed_at = CASE WHEN ${changed} THEN CASE
@@ -181,6 +188,7 @@ export async function updateSeasonRates(
       rates.extensionCostMinor,
       rates.extensionMinExtra,
       seasonId,
+      rates.splitMode,
     ],
   );
 }
@@ -521,7 +529,7 @@ export async function getSeatCapGap(
   period: string,
 ): Promise<SeatCapGap | null> {
   const rows = (await sqlClient.query(
-    `SELECT s.start_date, s.end_date, s.subscriber_cap, s.day_rate_minor,
+    `SELECT s.start_date, s.end_date, s.subscriber_cap, s.day_rate_minor, s.split_mode,
             (SELECT COUNT(*) FROM season_subscriptions ss
               WHERE ss.season_id = s.id AND ss.status = 'active')::int AS active
        FROM seasons s WHERE s.id = $1`,
@@ -531,10 +539,12 @@ export async function getSeatCapGap(
     end_date: string | null;
     subscriber_cap: number;
     day_rate_minor: number;
+    split_mode: string;
     active: number;
   }>;
   const season = rows[0];
-  if (!season) return null;
+  // Splitting between active subscribers leaves no seat-cap gap.
+  if (!season || season.split_mode === "active") return null;
   return seatCapGap({
     period,
     subscriberCap: Number(season.subscriber_cap),
@@ -558,13 +568,17 @@ export async function generateInvoices(
   period: string,
 ): Promise<GenerateResult> {
   const seasonRows = (await sqlClient.query(
-    `SELECT start_date, end_date, subscriber_cap, day_rate_minor, payment_due_day
+    `SELECT start_date, end_date, subscriber_cap, day_rate_minor, payment_due_day, split_mode,
+            (SELECT COUNT(*) FROM season_subscriptions ss
+              WHERE ss.season_id = seasons.id AND ss.status = 'active')::int AS active
        FROM seasons WHERE id = $1`,
     [seasonId],
   )) as Array<{
     start_date: string;
     end_date: string | null;
     subscriber_cap: number;
+    split_mode: string;
+    active: number;
     day_rate_minor: number;
     payment_due_day: number;
   }>;
@@ -574,9 +588,13 @@ export async function generateInvoices(
   const season = seasonRows[0];
 
   const playingDays = await seasonPlayingDays(seasonId, season, period);
-  const splitBetween = Number(season.subscriber_cap);
+  const split = splitBetween(
+    season.split_mode === "active" ? "active" : "cap",
+    Number(season.subscriber_cap),
+    Number(season.active),
+  );
   const dayRate = Number(season.day_rate_minor);
-  const gross = invoiceAmountMinor(playingDays, dayRate, splitBetween);
+  const gross = invoiceAmountMinor(playingDays, dayRate, split);
   const dueDate = dueDateFor(period, Number(season.payment_due_day));
 
   const subscribers = (await sqlClient.query(
@@ -632,7 +650,7 @@ export async function generateInvoices(
         period,
         playingDays,
         dayRate,
-        splitBetween,
+        split,
         gross,
         dueDate,
         roundUpToPlnMinor(gross),

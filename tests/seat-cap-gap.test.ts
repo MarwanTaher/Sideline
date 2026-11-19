@@ -24,3 +24,11 @@ test("seat-cap gap: no subscribers means the whole cost is uncovered", () => {
   const gap = seatCapGap({ ...base, activeSubscribers: 0 });
   assert.equal(gap?.gapMinor, 200_000);
 });
+
+test("split mode: cap keeps the seat count, active splits between subscribers", async () => {
+  const { splitBetween } = await import("../src/lib/season-calculations");
+  assert.equal(splitBetween("cap", 14, 12), 14);
+  assert.equal(splitBetween("active", 14, 12), 12);
+  // No active subscribers yet: fall back to the cap rather than divide by zero.
+  assert.equal(splitBetween("active", 14, 0), 14);
+});

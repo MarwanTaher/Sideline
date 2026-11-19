@@ -119,3 +119,14 @@ export function seatCapGap(input: {
     gapMinor: costMinor - invoicedMinor,
   };
 }
+
+export type SplitMode = "cap" | "active";
+
+/**
+ * How many shares the month's pitch cost is split into (P2.6). 'cap' (the
+ * default, decision 5) keeps a fixed price; 'active' splits between the
+ * active subscribers so the cost is always covered.
+ */
+export function splitBetween(mode: SplitMode, subscriberCap: number, activeSubscribers: number): number {
+  return mode === "active" && activeSubscribers > 0 ? activeSubscribers : subscriberCap;
+}

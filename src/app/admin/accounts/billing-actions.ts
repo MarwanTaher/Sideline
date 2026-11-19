@@ -77,7 +77,10 @@ export async function saveRatesAction(
     return { ok: false, message: "Minimum extra players must be at least 1." };
   }
 
+  const splitMode = formData.get("splitMode") === "active" ? "active" : "cap";
+
   await updateSeasonRates(seasonId, {
+    splitMode,
     dayRateMinor,
     multisportCreditMinor,
     paymentDueDay,

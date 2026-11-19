@@ -345,6 +345,13 @@ function RatesForm({
           defaultValue={String(rates.extensionMinExtra)}
           type="number"
         />
+        <label className={compact ? "col-span-2" : "sm:col-span-3"}>
+          <span className="block text-xs text-neutral-500">Split the monthly pitch cost</span>
+          <select name="splitMode" defaultValue={rates.splitMode} className={`${inputCls} w-full`}>
+            <option value="cap">By seat cap — fixed price, empty seats come from the fund</option>
+            <option value="active">By active subscribers — always covered, price varies</option>
+          </select>
+        </label>
         <p className={`text-xs text-neutral-500 ${compact ? "col-span-2" : "sm:col-span-3"}`}>
           Applies to invoices and charges raised from now on. Anything already
           raised keeps the rate it was billed at.
