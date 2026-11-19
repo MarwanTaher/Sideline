@@ -7,7 +7,7 @@ import {
   addAdjustment,
   deleteAdjustment,
   deleteCharge,
-  generateGuestCharges,
+  syncGuestCharges,
   setChargeKind,
   setChargePaid,
   setMatchExtended,
@@ -29,7 +29,7 @@ function revalidateMatch(matchId: number): void {
   revalidatePath(`/matches/${matchId}/availability`);
 }
 
-export async function generateChargesAction(
+export async function syncChargesAction(
   _prev: FundActionState,
   formData: FormData,
 ): Promise<FundActionState> {
@@ -39,14 +39,18 @@ export async function generateChargesAction(
   const matchId = Number(formData.get("matchId"));
   if (!Number.isInteger(matchId)) return { ok: false, message: "Invalid match." };
 
-  const created = await generateGuestCharges(matchId);
+  const { created, removed } = await syncGuestCharges(matchId);
   revalidateMatch(matchId);
+  const parts = [
+    created > 0 ? `raised ${created} charge${created === 1 ? "" : "s"}` : "",
+    removed > 0 ? `removed ${removed} that no longer appl${removed === 1 ? "ies" : "y"}` : "",
+  ].filter(Boolean);
   return {
     ok: true,
     message:
-      created === 0
-        ? "Everyone who owes already has a charge."
-        : `Raised ${created} charge(s).`,
+      parts.length === 0
+        ? "Charges already match who is playing."
+        : `Synced: ${parts.join(", ")}.`,
   };
 }
 

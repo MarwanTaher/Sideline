@@ -1,7 +1,7 @@
 import "server-only";
 import { sqlClient } from "./db";
 import { getSubscriptionSeasonForMatch, listSubscribers } from "./season-subscriptions";
-import { PLAYER_CHARGES_SQL } from "./season-fund-sql";
+import { DELETE_STALE_CHARGES_SQL, PLAYER_CHARGES_SQL } from "./season-fund-sql";
 
 /**
  * Session charges for non-core players, and the group fund they feed.
@@ -107,6 +107,8 @@ export type MatchChargeContext = {
   extensionMinExtra: number;
   /** Non-core players who should be charged but have no row yet. */
   uncharged: number;
+  /** Unpaid charges for players now OUT / core, or guests no longer approved. */
+  stale: number;
   extraCount: number;
   squadCount: number;
   extensionThreshold: number | null;
@@ -151,6 +153,14 @@ export async function getMatchChargeContext(
   const uncharged =
     nonCore.players.filter((p) => !chargedPlayers.has(p.playerId)).length +
     nonCore.guests.filter((g) => !chargedGuests.has(g.guestId)).length;
+  const owingPlayers = new Set(nonCore.players.map((p) => p.playerId));
+  const owingGuests = new Set(nonCore.guests.map((g) => g.guestId));
+  const stale = charges.filter(
+    (c) =>
+      !c.paidAt &&
+      ((c.playerId != null && !owingPlayers.has(c.playerId)) ||
+        (c.guestId != null && !owingGuests.has(c.guestId))),
+  ).length;
 
   return {
     matchId,
@@ -159,6 +169,7 @@ export async function getMatchChargeContext(
     extensionCostMinor: Number(s?.extension_cost_minor ?? 10000),
     extensionMinExtra: Number(s?.extension_min_extra ?? 4),
     uncharged,
+    stale,
     extraCount: charges.filter((c) => c.kind === "extra").length + uncharged,
     squadCount: Number(meta.squad_count),
     extensionThreshold: meta.extension_threshold,
@@ -201,6 +212,28 @@ async function listNonCorePlayers(matchId: number, seasonId: number): Promise<No
       hostPlayerId: Number(r.host_player_id),
     })),
   };
+}
+
+/**
+ * Bring a match's charges in line with who is playing: remove unpaid charges
+ * that no longer apply, then raise any that are missing. Paid charges and
+ * the admin's edits on the remaining ones are kept, so it is safe to re-run.
+ */
+export async function syncGuestCharges(
+  matchId: number,
+): Promise<{ created: number; removed: number }> {
+  const season = await getSubscriptionSeasonForMatch(matchId);
+  if (!season) return { created: 0, removed: 0 };
+
+  const nonCore = await listNonCorePlayers(matchId, season.id);
+  const removedRows = (await sqlClient.query(DELETE_STALE_CHARGES_SQL, [
+    matchId,
+    nonCore.players.map((p) => p.playerId),
+    nonCore.guests.map((g) => g.guestId),
+  ])) as Array<{ id: number }>;
+
+  const created = await generateGuestCharges(matchId);
+  return { created, removed: removedRows.length };
 }
 
 /**

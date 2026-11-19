@@ -27,3 +27,20 @@ export const PLAYER_CHARGES_SQL = `
      AND ($2::int IS NULL OR gc.match_id = $2::int)
      AND (NOT $3::boolean OR gc.paid_at IS NULL)
    ORDER BY m.played_on DESC, gc.id`;
+
+/**
+ * Remove a match's unpaid charges that no longer apply: players who are not a
+ * non-core IN player any more (dropped OUT, removed, or now a subscriber) and
+ * guests who are no longer approved. Paid charges are never touched.
+ *
+ * `$1` = match id, `$2` = non-core IN player ids, `$3` = approved guest ids.
+ */
+export const DELETE_STALE_CHARGES_SQL = `
+  DELETE FROM guest_charges gc
+   WHERE gc.match_id = $1
+     AND gc.paid_at IS NULL
+     AND (
+       (gc.player_id IS NOT NULL AND NOT (gc.player_id = ANY($2::int[])))
+       OR (gc.guest_id IS NOT NULL AND NOT (gc.guest_id = ANY($3::int[])))
+     )
+  RETURNING gc.id`;

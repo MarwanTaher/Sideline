@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import type { GuestCharge, MatchChargeContext } from "@/lib/season-fund";
 import { formatMinor } from "@/lib/format-money";
 import {
-  generateChargesAction,
+  syncChargesAction,
   setExtendedAction,
   setChargePaidAction,
   setChargeKindAction,
@@ -27,7 +27,7 @@ export default function SessionCharges({
   subscribers: { playerId: number; name: string }[];
 }) {
   const router = useRouter();
-  const [genState, genAction, genPending] = useActionState(generateChargesAction, INITIAL);
+  const [genState, genAction, genPending] = useActionState(syncChargesAction, INITIAL);
   const [extState, extAction, extPending] = useActionState(setExtendedAction, INITIAL);
 
   useEffect(() => {
@@ -86,13 +86,24 @@ export default function SessionCharges({
         </p>
       ) : null}
 
-      {context.uncharged > 0 ? (
-        <form action={genAction} className="mt-3 flex items-center gap-2">
+      {context.uncharged > 0 || context.stale > 0 ? (
+        <form action={genAction} className="mt-3 flex flex-wrap items-center gap-2">
           <input type="hidden" name="matchId" value={context.matchId} />
           <Button type="submit" pending={genPending} pendingLabel="…">
-            Raise charges for {context.uncharged} player
-            {context.uncharged === 1 ? "" : "s"}
+            Sync charges
           </Button>
+          <span className="text-xs text-neutral-500">
+            {[
+              context.uncharged > 0
+                ? `${context.uncharged} player${context.uncharged === 1 ? "" : "s"} to charge`
+                : "",
+              context.stale > 0
+                ? `${context.stale} unpaid charge${context.stale === 1 ? "" : "s"} no longer playing`
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </span>
         </form>
       ) : null}
       <FeedbackMessage ok={genState.ok} message={genState.message} className="mt-2" />

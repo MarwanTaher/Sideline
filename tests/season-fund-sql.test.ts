@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { PGlite } from "@electric-sql/pglite";
-import { PLAYER_CHARGES_SQL } from "../src/lib/season-fund-sql";
+import { DELETE_STALE_CHARGES_SQL, PLAYER_CHARGES_SQL } from "../src/lib/season-fund-sql";
 
 // In-memory fixtures only: this suite never loads DATABASE_URL or contacts Neon.
 async function fixture(): Promise<PGlite> {
@@ -58,6 +58,31 @@ test("player charges: a replacement owed to yourself is not a debt", async () =>
   const db = await fixture();
   try {
     assert.deepEqual(await ids(db, 1, null, false), []);
+  } finally {
+    await db.close();
+  }
+});
+
+test("sync charges: removes only unpaid charges that no longer apply", async () => {
+  const db = await fixture();
+  try {
+    // Match 11 now: Cara (3) still IN non-core; Ben (2) dropped OUT; Tom (100)
+    // still approved; Uma (101) no longer approved.
+    const removed = await db.query<{ id: number }>(
+      DELETE_STALE_CHARGES_SQL,
+      [11, [3], [100]],
+    );
+    assert.deepEqual(removed.rows.map((r) => Number(r.id)).sort(), [2, 4]);
+
+    const left = await db.query<{ id: number }>(`SELECT id FROM guest_charges ORDER BY id`);
+    assert.deepEqual(left.rows.map((r) => Number(r.id)), [1, 3, 5]);
+
+    // Paid charges stay even when the player no longer qualifies.
+    const none = await db.query(
+      DELETE_STALE_CHARGES_SQL,
+      [10, [], []],
+    );
+    assert.equal(none.rows.length, 0);
   } finally {
     await db.close();
   }
