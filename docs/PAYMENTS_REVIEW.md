@@ -323,7 +323,7 @@ branch names (`feature/pay-<id>`).
 |---|---|
 | P4.1 | **Monthly draft invoices** from the daily cron (decision 6). Drafts reuse `hidden_at`, so already-deployed code keeps them invisible to players; admin presses Publish |
 | P4.2 | Auto-sync session charges when the matchday is closed |
-| P4.3 | Remove knobs made redundant (manual "Raise charges", "Reset all unpaid", separate season/match detail forms) |
+| P4.3 | Remove knobs made redundant (manual "Sync charges" once P4.2 runs it automatically, "Reset all unpaid", separate season/match detail forms) and the leftovers listed in §9.8 |
 
 ## 7. Decisions
 
@@ -518,6 +518,19 @@ date. Re-running stays safe because generation already skips existing invoices.
 
 P0.1 → P0.2 → P0.4 → P0.6 → P0.3 → P0.5 → P0.7 → Phase 1 → Phase 2 → Phase 3 → Phase 4.
 **Start with P0.1**: it removes the double-billing risk and needs no migration.
+
+### 9.8 Cleanup backlog (collected during implementation)
+
+Small leftovers noticed while building a phase. They are done in P4.3 unless a
+later item touches the same code first. Tick them off here when removed.
+
+| Found in | Item |
+|---|---|
+| P0.4 | `getSubscriptionSeasonForDate` (`src/lib/season-subscriptions.ts`) has no callers left; remove it |
+| P0.1 | Unused `fmtDate` import in `src/lib/payments.ts` (lint warning, older than P0.1) |
+| P0.3 | `sideline_generate_match` does not copy pot payment details; fine while automated matches are season-only, revisit if automation creates normal matches |
+| P0.5 | The admin Home unpaid-charges count in `getHomeAdminCounts` has no PGlite test; move its SQL to a `*-sql.ts` module and test it |
+| Status | Phase 0 accepted by the organiser on 2026-11-19 (tested locally) |
 
 ## Appendix — files involved
 
