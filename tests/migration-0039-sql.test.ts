@@ -210,3 +210,27 @@ test("fund ledger query: per-kind totals and balance match the entries", async (
     await db.close();
   }
 });
+
+test("closing a matchday keeps the guests money depends on", async () => {
+  const { DELETE_UNBILLED_GUESTS_SQL } = await import("../src/lib/payments-sql");
+  const db = new PGlite();
+  try {
+    await db.exec(BEFORE_0039);
+    await migrate(db);
+    await db.exec(`
+      INSERT INTO match_guests(id, match_id, name, host_player_id, status) VALUES
+        (1, 20, 'Charged', 1, 'approved'), (2, 20, 'Free', 1, 'approved'), (3, 20, 'Pending', 1, 'pending'),
+        (4, 10, 'Pot guest', 2, 'approved');
+      INSERT INTO guest_charges(id, match_id, guest_id, amount_minor, kind, paid_at) VALUES (9, 20, 1, 3600, 'extra', now());
+    `);
+    await db.query(DELETE_UNBILLED_GUESTS_SQL, [20]);
+    await db.query(DELETE_UNBILLED_GUESTS_SQL, [10]);
+    const left = (await db.query<{ id: number }>(`SELECT id FROM match_guests ORDER BY id`)).rows.map((r) => r.id);
+    assert.deepEqual(left, [1, 4]);
+    // The paid guest fee is still in the ledger and the fund.
+    assert.equal((await db.query(`SELECT 1 FROM dues WHERE due_key = 'charge:9' AND status = 'confirmed'`)).rows.length, 1);
+    assert.equal((await db.query(`SELECT 1 FROM fund_entries WHERE entry_key = 'fee:9'`)).rows.length, 1);
+  } finally {
+    await db.close();
+  }
+});

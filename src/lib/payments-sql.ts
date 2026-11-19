@@ -51,3 +51,16 @@ export const FINALIZE_SHARE_SQL = `UPDATE matches m
         ) END
   WHERE m.id = $1 AND NOT ${SEASON_MATCH_SQL}
   RETURNING m.share_minor`;
+
+/**
+ * On matchday close: delete the match's guests that carry no money (`$1` =
+ * match id). Kept: approved guests with a session charge, and approved
+ * guests on a match whose pot is open.
+ */
+export const DELETE_UNBILLED_GUESTS_SQL = `DELETE FROM match_guests g
+  WHERE g.match_id = $1
+    AND (g.status <> 'approved'
+      OR (NOT EXISTS (SELECT 1 FROM guest_charges gc WHERE gc.guest_id = g.id)
+          AND NOT EXISTS (SELECT 1 FROM matches m
+                           WHERE m.id = g.match_id AND COALESCE(m.payments_active, 0) = 1
+                             AND COALESCE(m.total_payment, 0) > 0)))`;

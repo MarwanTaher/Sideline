@@ -1,3 +1,4 @@
+import { DELETE_UNBILLED_GUESTS_SQL } from "./payments-sql";
 import { sqlClient } from "@/lib/db";
 import { POSITIONS, type Position } from "@/lib/positions";
 import {
@@ -187,8 +188,15 @@ export async function removeGuest(
 }
 
 /** Remove every guest for a match (used when the matchday is closed). */
+/**
+ * Guests are temporary: remove them when the matchday closes, except guests
+ * money depends on — an approved guest with a session charge, or on a match
+ * whose pot is open (their share and paid flag are the record). Deleting
+ * those cascaded away their charges, paid or not, and changed everyone's
+ * share.
+ */
 export async function deleteGuestsForMatch(matchId: number): Promise<void> {
-  await sqlClient.query(`DELETE FROM match_guests WHERE match_id = $1`, [matchId]);
+  await sqlClient.query(DELETE_UNBILLED_GUESTS_SQL, [matchId]);
 }
 
 /** Remove a host's guests (used when the host leaves the match). */

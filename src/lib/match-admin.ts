@@ -1,6 +1,7 @@
 import { sqlClient } from "@/lib/db";
 import { notify } from "@/lib/push";
 import { deleteGuestsForMatch } from "@/lib/guests";
+import { syncGuestCharges } from "@/lib/season-fund";
 import { syncAchievements } from "@/lib/achievements";
 import { generateMatchMoments } from "@/lib/moments";
 import { getMatchDigest } from "@/lib/match-digest";
@@ -386,6 +387,13 @@ export async function setMatchdayStatus(
         await logAppError(error, "matches.close-automation");
         generationFailed = true;
       }
+    }
+    // P4.2: settle who owes for the session as the matchday closes, before
+    // guests are cleared (charged guests are kept).
+    try {
+      await syncGuestCharges(matchId);
+    } catch (err) {
+      await logAppError(err, "matches.close-sync-charges");
     }
     // Guests are temporary — remove them when the matchday is closed.
     await deleteGuestsForMatch(matchId);
