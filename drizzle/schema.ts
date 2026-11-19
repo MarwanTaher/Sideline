@@ -140,6 +140,7 @@ export const playerGoalsClaims = pgTable("player_goals_claims", {
 ]);
 
 export const playerAccessTokens = pgTable("player_access_tokens", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "player_access_tokens_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	playerId: integer("player_id").notNull(),
 	token: text().notNull(),
@@ -158,6 +159,7 @@ export const playerAccessTokens = pgTable("player_access_tokens", {
 ]);
 
 export const playerCredentials = pgTable("player_credentials", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	playerId: integer("player_id").primaryKey().notNull(),
 	passwordSalt: text("password_salt").notNull(),
 	passwordHash: text("password_hash").notNull(),
@@ -181,6 +183,7 @@ export const appSettings = pgTable("app_settings", {
 ]);
 
 export const playerKudos = pgTable("player_kudos", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "player_kudos_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	fromPlayerId: integer("from_player_id").notNull(),
 	toPlayerId: integer("to_player_id").notNull(),
@@ -231,6 +234,7 @@ export const playerStatsSubmissions = pgTable("player_stats_submissions", {
 ]);
 
 export const passwordResetRequests = pgTable("password_reset_requests", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "password_reset_requests_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	playerId: integer("player_id").notNull(),
 	requestedAt: timestamp("requested_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -270,6 +274,7 @@ export const legacyScoreSnapshots = pgTable("legacy_score_snapshots", {
 ]);
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "password_reset_tokens_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	playerId: integer("player_id").notNull(),
 	token: text().notNull(),
@@ -308,6 +313,7 @@ export const admins = pgTable("admins", {
 ]);
 
 export const adminTabLocks = pgTable("admin_tab_locks", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	adminId: integer("admin_id").notNull(),
 	tabKey: text("tab_key").notNull(),
 	createdAt: timestamp("created_at", { mode: 'string' }).default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -546,6 +552,7 @@ export const votes = pgTable("votes", {
 ]);
 
 export const pushSubscriptions = pgTable("push_subscriptions", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	playerId: integer("player_id").references(() => players.id, { onDelete: "cascade" }),
 	endpoint: text().notNull(),
@@ -559,6 +566,7 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
 ]);
 
 export const pushPreferences = pgTable("push_preferences", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
 	typeKey: text("type_key").notNull(),
 	enabled: integer().default(1).notNull(),
@@ -702,6 +710,7 @@ export const matchAutomationAudit = pgTable("match_automation_audit", {
 });
 
 export const playerAchievements = pgTable("player_achievements", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
 	achievementKey: text("achievement_key").notNull(),
@@ -960,6 +969,7 @@ export const fundAdjustments = pgTable("fund_adjustments", {
 });
 
 export const playerMoments = pgTable("player_moments", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
 	kind: text().notNull(),
@@ -973,6 +983,7 @@ export const playerMoments = pgTable("player_moments", {
 ]);
 
 export const stories = pgTable("stories", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
 	imageUrl: text("image_url").notNull(),
@@ -986,6 +997,7 @@ export const stories = pgTable("stories", {
 ]);
 
 export const storyViews = pgTable("story_views", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	storyId: integer("story_id").notNull().references(() => stories.id, { onDelete: "cascade" }),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
 	seenAt: timestamp("seen_at", { withTimezone: true, mode: "string" }).default(sql`now()`).notNull(),
@@ -994,6 +1006,7 @@ export const storyViews = pgTable("story_views", {
 ]);
 
 export const storyReactions = pgTable("story_reactions", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	storyId: integer("story_id").notNull().references(() => stories.id, { onDelete: "cascade" }),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
 	emoji: text().notNull(),
