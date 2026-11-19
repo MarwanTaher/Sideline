@@ -9,6 +9,7 @@ import {
   savePaymentTotal,
   setPaid,
   setPaymentsActive,
+  setShareFinalized,
   setPlayerAndGuestsPaid,
   isPaymentsActive,
   isSeasonMatch,
@@ -162,6 +163,34 @@ export async function setPaymentsActiveAction(
     return {
       ok: true,
       message: active ? "Payments opened for players." : "Payments closed.",
+    };
+  } catch (err) {
+    return fail(err);
+  }
+}
+
+/** P2.5: snapshot the share ("Finalize cost") or let it follow the roster again. */
+export async function finalizeShareAction(
+  _prev: PaymentActionState,
+  formData: FormData,
+): Promise<PaymentActionState> {
+  try {
+    await requireAdmin();
+    const matchId = matchIdSchema.parse(formData.get("matchId"));
+    await requireNormalMatch(matchId);
+    const finalize = formData.get("finalize") === "1";
+    const share = await setShareFinalized(matchId, finalize);
+    revalidatePath(`/matches/${matchId}/payments`);
+    revalidatePath("/payments");
+    revalidatePath("/admin/payments");
+    if (finalize && share == null) {
+      return { ok: false, message: "Set a total and a roster before finalizing the cost." };
+    }
+    return {
+      ok: true,
+      message: finalize
+        ? `Cost finalized: each head pays ${share}. Roster changes no longer change it.`
+        : "Unlocked: the share follows the roster again.",
     };
   } catch (err) {
     return fail(err);

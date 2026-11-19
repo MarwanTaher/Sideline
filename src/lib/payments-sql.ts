@@ -34,3 +34,20 @@ export const PREV_PAYMENT_DETAILS_SQL = `SELECT payment_name, payment_mobile, pa
      OR btrim(COALESCE(pay_link, '')) <> ''
   ORDER BY id DESC
   LIMIT 1`;
+
+/**
+ * P2.5 "Finalize cost": snapshot the per-head share (minor units of the match
+ * currency) so later roster changes stop moving it. `$1` = match id,
+ * `$2` = true to finalize, false to unlock. Season matches are never touched.
+ * Returns the new share_minor (NULL when unlocked or nothing to split).
+ */
+export const FINALIZE_SHARE_SQL = `UPDATE matches m
+    SET share_minor = CASE WHEN $2::boolean THEN (
+          SELECT CASE WHEN h.heads > 0 AND COALESCE(m.total_payment, 0) > 0
+                      THEN (CEIL(m.total_payment::numeric / h.heads) * 100)::int END
+            FROM (SELECT (SELECT COUNT(*) FROM match_players mp WHERE mp.match_id = m.id)
+                       + (SELECT COUNT(*) FROM match_guests g
+                           WHERE g.match_id = m.id AND g.status = 'approved') AS heads) h
+        ) END
+  WHERE m.id = $1 AND NOT ${SEASON_MATCH_SQL}
+  RETURNING m.share_minor`;

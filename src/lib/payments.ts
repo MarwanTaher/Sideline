@@ -1,7 +1,7 @@
 import { sqlClient } from "@/lib/db";
 import { fmtDate } from "@/lib/matches";
 import { normCurrency, type PaymentCurrency } from "@/lib/currency";
-import { POT_STATE_SQL, SEASON_MATCH_SQL } from "@/lib/payments-sql";
+import { FINALIZE_SHARE_SQL, POT_STATE_SQL, SEASON_MATCH_SQL } from "@/lib/payments-sql";
 
 export interface PaymentMeta {
   id: number;
@@ -14,6 +14,8 @@ export interface PaymentMeta {
   payLink: string;
   paymentsActive: boolean;
   currency: PaymentCurrency;
+  /** Share fixed at "Finalize cost" (whole currency units), or null while it follows the roster. */
+  finalShare: number | null;
 }
 
 export interface PaymentRow {
@@ -45,6 +47,7 @@ interface MetaRow {
   pay_link: string;
   payments_active: number;
   payment_currency: string | null;
+  share_minor: number | null;
 }
 
 export async function getPaymentMeta(matchId: number): Promise<PaymentMeta | null> {
@@ -57,7 +60,7 @@ export async function getPaymentMeta(matchId: number): Promise<PaymentMeta | nul
             COALESCE(payment_note, '') AS payment_note,
             COALESCE(pay_link, '') AS pay_link,
             COALESCE(payments_active, 0) AS payments_active,
-            payment_currency
+            payment_currency, share_minor
      FROM matches WHERE id = $1`,
     [matchId],
   )) as unknown as MetaRow[];
@@ -74,6 +77,7 @@ export async function getPaymentMeta(matchId: number): Promise<PaymentMeta | nul
     payLink: r.pay_link,
     paymentsActive: Number(r.payments_active) === 1,
     currency: normCurrency(r.payment_currency),
+    finalShare: r.share_minor == null ? null : Number(r.share_minor) / 100,
   };
 }
 
@@ -128,11 +132,18 @@ export function computeSummary(
   rows: PaymentRow[],
   totalPayment: number,
   guestPaid: boolean[] = [],
+  /** P2.5: a finalized share wins over the roster-based split. */
+  finalShare: number | null = null,
 ): PaymentSummary {
   const totalPlayers = rows.length + guestPaid.length;
   const paidCount =
     rows.filter((r) => r.paid).length + guestPaid.filter(Boolean).length;
-  const sharePerPlayer = totalPlayers > 0 ? Math.ceil(totalPayment / totalPlayers) : 0;
+  const sharePerPlayer =
+    finalShare != null
+      ? finalShare
+      : totalPlayers > 0
+        ? Math.ceil(totalPayment / totalPlayers)
+        : 0;
   const collected = sharePerPlayer * paidCount;
   const remaining = Math.max(Math.trunc(totalPayment) - collected, 0);
   // Rounding each share up means a fully collected pot slightly exceeds the
@@ -159,7 +170,7 @@ export function computeSummary(
 export async function getTotalPaymentChange(): Promise<number> {
   const raw = (await sqlClient.query(
     `SELECT m.id,
-            COALESCE(m.total_payment, 0) AS total_payment,
+            COALESCE(m.total_payment, 0) AS total_payment, m.share_minor,
             (SELECT COUNT(*) FROM match_players mp WHERE mp.match_id = m.id) AS player_heads,
             (SELECT COUNT(*) FROM match_guests g WHERE g.match_id = m.id AND g.status = 'approved') AS guest_heads,
             (SELECT COUNT(*) FROM match_players mp2
@@ -174,6 +185,7 @@ export async function getTotalPaymentChange(): Promise<number> {
     guest_heads: number | string;
     paid_players: number | string;
     paid_guests: number | string;
+    share_minor: number | null;
   }>;
 
   let total = 0;
@@ -182,15 +194,33 @@ export async function getTotalPaymentChange(): Promise<number> {
     const heads = Number(r.player_heads) + Number(r.guest_heads);
     const paidCount = Number(r.paid_players) + Number(r.paid_guests);
     if (heads === 0 || totalPayment <= 0) continue;
-    const share = Math.ceil(totalPayment / heads);
+    const share =
+      r.share_minor != null ? Number(r.share_minor) / 100 : Math.ceil(totalPayment / heads);
     const collected = share * paidCount;
     total += Math.max(collected - totalPayment, 0);
   }
   return total;
 }
 
+/** A new total un-finalizes the share: the old snapshot no longer matches it. */
 export async function savePaymentTotal(matchId: number, total: number): Promise<void> {
-  await sqlClient.query(`UPDATE matches SET total_payment = $1 WHERE id = $2`, [total, matchId]);
+  await sqlClient.query(
+    `UPDATE matches SET total_payment = $1, share_minor = NULL WHERE id = $2`,
+    [total, matchId],
+  );
+}
+
+/**
+ * P2.5 "Finalize cost" (or unlock): snapshot today's share so roster changes
+ * stop moving what everyone owes. Returns the share in whole currency units,
+ * or null when unlocked / nothing to split.
+ */
+export async function setShareFinalized(matchId: number, finalized: boolean): Promise<number | null> {
+  const rows = (await sqlClient.query(FINALIZE_SHARE_SQL, [matchId, finalized])) as Array<{
+    share_minor: number | null;
+  }>;
+  const v = rows[0]?.share_minor;
+  return v == null ? null : Number(v) / 100;
 }
 
 export async function savePaymentDetails(
@@ -369,6 +399,7 @@ async function buildPlayerPaymentMatch(
     rows,
     meta.totalPayment,
     guestRows.map((g) => g.paid === 1),
+    meta.finalShare,
   );
   const mine = rows.find((r) => r.playerId === playerId);
   const myGuests = guestRows.filter((g) => g.host_player_id === playerId);

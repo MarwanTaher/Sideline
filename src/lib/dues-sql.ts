@@ -19,7 +19,8 @@ WITH pot AS (
   -- Normal-match pot shares, only while payments are open (players can't
   -- see them otherwise). Share = ceil(total / heads), as computeSummary.
   SELECT m.id, m.played_on, m.payment_currency,
-         (CEIL(m.total_payment::numeric / h.heads) * 100)::int AS share_minor
+         -- A finalized share (P2.5) no longer follows the roster.
+         COALESCE(m.share_minor, (CEIL(m.total_payment::numeric / h.heads) * 100)::int) AS share_minor
     FROM matches m
     CROSS JOIN LATERAL (
       SELECT (SELECT COUNT(*) FROM match_players mp WHERE mp.match_id = m.id)

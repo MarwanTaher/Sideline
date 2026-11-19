@@ -186,6 +186,7 @@ async function AdminSection({ matchId }: { matchId: number }) {
     payLink: "",
     paymentsActive: false,
     currency: DEFAULT_CURRENCY,
+    finalShare: null,
   };
 
   return (
@@ -203,6 +204,7 @@ async function AdminSection({ matchId }: { matchId: number }) {
           rows,
           safeMeta.totalPayment,
           guests.map((g) => g.paid),
+          safeMeta.finalShare,
         )}
       />
     </>

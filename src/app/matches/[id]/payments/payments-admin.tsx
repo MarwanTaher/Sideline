@@ -9,6 +9,7 @@ import {
   togglePaidAction,
   toggleGuestPaidAction,
   setPaymentsActiveAction,
+  finalizeShareAction,
   type PaymentActionState,
 } from "./actions";
 import { sendPaymentReminderAction } from "@/app/actions/push";
@@ -50,6 +51,50 @@ function TotalForm({ matchId, total, currency }: { matchId: number; total: numbe
         Save total
       </Button>
       <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
+    </form>
+  );
+}
+
+/**
+ * P2.5: "Finalize cost" snapshots the share so adding or removing a player
+ * stops changing what everyone owes (including people who already paid).
+ */
+function FinalizeForm({
+  matchId,
+  finalShare,
+  liveShare,
+  money,
+}: {
+  matchId: number;
+  finalShare: number | null;
+  liveShare: number;
+  money: (n: number) => string;
+}) {
+  const [state, action, pending] = useActionState(finalizeShareAction, INITIAL);
+  useRefreshOnOk(state);
+  const finalized = finalShare != null;
+  return (
+    <form
+      action={action}
+      className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-black/10 p-4 dark:border-white/10"
+    >
+      <input type="hidden" name="matchId" value={matchId} />
+      <input type="hidden" name="finalize" value={finalized ? "0" : "1"} />
+      <div>
+        <p className="text-sm font-medium">Share per head</p>
+        <p className="mt-0.5 text-xs text-neutral-500">
+          {finalized
+            ? `Finalized at ${money(finalShare)}. Roster changes no longer change it; saving a new total unlocks it.`
+            : `Currently ${money(liveShare)}, recalculated whenever the roster changes. Finalize once the roster is settled.`}
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <Badge tone={finalized ? "success" : "neutral"}>{finalized ? "Finalized" : "Live"}</Badge>
+        <Button type="submit" variant={finalized ? "secondary" : "primary"} pending={pending} pendingLabel="Saving…">
+          {finalized ? "Unlock" : "Finalize cost"}
+        </Button>
+      </div>
+      <FeedbackMessage ok={state.ok} message={state.message} className="w-full" />
     </form>
   );
 }
@@ -308,6 +353,12 @@ export function PaymentsAdmin({
     <div className="mt-6 space-y-6">
       <ActivateForm matchId={selectedMatchId} active={meta.paymentsActive} />
       <TotalForm matchId={selectedMatchId} total={meta.totalPayment} currency={meta.currency} />
+      <FinalizeForm
+        matchId={selectedMatchId}
+        finalShare={meta.finalShare}
+        liveShare={summary.sharePerPlayer}
+        money={money}
+      />
       <DetailsForm matchId={selectedMatchId} meta={meta} />
       {rows.length === 0 && guests.length === 0 ? (
         <p className="text-sm text-neutral-500">No players in this match.</p>

@@ -61,3 +61,34 @@ test("prefill: new matches copy details from the latest match that has them", as
     await db.close();
   }
 });
+
+test("finalize cost: snapshots ceil(total / heads), unlocks, skips season matches", async () => {
+  const { FINALIZE_SHARE_SQL } = await import("../src/lib/payments-sql");
+  const db = new PGlite();
+  try {
+    await db.exec(`
+      CREATE TABLE seasons(id integer PRIMARY KEY, subscription_enabled boolean);
+      CREATE TABLE matches(id integer PRIMARY KEY, season_id integer, total_payment double precision, share_minor integer);
+      CREATE TABLE match_players(match_id integer, player_id integer);
+      CREATE TABLE match_guests(id integer, match_id integer, status text);
+      INSERT INTO seasons VALUES (1, true);
+      INSERT INTO matches VALUES (10, NULL, 100, NULL), (11, 1, 100, NULL), (12, NULL, 0, NULL);
+      INSERT INTO match_players VALUES (10, 1), (10, 2), (11, 1), (12, 1);
+      INSERT INTO match_guests VALUES (1, 10, 'approved'), (2, 10, 'pending');
+    `);
+    const run = async (id: number, on: boolean) =>
+      (await db.query<{ share_minor: number | null }>(FINALIZE_SHARE_SQL, [id, on])).rows;
+
+    assert.deepEqual(await run(10, true), [{ share_minor: 3400 }]); // 100 / 3 heads → 34
+    // Roster changes after finalizing don't move the snapshot.
+    await db.exec(`INSERT INTO match_players VALUES (10, 3)`);
+    const kept = await db.query<{ share_minor: number }>(`SELECT share_minor FROM matches WHERE id = 10`);
+    assert.equal(kept.rows[0].share_minor, 3400);
+
+    assert.deepEqual(await run(10, false), [{ share_minor: null }]);
+    assert.deepEqual(await run(11, true), []);                 // season match: untouched
+    assert.deepEqual(await run(12, true), [{ share_minor: null }]); // nothing to split
+  } finally {
+    await db.close();
+  }
+});

@@ -18,7 +18,8 @@ async function fixture(): Promise<PGlite> {
     CREATE TABLE players(id integer PRIMARY KEY, name text);
     CREATE TABLE seasons(id integer PRIMARY KEY, subscription_enabled boolean);
     CREATE TABLE matches(id integer PRIMARY KEY, played_on text, season_id integer,
-      payments_active integer, total_payment double precision, payment_currency text);
+      payments_active integer, total_payment double precision, payment_currency text,
+      share_minor integer);
     CREATE TABLE match_players(match_id integer, player_id integer);
     CREATE TABLE payments(match_id integer, player_id integer, paid integer, updated_at timestamp);
     CREATE TABLE match_guests(id integer PRIMARY KEY, match_id integer, name text,
@@ -33,9 +34,9 @@ async function fixture(): Promise<PGlite> {
     INSERT INTO players VALUES (1, 'Adam'), (2, 'Ben'), (3, 'Cara');
     INSERT INTO seasons VALUES (1, true);
     INSERT INTO matches VALUES
-      (10, '2026-11-08', NULL, 1, 100, 'PLN'),  -- normal match, pot open: 3 heads → 34 each
-      (11, '2026-11-15', NULL, 0, 100, 'PLN'),  -- normal match, pot closed
-      (12, '2026-11-22', 1, 1, 100, 'PLN');     -- season match: pot never applies
+      (10, '2026-11-08', NULL, 1, 100, 'PLN', NULL),  -- normal match, pot open: 3 heads → 34 each
+      (11, '2026-11-15', NULL, 0, 100, 'PLN', NULL),  -- normal match, pot closed
+      (12, '2026-11-22', 1, 1, 100, 'PLN', NULL);     -- season match: pot never applies
     INSERT INTO match_players VALUES (10, 1), (10, 2), (11, 1), (12, 1), (12, 2);
     INSERT INTO payments VALUES (10, 1, 1, now());
     INSERT INTO match_guests VALUES
@@ -137,5 +138,16 @@ test("parseDueKey round-trips every key shape and rejects junk", async () => {
   assert.deepEqual(parseDueKey("share:10:g100"), { kind: "guest_share", matchId: 10, guestId: 100 });
   for (const bad of ["", "invoice:0", "invoice:-1", "invoice:1;DROP", "share:10:x2", "charge:"]) {
     assert.equal(parseDueKey(bad), null, bad);
+  }
+});
+
+test("dues: a finalized pot share wins over the roster split", async () => {
+  const db = await fixture();
+  try {
+    await db.exec(`UPDATE matches SET share_minor = 5000 WHERE id = 10`);
+    const ben = await dues(db, PLAYER_DUES_SQL, [2]);
+    assert.deepEqual(ben.filter((d) => d.source === "match_share").map((d) => d.amountMinor), [5000, 5000]);
+  } finally {
+    await db.close();
   }
 });
