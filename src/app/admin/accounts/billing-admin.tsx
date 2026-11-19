@@ -25,6 +25,7 @@ import {
   savePaymentDetailsAction,
   confirmDeclaredInvoicesAction,
   sendInvoiceReminderAction,
+  publishDraftsAction,
   type BillingActionState,
 } from "./billing-actions";
 import { Button } from "@/components/ui/button";
@@ -80,10 +81,12 @@ export default function BillingAdmin({
     confirmDeclaredInvoicesAction,
     INITIAL,
   );
+  const [pubState, pubAction, pubPending] = useActionState(publishDraftsAction, INITIAL);
+  const drafts = invoices.filter((i) => i.isDraft);
 
   useEffect(() => {
-    if (genState.ok || confirmState.ok) router.refresh();
-  }, [genState, confirmState, router]);
+    if (genState.ok || confirmState.ok || pubState.ok) router.refresh();
+  }, [genState, confirmState, pubState, router]);
 
   return (
     <DesktopSplit
@@ -106,6 +109,27 @@ export default function BillingAdmin({
         across the core group, due on the contract day. Core players owe this
         whether they play or not.
       </p>
+
+      {drafts.length > 0 ? (
+        <form
+          action={pubAction}
+          className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-sky-500/40 bg-sky-50/60 p-3 text-sm dark:bg-sky-950/20"
+        >
+          <input type="hidden" name="seasonId" value={seasonId} />
+          <input type="hidden" name="period" value={period} />
+          <span>
+            <span className="font-semibold">{drafts.length} draft invoice{drafts.length === 1 ? "" : "s"}</span>{" "}
+            for {period} were created automatically and are not visible to players yet. Check them, then
+            publish; MultiSport and replacement credit is applied when you do.
+          </span>
+          <Button type="submit" pending={pubPending} pendingLabel="Publishing…">
+            Publish {drafts.length}
+          </Button>
+          <FeedbackMessage ok={pubState.ok} message={pubState.message} className="w-full" />
+        </form>
+      ) : (
+        <FeedbackMessage ok={pubState.ok} message={pubState.message} className="mt-2" />
+      )}
 
       {seatGap && seatGap.gapMinor > 0 ? (
         <SeatGapWarning gap={seatGap} fundBalanceMinor={fundBalanceMinor} />
@@ -561,7 +585,11 @@ function InvoiceRow({
         <div className="min-w-0">
           <p className="font-medium">
             {invoice.name}
-            {hidden ? (
+            {invoice.isDraft ? (
+              <span className="ml-2 rounded bg-sky-100 px-1.5 py-0.5 text-xs font-medium text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+                draft
+              </span>
+            ) : hidden ? (
               <span className="ml-2 rounded bg-neutral-200 px-1.5 py-0.5 text-xs font-medium text-neutral-600 dark:bg-neutral-800 dark:text-neutral-300">
                 hidden from player
               </span>

@@ -32,3 +32,13 @@ test("split mode: cap keeps the seat count, active splits between subscribers", 
   // No active subscribers yet: fall back to the cap rather than divide by zero.
   assert.equal(splitBetween("active", 14, 0), 14);
 });
+
+test("draft period: next month from the 25th, inside the contract only", async () => {
+  const { nextDraftPeriod } = await import("../src/lib/season-calculations");
+  assert.equal(nextDraftPeriod("2026-11-24", "2026-10-01", "2027-03-31"), null);
+  assert.equal(nextDraftPeriod("2026-11-25", "2026-10-01", "2027-03-31"), "2026-12");
+  assert.equal(nextDraftPeriod("2026-12-31", "2026-10-01", "2027-03-31"), "2027-01");
+  assert.equal(nextDraftPeriod("2027-03-26", "2026-10-01", "2027-03-31"), null); // season over
+  assert.equal(nextDraftPeriod("2026-09-28", "2026-10-15", null), "2026-10");     // starts mid-month
+  assert.equal(nextDraftPeriod("2026-09-28", "2026-11-01", null), null);          // not started
+});

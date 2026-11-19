@@ -30,6 +30,7 @@ function inv(id: number, period: string, over: Partial<Invoice> = {}): Invoice {
     declaredNote: "",
     note: "",
     hiddenAt: null,
+    isDraft: false,
     ...over,
   };
 }

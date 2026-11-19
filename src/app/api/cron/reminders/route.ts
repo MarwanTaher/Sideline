@@ -10,6 +10,8 @@ import { AVAILABILITY_LOCK_MS, formatDuration, kickoffMs } from "@/lib/match-sch
 import { getWaitlist } from "@/lib/availability";
 import { isAvailabilityLockPushDue } from "@/lib/reminder-scheduling";
 import { sendSeasonPaymentReminders } from "@/lib/season-reminders";
+import { createMonthlyDraftInvoices } from "@/lib/season-billing";
+import { clubToday } from "@/lib/dues-summary";
 import { logAppError } from "@/lib/error-log";
 import { processMatchAutomation } from "@/lib/match-automation";
 
@@ -234,8 +236,17 @@ export async function GET(request: Request) {
     await logAppError(error, "cron.reminders.season-payments");
   }
 
+  // P4.1: from the 25th, next month's invoices are drafted for the admin to publish.
+  let draftInvoices: Array<{ seasonId: number; period: string; created: number }> = [];
+  try {
+    draftInvoices = await createMonthlyDraftInvoices(clubToday(new Date(now)));
+  } catch (error) {
+    await logAppError(error, "cron.reminders.draft-invoices");
+  }
+
   return NextResponse.json({
     ok: true,
+    draftInvoices,
     checked: matches.length,
     sent,
     locked,

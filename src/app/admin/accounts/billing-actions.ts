@@ -18,6 +18,7 @@ import { formatMinor } from "@/lib/format-money";
 import { getSubscriptionSeason } from "@/lib/season-subscriptions";
 import { sqlClient } from "@/lib/db";
 import { sendSeasonInvoiceReminder } from "@/lib/season-reminders";
+import { publishDraftInvoices } from "@/lib/season-billing";
 import { applyScanCreditsToCharges } from "@/lib/season-fund";
 import { logAppError } from "@/lib/error-log";
 
@@ -422,4 +423,24 @@ export async function reportScanAction(
   await reportScan(matchId, Number(playerId), Number(creditRows[0]?.multisport_credit_minor ?? 1500));
   revalidatePath("/season");
   return { ok: true, message: "Reported — an admin will confirm it." };
+}
+
+/** P4.1: publish a month's draft invoices (made by the monthly cron). */
+export async function publishDraftsAction(
+  _prev: BillingActionState,
+  formData: FormData,
+): Promise<BillingActionState> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, message: denied };
+  const seasonId = Number(formData.get("seasonId"));
+  const period = String(formData.get("period") ?? "");
+  if (!Number.isInteger(seasonId) || seasonId <= 0 || !/^\d{4}-\d{2}$/.test(period)) {
+    return { ok: false, message: "Invalid season or billing period." };
+  }
+  const published = await publishDraftInvoices(seasonId, period);
+  revalidateBilling();
+  revalidatePath("/");
+  return published > 0
+    ? { ok: true, message: `${published} draft invoice(s) for ${period} published to players.` }
+    : { ok: false, message: "No drafts left to publish." };
 }

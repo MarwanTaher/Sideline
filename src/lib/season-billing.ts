@@ -1,11 +1,16 @@
 import "server-only";
 import { z } from "zod";
 import { sqlClient } from "./db";
-import { REALLOCATE_CREDIT_SQL, RELEASE_INVOICE_CREDIT_SQL } from "./season-billing-sql";
+import {
+  GENERATE_INVOICE_SQL,
+  REALLOCATE_CREDIT_SQL,
+  RELEASE_INVOICE_CREDIT_SQL,
+} from "./season-billing-sql";
 import { invoiceAmountMinor, roundUpToPlnMinor } from "./format-money";
 import {
   dueDateFor,
   playingDaysInPeriod,
+  nextDraftPeriod,
   seatCapGap,
   splitBetween,
   type SeatCapGap,
@@ -56,6 +61,8 @@ export type Invoice = {
   note: string;
   /** Hidden by an admin: not shown to the player, reminded or chased. */
   hiddenAt: string | null;
+  /** P4.1: created by the monthly cron, waiting for an admin to publish (also hidden). */
+  isDraft: boolean;
 };
 
 type InvoiceRow = {
@@ -77,6 +84,7 @@ type InvoiceRow = {
   declared_note: string;
   note: string;
   hidden_at?: string | Date | null;
+  is_draft?: boolean | null;
 };
 
 function toIso(v: string | Date | null): string | null {
@@ -116,6 +124,7 @@ function toInvoice(r: InvoiceRow): Invoice {
     declaredNote: String(r.declared_note ?? ""),
     note: String(r.note ?? ""),
     hiddenAt: toIso(r.hidden_at ?? null),
+    isDraft: Boolean(r.is_draft),
   };
 }
 
@@ -486,7 +495,7 @@ export async function setInvoiceHidden(invoiceId: number, hidden: boolean): Prom
     return;
   }
   await sqlClient.transaction([
-    sqlClient.query(`UPDATE season_invoices SET hidden_at = NULL WHERE id = $1::int`, [invoiceId]),
+    sqlClient.query(`UPDATE season_invoices SET hidden_at = NULL, is_draft = false WHERE id = $1::int`, [invoiceId]),
     ...reallocateCreditQueries(invoiceId),
   ]);
 }
@@ -567,10 +576,18 @@ export async function getSeatCapGap(
  * scans from any earlier match, which is what "deducted from the next bill"
  * means in practice.
  */
+/**
+ * Raise a month's invoices for every active subscriber (existing ones are
+ * skipped). With `draft` (P4.1, the monthly cron) they are created hidden,
+ * marked is_draft and without credit; publishDraftInvoices applies credit and
+ * shows them to players.
+ */
 export async function generateInvoices(
   seasonId: number,
   period: string,
+  opts: { draft?: boolean } = {},
 ): Promise<GenerateResult> {
+  const draft = Boolean(opts.draft);
   const seasonRows = (await sqlClient.query(
     `SELECT start_date, end_date, subscriber_cap, day_rate_minor, payment_due_day, split_mode,
             (SELECT COUNT(*) FROM season_subscriptions ss
@@ -613,69 +630,7 @@ export async function generateInvoices(
       // Credits are used in scan order only while they fit the bill; the rest
       // stays approved and comes off a later bill instead of being lost.
       // Locked before ranking (FOR UPDATE cannot sit next to a window function).
-      `WITH available_credit AS MATERIALIZED (
-         SELECT id, credit_minor
-           FROM multisport_scans
-          WHERE player_id = $2 AND status = 'approved'
-            AND applied_invoice_id IS NULL AND settled_at IS NULL
-          ORDER BY id
-          FOR UPDATE
-       ),
-       fitting_credit AS (
-         SELECT id, credit_minor
-           FROM (SELECT id, credit_minor,
-                        SUM(credit_minor) OVER (ORDER BY id) AS running
-                   FROM available_credit) ranked
-          WHERE running <= $9::int
-       ),
-       scan_credit AS (
-         SELECT COALESCE(SUM(credit_minor), 0)::int AS amount
-           FROM fitting_credit
-       ),
-       -- P2.1: replacement credits fill what the scans left, oldest first.
-       available_season_credit AS MATERIALIZED (
-         SELECT id, credit_minor
-           FROM season_credits
-          WHERE season_id = $1 AND player_id = $2
-            AND applied_invoice_id IS NULL AND settled_at IS NULL
-          ORDER BY id
-          FOR UPDATE
-       ),
-       fitting_season_credit AS (
-         SELECT r.id, r.credit_minor
-           FROM (SELECT id, credit_minor,
-                        SUM(credit_minor) OVER (ORDER BY id) AS running
-                   FROM available_season_credit) r, scan_credit
-          WHERE scan_credit.amount + r.running <= $9::int
-       ),
-       credit AS (
-         SELECT scan_credit.amount
-                + (SELECT COALESCE(SUM(credit_minor), 0) FROM fitting_season_credit)::int AS amount
-           FROM scan_credit
-       ),
-       inserted AS (
-         INSERT INTO season_invoices
-           (season_id, player_id, period, playing_days, day_rate_minor,
-            split_between, gross_minor, credit_minor, due_date)
-         SELECT $1, $2, $3, $4, $5, $6, $7, credit.amount, $8 FROM credit
-         ON CONFLICT (season_id, player_id, period) DO NOTHING
-         RETURNING id
-       ),
-       applied AS (
-         UPDATE multisport_scans
-            SET applied_invoice_id = (SELECT id FROM inserted)
-          WHERE id IN (SELECT id FROM fitting_credit)
-            AND EXISTS (SELECT 1 FROM inserted)
-         RETURNING id
-       ),
-       applied_season_credit AS (
-         UPDATE season_credits
-            SET applied_invoice_id = (SELECT id FROM inserted)
-          WHERE id IN (SELECT id FROM fitting_season_credit)
-            AND EXISTS (SELECT 1 FROM inserted)
-         RETURNING id
-       )
-       SELECT id FROM inserted`,
+      GENERATE_INVOICE_SQL,
       [
         seasonId,
         Number(subscriber.player_id),
@@ -686,6 +641,7 @@ export async function generateInvoices(
         gross,
         dueDate,
         roundUpToPlnMinor(gross),
+        draft,
       ],
     ),
   );
@@ -870,4 +826,48 @@ export async function getRoundingLedger(seasonId: number): Promise<{
     totalMinor: lines.reduce((sum, l) => sum + l.roundingMinor, 0),
     collectedMinor: lines.reduce((sum, l) => sum + l.collectedMinor, 0),
   };
+}
+
+/**
+ * P4.1: publish a month's draft invoices: show them to players and fit their
+ * credit (scans, then replacement credits), exactly as un-hiding does.
+ * Returns how many were published.
+ */
+export async function publishDraftInvoices(seasonId: number, period: string): Promise<number> {
+  const drafts = (await sqlClient.query(
+    `SELECT id FROM season_invoices WHERE season_id = $1 AND period = $2 AND is_draft = true ORDER BY id`,
+    [seasonId, period],
+  )) as Array<{ id: number }>;
+  for (const { id } of drafts) {
+    await sqlClient.transaction([
+      sqlClient.query(
+        `UPDATE season_invoices SET is_draft = false, hidden_at = NULL WHERE id = $1::int`,
+        [id],
+      ),
+      ...reallocateCreditQueries(Number(id)),
+    ]);
+  }
+  return drafts.length;
+}
+
+/**
+ * P4.1 (daily cron): from the 25th, draft next month's invoices for every
+ * active subscription season. Safe to re-run: existing invoices (drafts or
+ * published) are skipped. Returns what was created per season.
+ */
+export async function createMonthlyDraftInvoices(
+  today: string,
+): Promise<Array<{ seasonId: number; period: string; created: number }>> {
+  const seasons = (await sqlClient.query(
+    `SELECT id, start_date, end_date FROM seasons
+      WHERE subscription_enabled = true AND status = 'active'`,
+  )) as Array<{ id: number; start_date: string; end_date: string | null }>;
+  const out: Array<{ seasonId: number; period: string; created: number }> = [];
+  for (const s of seasons) {
+    const period = nextDraftPeriod(today, String(s.start_date), s.end_date == null ? null : String(s.end_date));
+    if (!period) continue;
+    const result = await generateInvoices(Number(s.id), period, { draft: true });
+    out.push({ seasonId: Number(s.id), period, created: result.created });
+  }
+  return out;
 }

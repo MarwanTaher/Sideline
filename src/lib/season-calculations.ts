@@ -130,3 +130,29 @@ export type SplitMode = "cap" | "active";
 export function splitBetween(mode: SplitMode, subscriberCap: number, activeSubscribers: number): number {
   return mode === "active" && activeSubscribers > 0 ? activeSubscribers : subscriberCap;
 }
+
+/** P4.1: day of the month (club time) from which next month's draft invoices are created. */
+export const DRAFT_INVOICE_DAY = 25;
+
+/**
+ * P4.1: the month to draft invoices for on `today` (YYYY-MM-DD, club time),
+ * or null. From the 25th, next month is drafted if it overlaps the contract
+ * (start date to end date, inclusive).
+ */
+export function nextDraftPeriod(
+  today: string,
+  startDate: string,
+  endDate: string | null,
+  draftDay = DRAFT_INVOICE_DAY,
+): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(today);
+  if (!m) return null;
+  if (Number(m[3]) < draftDay) return null;
+  const year = Number(m[1]) + (m[2] === "12" ? 1 : 0);
+  const month = m[2] === "12" ? 1 : Number(m[2]) + 1;
+  const period = `${year}-${String(month).padStart(2, "0")}`;
+  const lastDay = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+  if (startDate > lastDay) return null;
+  if (endDate != null && endDate < `${period}-01`) return null;
+  return period;
+}
