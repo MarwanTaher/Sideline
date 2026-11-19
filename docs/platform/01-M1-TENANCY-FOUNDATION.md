@@ -73,7 +73,7 @@ radius:
 | `0040_groups.sql` | `groups` table + seed |
 | `0041_group_id_roots.sql` | ✅ `group_id integer NOT NULL DEFAULT 1 REFERENCES groups` on root tables; `(group_id, id)` unique indexes; `app_settings` keyed by `(group_id, key)` with a transitional `(key)` index (§6). |
 | `0042_drop_admin_sessions.sql` | ✅ Drops the unused `admin_sessions` table. |
-| `0043_group_id_match_children.sql` | Match children. Add composite FKs `NOT VALID`, then `VALIDATE CONSTRAINT`. |
+| `0043_group_id_match_children.sql` | ✅ Match children: `group_id`, `(group_id,id)` on `match_guests`/`match_rounds`, 51 composite FKs via `sideline_add_group_fk()` (NOT VALID → VALIDATE; `SET NULL (col)` form, PG 15+). |
 | `0044_group_id_season_money.sql` | Season, money, and ledger tables (`dues`/`fund_entries` triggers from `0039` must copy `group_id`). |
 | `0045_group_id_social_identity.sql` | Player children and identity tables |
 | `0046_group_scoped_uniques.sql` | Per-group uniques and singletons (§6) |
@@ -196,7 +196,7 @@ manual, as today.
 1. ✅ Inventory script + this classification committed as a test fixture
 2. ✅ `0040` groups + `group-constants.ts` / `group-context.ts` (not applied to any database yet)
 3. ✅ `0041` roots + per-group `app_settings` key + all `app_settings` readers/writers; `0042` drops `admin_sessions`
-4. `0043` match children
+4. ✅ `0043` match children (+ `sideline_add_group_fk()` helper)
 5. `0044` season/money/ledger (+ trigger updates)
 6. `0045` social/identity
 7. `0046`/`0047` uniques + revision triggers + score-cache code

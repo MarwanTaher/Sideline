@@ -81,6 +81,7 @@ export const players = pgTable("players", {
 ]);
 
 export const voteAudit = pgTable("vote_audit", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "vote_audit_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	matchId: integer("match_id").notNull(),
 	voterId: integer("voter_id").notNull(),
@@ -114,6 +115,7 @@ export const voteAudit = pgTable("vote_audit", {
 ]);
 
 export const playerGoalsClaims = pgTable("player_goals_claims", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "player_goals_claims_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	matchId: integer("match_id").notNull(),
 	playerId: integer("player_id").notNull(),
@@ -199,6 +201,7 @@ export const playerKudos = pgTable("player_kudos", {
 ]);
 
 export const playerStatsSubmissions = pgTable("player_stats_submissions", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "player_stats_submissions_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	matchId: integer("match_id").notNull(),
 	playerId: integer("player_id").notNull(),
@@ -318,6 +321,7 @@ export const adminTabLocks = pgTable("admin_tab_locks", {
 ]);
 
 export const statsAudit = pgTable("stats_audit", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity({ name: "stats_audit_id_seq", startWith: 1, increment: 1, minValue: 1, maxValue: 2147483647, cache: 1 }),
 	matchId: integer("match_id").notNull(),
 	playerId: integer("player_id").notNull(),
@@ -382,6 +386,7 @@ export const awardOverrideAudit = pgTable("award_override_audit", {
 ]);
 
 export const matchPlayers = pgTable("match_players", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	matchId: integer("match_id").notNull(),
 	playerId: integer("player_id").notNull(),
 	teamNo: integer("team_no").notNull(),
@@ -402,6 +407,7 @@ export const matchPlayers = pgTable("match_players", {
 ]);
 
 export const payments = pgTable("payments", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	matchId: integer("match_id").notNull(),
 	playerId: integer("player_id").notNull(),
 	paid: integer().default(0).notNull(),
@@ -423,6 +429,7 @@ export const payments = pgTable("payments", {
 ]);
 
 export const matchAvailability = pgTable("match_availability", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	matchId: integer("match_id").notNull(),
 	playerId: integer("player_id").notNull(),
 	status: text().default('out').notNull(),
@@ -443,6 +450,7 @@ export const matchAvailability = pgTable("match_availability", {
 ]);
 
 export const voteSkips = pgTable("vote_skips", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	matchId: integer("match_id").notNull(),
 	voterId: integer("voter_id").notNull(),
 	skippedPlayerId: integer("skipped_player_id").notNull(),
@@ -467,6 +475,7 @@ export const voteSkips = pgTable("vote_skips", {
 ]);
 
 export const stats = pgTable("stats", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	matchId: integer("match_id").notNull(),
 	playerId: integer("player_id").notNull(),
 	goals: integer().default(0).notNull(),
@@ -503,6 +512,7 @@ export const legacyDefensiveStats = pgTable("legacy_defensive_stats", {
 ]);
 
 export const votes = pgTable("votes", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	matchId: integer("match_id").notNull(),
 	voterId: integer("voter_id").notNull(),
 	votedForId: integer("voted_for_id").notNull(),
@@ -559,6 +569,7 @@ export const pushPreferences = pgTable("push_preferences", {
 ]);
 
 export const matchGuests = pgTable("match_guests", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
 	hostPlayerId: integer("host_player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
@@ -672,6 +683,7 @@ export const seasonMatchOccurrences = pgTable("season_match_occurrences", {
 ]);
 
 export const matchWaitlist = pgTable("match_waitlist", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
 	position: bigint({ mode: "number" }).notNull(),
@@ -700,6 +712,7 @@ export const playerAchievements = pgTable("player_achievements", {
 ]);
 
 export const matchMotmVotes = pgTable("match_motm_votes", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
 	voterId: integer("voter_id").notNull().references(() => players.id, { onDelete: "cascade" }),
 	votedForId: integer("voted_for_id").notNull().references(() => players.id, { onDelete: "cascade" }),
@@ -710,6 +723,7 @@ export const matchMotmVotes = pgTable("match_motm_votes", {
 ]);
 
 export const matchReactions = pgTable("match_reactions", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
 	emoji: text().notNull(),
@@ -720,6 +734,7 @@ export const matchReactions = pgTable("match_reactions", {
 ]);
 
 export const matchRounds = pgTable("match_rounds", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
 	roundNo: integer("round_no").notNull(),
@@ -738,6 +753,7 @@ export const matchRounds = pgTable("match_rounds", {
 ]);
 
 export const matchScorekeepers = pgTable("match_scorekeepers", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).default(sql`now()`).notNull(),
@@ -747,6 +763,7 @@ export const matchScorekeepers = pgTable("match_scorekeepers", {
 ]);
 
 export const roundGoals = pgTable("round_goals", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	roundId: integer("round_id").notNull().references(() => matchRounds.id, { onDelete: "cascade" }),
 	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
@@ -803,6 +820,7 @@ export const seasonInvoices = pgTable("season_invoices", {
 ]);
 
 export const multisportScans = pgTable("multisport_scans", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
@@ -822,6 +840,7 @@ export const multisportScans = pgTable("multisport_scans", {
 ]);
 
 export const guestCharges = pgTable("guest_charges", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
 	playerId: integer("player_id").references(() => players.id, { onDelete: "cascade" }),
@@ -863,6 +882,7 @@ export const seasonCredits = pgTable("season_credits", {
 ]);
 
 export const matchdaySettlements = pgTable("matchday_settlements", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	matchId: integer("match_id").primaryKey().references(() => matches.id, { onDelete: "cascade" }),
 	expectedMinor: integer("expected_minor").notNull(),
 	paidMinor: integer("paid_minor").notNull(),
@@ -1003,6 +1023,7 @@ export const scoreCacheSnapshots = pgTable("score_cache_snapshots", {
 ]);
 
 export const predictions = pgTable("predictions", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	matchId: integer("match_id").notNull(),
 	playerId: integer("player_id").notNull(),
