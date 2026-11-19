@@ -530,7 +530,13 @@ later item touches the same code first. Tick them off here when removed.
 | P0.1 | Unused `fmtDate` import in `src/lib/payments.ts` (lint warning, older than P0.1) |
 | P0.3 | `sideline_generate_match` does not copy pot payment details; fine while automated matches are season-only, revisit if automation creates normal matches |
 | P0.5 | The admin Home unpaid-charges count in `getHomeAdminCounts` has no PGlite test; move its SQL to a `*-sql.ts` module and test it |
+| P1.1 | `listDues` reads season invoices regardless of `seasons.visible_to_players`; the old Home invoice to-do checked it. Fine while drafts use `hidden_at` (P4.1); add the check if a hidden season can have visible invoices |
+| P1.2 | The "Your session charges" box on Match ▸ Payments (P0.2) and `listPlayerCharges` overlap with My payments; fold them into a `dues` filter when P3.2 switches reads |
+| P1.2 | Session and replacement charges can't be declared by the player yet (no `declared` state on `guest_charges`); comes with the `dues` table in P3 |
+| P1.3 | The admin mobile tab bar (`admin-tabs-mobile.tsx`) has no Payments inbox tab (it's linked from Home and the desktop Admin nav) |
+| P1.3 | "Confirm all" marks dues paid one query per due; batch it once writes go through `dues` (P3.2) |
 | Status | Phase 0 accepted by the organiser on 2026-11-19 (tested locally) |
+| Status | Phase 1 implemented 2026-11-19, waiting for the organiser's review |
 
 ## Appendix — files involved
 
