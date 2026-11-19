@@ -4,7 +4,6 @@ import { z } from "zod";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import {
-  resetAllUnpaid,
   savePaymentDetails,
   savePaymentTotal,
   setPaid,
@@ -132,21 +131,6 @@ export async function toggleGuestPaidAction(
   }
 }
 
-export async function resetUnpaidAction(
-  _prev: PaymentActionState,
-  formData: FormData,
-): Promise<PaymentActionState> {
-  try {
-    await requireAdmin();
-    const matchId = matchIdSchema.parse(formData.get("matchId"));
-    await requireNormalMatch(matchId);
-    await resetAllUnpaid(matchId);
-    revalidatePath(`/matches/${matchId}/payments`);
-    return { ok: true, message: "All players marked unpaid for this match." };
-  } catch (err) {
-    return fail(err);
-  }
-}
 
 /** Admin: open or close self-service payments for a match. */
 export async function setPaymentsActiveAction(

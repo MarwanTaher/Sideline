@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import type { GuestCharge, MatchChargeContext } from "@/lib/season-fund";
 import { formatMinor } from "@/lib/format-money";
 import {
-  syncChargesAction,
   setExtendedAction,
   setChargePaidAction,
   setChargeKindAction,
@@ -28,12 +27,11 @@ export default function SessionCharges({
   subscribers: { playerId: number; name: string }[];
 }) {
   const router = useRouter();
-  const [genState, genAction, genPending] = useActionState(syncChargesAction, INITIAL);
   const [extState, extAction, extPending] = useActionState(setExtendedAction, INITIAL);
 
   useEffect(() => {
-    if (genState.ok || extState.ok) router.refresh();
-  }, [genState, extState, router]);
+    if (extState.ok) router.refresh();
+  }, [extState, router]);
 
   const extras = charges.filter((c) => c.kind === "extra");
   const collected = extras
@@ -90,26 +88,20 @@ export default function SessionCharges({
       ) : null}
 
       {context.uncharged > 0 || context.stale > 0 ? (
-        <form action={genAction} className="mt-3 flex flex-wrap items-center gap-2">
-          <input type="hidden" name="matchId" value={context.matchId} />
-          <Button type="submit" pending={genPending} pendingLabel="…">
-            Sync charges
-          </Button>
-          <span className="text-xs text-neutral-500">
-            {[
-              context.uncharged > 0
-                ? `${context.uncharged} player${context.uncharged === 1 ? "" : "s"} to charge`
-                : "",
-              context.stale > 0
-                ? `${context.stale} unpaid charge${context.stale === 1 ? "" : "s"} no longer playing`
-                : "",
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </span>
-        </form>
+        <p className="mt-3 text-xs text-neutral-500">
+          {[
+            context.uncharged > 0
+              ? `${context.uncharged} player${context.uncharged === 1 ? "" : "s"} still to charge`
+              : "",
+            context.stale > 0
+              ? `${context.stale} unpaid charge${context.stale === 1 ? "" : "s"} no longer playing`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          {" "}— charges are synced automatically when the matchday is closed.
+        </p>
       ) : null}
-      <FeedbackMessage ok={genState.ok} message={genState.message} className="mt-2" />
 
       {charges.length === 0 ? (
         <p className="mt-3 text-sm text-neutral-500">

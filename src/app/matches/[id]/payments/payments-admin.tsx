@@ -3,7 +3,6 @@
 import { useEffect, useState, useActionState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  resetUnpaidAction,
   saveDetailsAction,
   saveTotalAction,
   togglePaidAction,
@@ -252,44 +251,6 @@ function GuestPaidToggle({
   );
 }
 
-function ResetForm({ matchId }: { matchId: number }) {
-  const [state, action, pending] = useActionState(resetUnpaidAction, INITIAL);
-  const [confirm, setConfirm] = useState("");
-  useRefreshOnOk(state);
-  const confirmed = confirm.trim().toUpperCase() === "RESET";
-  return (
-    <form action={action} className="rounded-xl border border-red-500/30 p-4">
-      <input type="hidden" name="matchId" value={matchId} />
-      <p className="text-sm font-medium text-red-700 dark:text-red-300">
-        Reset all payments to unpaid
-      </p>
-      <p className="mt-0.5 text-xs text-neutral-500">
-        This clears every player&apos;s paid status for this match day. Type{" "}
-        <span className="font-mono font-semibold">RESET</span> to confirm.
-      </p>
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <input
-          type="text"
-          value={confirm}
-          onChange={(e) => setConfirm(e.target.value)}
-          placeholder="RESET"
-          autoComplete="off"
-          className="rounded-lg border border-black/15 bg-white px-3 py-2 text-sm dark:border-white/15 dark:bg-neutral-900"
-        />
-        <Button
-          type="submit"
-          variant="danger"
-          disabled={!confirmed}
-          pending={pending}
-          pendingLabel="Resetting…"
-        >
-          Reset all to unpaid
-        </Button>
-      </div>
-      <FeedbackMessage ok={state.ok} message={state.message} className="mt-2" />
-    </form>
-  );
-}
 
 function Metric({ label, value }: { label: string; value: string | number }) {
   return (
@@ -431,9 +392,6 @@ export function PaymentsAdmin({
               ? ` · +${money(summary.changeCollected)} extra from rounding`
               : ""}
           </p>
-          <div className="mt-3">
-            <ResetForm matchId={selectedMatchId} />
-          </div>
         </div>
       )}
     </div>

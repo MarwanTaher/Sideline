@@ -1,5 +1,4 @@
 import { sqlClient } from "@/lib/db";
-import { fmtDate } from "@/lib/matches";
 import { normCurrency, type PaymentCurrency } from "@/lib/currency";
 import { FINALIZE_SHARE_SQL, POT_STATE_SQL, SEASON_MATCH_SQL } from "@/lib/payments-sql";
 
@@ -286,12 +285,6 @@ export async function setPlayerAndGuestsPaid(
   ]);
 }
 
-export async function resetAllUnpaid(matchId: number): Promise<void> {
-  await sqlClient.query(
-    `UPDATE payments SET paid = 0, updated_at = CURRENT_TIMESTAMP WHERE match_id = $1`,
-    [matchId],
-  );
-}
 
 /** Open or close self-service payments for a match (players see it on their tab). */
 export async function setPaymentsActive(matchId: number, active: boolean): Promise<void> {

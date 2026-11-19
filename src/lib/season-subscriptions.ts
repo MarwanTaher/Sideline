@@ -96,22 +96,6 @@ export async function getSubscriptionSeasonForMatch(
   return rows.length > 0 ? toSeason(rows[0]) : null;
 }
 
-/** The subscription season covering a date, for defaulting the match form. */
-export async function getSubscriptionSeasonForDate(
-  playedOn: string,
-): Promise<SubscriptionSeason | null> {
-  const rows = (await sqlClient.query(
-    `SELECT ${SEASON_COLUMNS} FROM seasons
-      WHERE subscription_enabled = true
-        AND status = 'active'
-        AND start_date <= $1
-        AND (end_date IS NULL OR end_date >= $1)
-      ORDER BY start_date DESC
-      LIMIT 1`,
-    [playedOn],
-  )) as SeasonRow[];
-  return rows.length > 0 ? toSeason(rows[0]) : null;
-}
 
 /** The subscription season currently open for sign-up or under way. */
 export async function getActiveSubscriptionSeason(): Promise<SubscriptionSeason | null> {
