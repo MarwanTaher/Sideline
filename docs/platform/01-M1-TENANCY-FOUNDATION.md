@@ -74,7 +74,7 @@ radius:
 | `0041_group_id_roots.sql` | ✅ `group_id integer NOT NULL DEFAULT 1 REFERENCES groups` on root tables; `(group_id, id)` unique indexes; `app_settings` keyed by `(group_id, key)` with a transitional `(key)` index (§6). |
 | `0042_drop_admin_sessions.sql` | ✅ Drops the unused `admin_sessions` table. |
 | `0043_group_id_match_children.sql` | ✅ Match children: `group_id`, `(group_id,id)` on `match_guests`/`match_rounds`, 51 composite FKs via `sideline_add_group_fk()` (NOT VALID → VALIDATE; `SET NULL (col)` form, PG 15+). |
-| `0044_group_id_season_money.sql` | Season, money, and ledger tables (`dues`/`fund_entries` triggers from `0039` must copy `group_id`). |
+| `0044_group_id_season_money.sql` | ✅ Season, money, and ledger tables; 27 composite FKs (helper gains `parent_col` + RESTRICT); `sideline_dues_source` / `sideline_fund_source` and both sync functions carry `group_id` from the source row. |
 | `0045_group_id_social_identity.sql` | Player children and identity tables |
 | `0046_group_scoped_uniques.sql` | Per-group uniques and singletons (§6) |
 | `0047_group_aware_triggers.sql` | Revision triggers and functions (§7) |
@@ -114,8 +114,8 @@ before it. Apply `0041` before deploying the M1.2 code.
 - **Score revision** (`0031`). Today it increments `score_cache_state` where `id = 1`. After the
   change, it increments the row for `COALESCE(NEW.group_id, OLD.group_id)`. The
   `app_settings` branch only fires for that group's scoring keys.
-- **Ledger triggers** (`0039`). `dues` and `fund_entries` rows inherit `group_id` from the
-  source row.
+- **Ledger triggers** (`0039`). ✅ `dues` and `fund_entries` rows inherit `group_id` from the
+  source row (0044).
 - **Automation and capacity functions** (`0037`). `sideline_public_signup_open` and the capacity
   and queue functions already lock by match/season; they keep the group from the match row.
   Leave the `'Europe/Warsaw'` literals alone in M1; M4 replaces them.
@@ -197,7 +197,7 @@ manual, as today.
 2. ✅ `0040` groups + `group-constants.ts` / `group-context.ts` (not applied to any database yet)
 3. ✅ `0041` roots + per-group `app_settings` key + all `app_settings` readers/writers; `0042` drops `admin_sessions`
 4. ✅ `0043` match children (+ `sideline_add_group_fk()` helper)
-5. `0044` season/money/ledger (+ trigger updates)
+5. ✅ `0044` season/money/ledger (+ ledger view/function updates)
 6. `0045` social/identity
 7. `0046`/`0047` uniques + revision triggers + score-cache code
 8. RLS spike report (a markdown write-up in this folder; no production change)

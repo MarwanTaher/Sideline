@@ -625,6 +625,7 @@ export const seasons = pgTable("seasons", {
 ]);
 
 export const seasonMatchAutomation = pgTable("season_match_automation", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	seasonId: integer("season_id").primaryKey().references(() => seasons.id, { onDelete: "restrict" }),
 	enabled: boolean().default(false).notNull(),
 	activatedAt: timestamp("activated_at", { withTimezone: true, mode: "string" }),
@@ -662,6 +663,7 @@ export const seasonMatchAutomation = pgTable("season_match_automation", {
 ]);
 
 export const seasonMatchOccurrences = pgTable("season_match_occurrences", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	seasonId: integer("season_id").notNull().references(() => seasonMatchAutomation.seasonId, { onDelete: "restrict" }),
 	localDate: date("local_date").notNull(),
@@ -690,6 +692,7 @@ export const matchWaitlist = pgTable("match_waitlist", {
 }, (table) => [primaryKey({ columns: [table.matchId, table.playerId] }), index("match_waitlist_order").on(table.matchId, table.position, table.playerId)]);
 
 export const matchAutomationAudit = pgTable("match_automation_audit", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	seasonId: integer("season_id").notNull().references(() => seasons.id, { onDelete: "restrict" }),
 	matchId: integer("match_id").references(() => matches.id, { onDelete: "set null" }),
@@ -780,6 +783,7 @@ export const roundGoals = pgTable("round_goals", {
 ]);
 
 export const seasonSubscriptions = pgTable("season_subscriptions", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	seasonId: integer("season_id").notNull().references(() => seasons.id, { onDelete: "cascade" }),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
@@ -797,6 +801,7 @@ export const seasonSubscriptions = pgTable("season_subscriptions", {
 ]);
 
 export const seasonInvoices = pgTable("season_invoices", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	seasonId: integer("season_id").notNull().references(() => seasons.id, { onDelete: "cascade" }),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
@@ -862,6 +867,7 @@ export const guestCharges = pgTable("guest_charges", {
 ]);
 
 export const seasonCredits = pgTable("season_credits", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	seasonId: integer("season_id").notNull().references(() => seasons.id, { onDelete: "cascade" }),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
@@ -898,6 +904,7 @@ export const matchdaySettlements = pgTable("matchday_settlements", {
 
 /** 0039: every amount someone owes, kept in sync by triggers (sideline_dues_source). */
 export const dues = pgTable("dues", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	dueKey: text("due_key").primaryKey(),
 	source: text().notNull(),
 	sourceId: integer("source_id").notNull(),
@@ -928,6 +935,7 @@ export const dues = pgTable("dues", {
 
 /** 0039: one row per group-fund money event, kept in sync by triggers (sideline_fund_source). */
 export const fundEntries = pgTable("fund_entries", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	entryKey: text("entry_key").primaryKey(),
 	seasonId: integer("season_id").notNull().references(() => seasons.id, { onDelete: "cascade" }),
 	kind: text().notNull(),
@@ -942,6 +950,7 @@ export const fundEntries = pgTable("fund_entries", {
 ]);
 
 export const fundAdjustments = pgTable("fund_adjustments", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	seasonId: integer("season_id").notNull().references(() => seasons.id, { onDelete: "cascade" }),
 	amountMinor: integer("amount_minor").notNull(),
@@ -1047,6 +1056,7 @@ export const predictions = pgTable("predictions", {
 ]);
 
 export const seatOffers = pgTable("seat_offers", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	id: integer().primaryKey().generatedByDefaultAsIdentity(),
 	matchId: integer("match_id").notNull().references(() => matches.id, { onDelete: "cascade" }),
 	subscriberId: integer("subscriber_id").notNull().references(() => players.id, { onDelete: "cascade" }),
@@ -1064,6 +1074,7 @@ export const seatOffers = pgTable("seat_offers", {
 ]);
 
 export const seatOfferRequests = pgTable("seat_offer_requests", {
+	groupId: integer("group_id").default(1).notNull().references(() => groups.id),
 	offerId: integer("offer_id").notNull().references(() => seatOffers.id, { onDelete: "cascade" }),
 	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
