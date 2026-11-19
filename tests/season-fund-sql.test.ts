@@ -13,7 +13,9 @@ async function fixture(): Promise<PGlite> {
     CREATE TABLE match_guests(id integer PRIMARY KEY, match_id integer, name text, host_player_id integer);
     CREATE TABLE guest_charges(
       id integer PRIMARY KEY, match_id integer, player_id integer, guest_id integer,
-      amount_minor integer, kind text, owed_to_player_id integer, paid_at timestamptz);
+      amount_minor integer, kind text, owed_to_player_id integer, paid_at timestamptz,
+      scan_credit_minor integer DEFAULT 0, scan_refunded_at timestamptz);
+    CREATE TABLE multisport_scans(match_id integer, player_id integer, settled_at timestamptz, settled_as text);
     INSERT INTO players VALUES (1, 'Adam'), (2, 'Ben'), (3, 'Cara');
     INSERT INTO matches VALUES (10, '2026-11-16'), (11, '2026-11-23');
     INSERT INTO match_guests VALUES

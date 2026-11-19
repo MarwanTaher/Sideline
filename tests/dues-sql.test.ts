@@ -29,7 +29,7 @@ async function fixture(): Promise<PGlite> {
       paid_at timestamptz, declared_paid_at timestamptz, hidden_at timestamptz);
     CREATE TABLE guest_charges(id integer PRIMARY KEY, match_id integer, player_id integer,
       guest_id integer, amount_minor integer, kind text, owed_to_player_id integer,
-      paid_at timestamptz);
+      paid_at timestamptz, scan_credit_minor integer DEFAULT 0);
 
     INSERT INTO players VALUES (1, 'Adam'), (2, 'Ben'), (3, 'Cara');
     INSERT INTO seasons VALUES (1, true, NULL);
