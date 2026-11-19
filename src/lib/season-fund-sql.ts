@@ -44,3 +44,25 @@ export const DELETE_STALE_CHARGES_SQL = `
        OR (gc.guest_id IS NOT NULL AND NOT (gc.guest_id = ANY($3::int[])))
      )
   RETURNING gc.id`;
+
+/**
+ * Group fund balance parts for a season (`$1` = season id). Derived from the
+ * rows, never stored. Extensions use the cost snapshotted when confirmed
+ * (`matches.extension_cost_minor`, 0038); matches confirmed before that
+ * column existed fall back to the season's current rate.
+ */
+export const FUND_BALANCE_SQL = `SELECT
+   (SELECT COALESCE(SUM(CASE WHEN paid_at IS NOT NULL
+             THEN (CEIL(gross_minor::numeric / 100) * 100) - gross_minor ELSE 0 END), 0)
+      FROM season_invoices WHERE season_id = $1)::int AS rounding,
+   (SELECT COALESCE(SUM(CASE WHEN gc.paid_at IS NOT NULL THEN gc.amount_minor ELSE 0 END), 0)
+      FROM guest_charges gc JOIN matches m ON m.id = gc.match_id
+     WHERE gc.kind = 'extra' AND m.season_id = $1)::int AS fees_paid,
+   (SELECT COALESCE(SUM(CASE WHEN gc.paid_at IS NULL THEN gc.amount_minor ELSE 0 END), 0)
+      FROM guest_charges gc JOIN matches m ON m.id = gc.match_id
+     WHERE gc.kind = 'extra' AND m.season_id = $1)::int AS fees_outstanding,
+   (SELECT COALESCE(SUM(COALESCE(m.extension_cost_minor, s.extension_cost_minor)), 0)
+      FROM matches m JOIN seasons s ON s.id = m.season_id
+     WHERE m.extended = true AND m.season_id = $1)::int AS extensions,
+   (SELECT COALESCE(SUM(amount_minor), 0)
+      FROM fund_adjustments WHERE season_id = $1)::int AS adjustments`;

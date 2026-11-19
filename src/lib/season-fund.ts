@@ -1,7 +1,11 @@
 import "server-only";
 import { sqlClient } from "./db";
 import { getSubscriptionSeasonForMatch, listSubscribers } from "./season-subscriptions";
-import { DELETE_STALE_CHARGES_SQL, PLAYER_CHARGES_SQL } from "./season-fund-sql";
+import {
+  DELETE_STALE_CHARGES_SQL,
+  FUND_BALANCE_SQL,
+  PLAYER_CHARGES_SQL,
+} from "./season-fund-sql";
 
 /**
  * Session charges for non-core players, and the group fund they feed.
@@ -128,9 +132,10 @@ export async function getMatchChargeContext(
 
   const metaRows = (await sqlClient.query(
     `SELECT COALESCE(m.extended, false) AS extended, sideline_squad_count(m.id) AS squad_count,
-      m.extension_threshold,m.base_minutes,m.extension_minutes FROM matches m WHERE m.id = $1`,
+      m.extension_threshold,m.base_minutes,m.extension_minutes,m.extension_cost_minor
+      FROM matches m WHERE m.id = $1`,
     [matchId],
-  )) as Array<{ extended: boolean; squad_count: number; extension_threshold: number | null; base_minutes: number; extension_minutes: number }>;
+  )) as Array<{ extended: boolean; squad_count: number; extension_threshold: number | null; base_minutes: number; extension_minutes: number; extension_cost_minor: number | null }>;
   const meta = metaRows[0];
   if (!meta) return null;
 
@@ -166,7 +171,11 @@ export async function getMatchChargeContext(
     matchId,
     extended: Boolean(meta.extended),
     guestRateMinor: Number(s?.guest_rate_minor ?? 3600),
-    extensionCostMinor: Number(s?.extension_cost_minor ?? 10000),
+    // Once confirmed, the match keeps that day's price (P2.4).
+    extensionCostMinor:
+      meta.extended && meta.extension_cost_minor != null
+        ? Number(meta.extension_cost_minor)
+        : Number(s?.extension_cost_minor ?? 10000),
     extensionMinExtra: Number(s?.extension_min_extra ?? 4),
     uncharged,
     stale,
@@ -344,21 +353,7 @@ export async function getFundBalance(seasonId: number): Promise<FundBalance> {
   // One round trip rather than four: the Neon HTTP driver has no connection to
   // reuse, so each separate query costs a full request.
   const rows = (await sqlClient.query(
-    `SELECT
-       (SELECT COALESCE(SUM(CASE WHEN paid_at IS NOT NULL
-                 THEN (CEIL(gross_minor::numeric / 100) * 100) - gross_minor ELSE 0 END), 0)
-          FROM season_invoices WHERE season_id = $1)::int AS rounding,
-       (SELECT COALESCE(SUM(CASE WHEN gc.paid_at IS NOT NULL THEN gc.amount_minor ELSE 0 END), 0)
-          FROM guest_charges gc JOIN matches m ON m.id = gc.match_id
-         WHERE gc.kind = 'extra' AND m.season_id = $1)::int AS fees_paid,
-       (SELECT COALESCE(SUM(CASE WHEN gc.paid_at IS NULL THEN gc.amount_minor ELSE 0 END), 0)
-          FROM guest_charges gc JOIN matches m ON m.id = gc.match_id
-         WHERE gc.kind = 'extra' AND m.season_id = $1)::int AS fees_outstanding,
-       (SELECT COALESCE(COUNT(*) * MAX(s.extension_cost_minor), 0)
-          FROM matches m JOIN seasons s ON s.id = $1
-         WHERE m.extended = true AND m.season_id = $1)::int AS extensions,
-       (SELECT COALESCE(SUM(amount_minor), 0)
-          FROM fund_adjustments WHERE season_id = $1)::int AS adjustments`,
+    FUND_BALANCE_SQL,
     [seasonId],
   )) as Array<{
     rounding: number;

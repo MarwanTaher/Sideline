@@ -87,3 +87,26 @@ test("sync charges: removes only unpaid charges that no longer apply", async () 
     await db.close();
   }
 });
+
+test("fund balance: extensions use the snapshotted cost, falling back to the rate", async () => {
+  const { FUND_BALANCE_SQL } = await import("../src/lib/season-fund-sql");
+  const db = new PGlite();
+  try {
+    await db.exec(`
+      CREATE TABLE seasons(id integer PRIMARY KEY, extension_cost_minor integer);
+      CREATE TABLE matches(id integer PRIMARY KEY, season_id integer, extended boolean, extension_cost_minor integer);
+      CREATE TABLE season_invoices(season_id integer, gross_minor integer, paid_at timestamptz);
+      CREATE TABLE guest_charges(match_id integer, kind text, amount_minor integer, scan_credit_minor integer DEFAULT 0, paid_at timestamptz);
+      CREATE TABLE fund_adjustments(season_id integer, amount_minor integer);
+      INSERT INTO seasons VALUES (1, 12000);
+      INSERT INTO matches VALUES
+        (1, 1, true, 10000),   -- confirmed at the old 100 PLN rate
+        (2, 1, true, NULL),    -- confirmed before 0038: current rate
+        (3, 1, false, NULL);
+    `);
+    const r = (await db.query<{ extensions: number }>(FUND_BALANCE_SQL, [1])).rows[0];
+    assert.equal(r.extensions, 22000);
+  } finally {
+    await db.close();
+  }
+});
