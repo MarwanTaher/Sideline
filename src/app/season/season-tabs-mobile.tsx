@@ -49,7 +49,8 @@ function HomeIcon({ className }: IconProps) {
 
 const TABS = [
   { key: "", label: "Overview", href: "/season", Icon: OverviewIcon },
-  { key: "payments", label: "Payments", href: "/season?tab=payments", Icon: PaymentsIcon },
+  // Season bills are on the one Payments page.
+  { key: "payments", label: "Payments", href: "/payments", Icon: PaymentsIcon },
   { key: "multisport", label: "MultiSport", href: "/season?tab=multisport", Icon: CardIcon },
   { key: "fund", label: "Fund", href: "/season?tab=fund", Icon: FundIcon },
 ] as const;

@@ -366,6 +366,8 @@ export interface PlayerPaymentMatch {
   payLink: string;
   totalPayment: number;
   share: number;
+  /** P2.5: the admin fixed the share ("Finalize cost"). */
+  finalShare: boolean;
   currency: PaymentCurrency;
   /** The viewer's name, for a transfer reference the admin can match. */
   playerName: string;
@@ -413,6 +415,7 @@ async function buildPlayerPaymentMatch(
     payLink: meta.payLink,
     totalPayment: meta.totalPayment,
     share: summary.sharePerPlayer,
+    finalShare: meta.finalShare != null,
     currency: meta.currency,
     playerName: String(nameRows[0]?.name ?? ""),
     inRoster: Boolean(mine),

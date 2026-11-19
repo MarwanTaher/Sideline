@@ -79,7 +79,7 @@ export async function sendSeasonPaymentReminders(
         {
           title,
           body,
-          url: "/season?tab=payments",
+          url: "/payments",
           tag: `season-invoice-reminder-${daysBeforeDue}-${daysBeforeDue === 0 ? dates.today : dates.threeDays}`,
         },
         { playerIds },
@@ -117,7 +117,7 @@ export async function sendSeasonInvoiceReminder(invoiceId: number): Promise<bool
     {
       title: "Season payment reminder",
       body: `${invoice.period} invoice · ${formatMinor(amount)} is still outstanding.`,
-      url: "/season?tab=payments",
+      url: "/payments",
       tag: `season-invoice-manual-${invoice.id}`,
     },
     { playerIds: [Number(invoice.player_id)] },

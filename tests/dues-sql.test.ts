@@ -170,3 +170,23 @@ test("home admin counts come from the ledger", async () => {
     await db.close();
   }
 });
+
+test("groupDuesByPayee: season account, match pot, direct subscriber", async () => {
+  const { groupDuesByPayee } = await import("../src/lib/dues-summary");
+  const base = {
+    sourceId: 1, payerPlayerId: 2, payerName: "Ben", guestName: null, payeePlayerId: null, payeeName: null,
+    matchId: null, playedOn: null, seasonId: null, period: null, currency: "PLN", status: "open" as const,
+    declaredAt: null, confirmedAt: null, dueOn: "2026-11-03",
+  };
+  const groups = groupDuesByPayee([
+    { ...base, key: "invoice:1", source: "season_invoice", payee: "group", seasonId: 1, amountMinor: 14300 },
+    { ...base, key: "share:10:p2", source: "match_share", payee: "group", matchId: 10, amountMinor: 3400 },
+    { ...base, key: "charge:1", source: "session_fee", payee: "group", seasonId: 1, matchId: 12, amountMinor: 3600 },
+    { ...base, key: "charge:2", source: "replacement", payee: "player", payeePlayerId: 1, payeeName: "Adam", seasonId: 1, matchId: 12, amountMinor: 3600 },
+  ]);
+  assert.deepEqual(groups.map((g) => [g.id, g.dues.map((d) => d.key), g.owedByCurrency.PLN]), [
+    ["season:1", ["invoice:1", "charge:1"], 17900],
+    ["match:10", ["share:10:p2"], 3400],
+    ["direct:1", ["charge:2"], 3600],
+  ]);
+});

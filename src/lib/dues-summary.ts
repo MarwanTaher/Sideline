@@ -194,3 +194,48 @@ export function parseDueKey(key: string): DueRef | null {
   }
   return null;
 }
+
+export type PayeeGroup = {
+  /** "season:3", "match:41" or "direct:7". */
+  id: string;
+  kind: "season" | "match" | "direct";
+  seasonId: number | null;
+  matchId: number | null;
+  payeePlayerId: number | null;
+  payeeName: string | null;
+  dues: Due[];
+  owedByCurrency: Record<string, number>;
+};
+
+/**
+ * Group dues by where the money goes, so My payments shows one payment per
+ * payee: a season's group account (bills, session fees, new-rules
+ * replacements), a normal match's pot, or a subscriber paid directly
+ * (old-rules replacements). Order follows the first (earliest) due.
+ */
+export function groupDuesByPayee(dues: Due[]): PayeeGroup[] {
+  const groups = new Map<string, PayeeGroup>();
+  for (const d of dues) {
+    const kind: PayeeGroup["kind"] =
+      d.source === "match_share" ? "match" : d.payee === "player" ? "direct" : "season";
+    const id =
+      kind === "match" ? `match:${d.matchId}` : kind === "direct" ? `direct:${d.payeePlayerId}` : `season:${d.seasonId ?? 0}`;
+    let g = groups.get(id);
+    if (!g) {
+      g = {
+        id,
+        kind,
+        seasonId: kind === "season" ? d.seasonId : null,
+        matchId: kind === "match" ? d.matchId : null,
+        payeePlayerId: kind === "direct" ? d.payeePlayerId : null,
+        payeeName: kind === "direct" ? d.payeeName : null,
+        dues: [],
+        owedByCurrency: {},
+      };
+      groups.set(id, g);
+    }
+    g.dues.push(d);
+    g.owedByCurrency[d.currency] = (g.owedByCurrency[d.currency] ?? 0) + d.amountMinor;
+  }
+  return [...groups.values()];
+}

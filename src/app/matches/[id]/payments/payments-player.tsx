@@ -144,25 +144,7 @@ function MatchCard({ m, showHeader }: { m: PlayerPaymentMatch; showHeader: boole
   );
 }
 
-export function PaymentsPlayer({ matches }: { matches: PlayerPaymentMatch[] }) {
-  if (matches.length === 0) {
-    return (
-      <p className="mt-6 rounded-xl border border-black/10 p-4 text-sm text-neutral-500 dark:border-white/10">
-        No open payments right now. When an admin opens payments for a match you played
-        in, your share will appear here.
-      </p>
-    );
-  }
-  return (
-    <div className="mt-6 space-y-8">
-      {matches.map((m) => (
-        <MatchCard key={m.matchId} m={m} showHeader />
-      ))}
-    </div>
-  );
-}
-
-/** Single-match variant used inside a match's Payments tab. */
+/** One match's pot, used on the player's Payments page. */
 export function PaymentsPlayerMatch({ match }: { match: PlayerPaymentMatch }) {
   return (
     <div className="mt-4">

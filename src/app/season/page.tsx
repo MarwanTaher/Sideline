@@ -11,8 +11,7 @@ import {
 } from "@/lib/season-subscriptions";
 import { Avatar } from "@/components/ui/avatar";
 import { SectionIcon } from "@/components/section-icon";
-import { listPlayerInvoices, getPaymentDetails } from "@/lib/season-billing";
-import { listPlayerScans, uncreditedTotalMinor } from "@/lib/multisport";
+import { listPlayerScans } from "@/lib/multisport";
 import { getFundBalance } from "@/lib/season-fund";
 import { newRulesSql } from "@/lib/season-fund-sql";
 import { formatMinor } from "@/lib/format-money";
@@ -25,7 +24,6 @@ import {
   WithdrawButton,
 } from "./subscription-controls";
 import { MultisportReporter } from "./billing-panels";
-import PaymentsTab from "./payments-tab";
 import SeasonTabsMobile from "./season-tabs-mobile";
 import AutomationPanel from "./automation-panel";
 import { getAutomation, listAutomationOccurrences, getAutomationAudit } from "@/lib/match-automation";
@@ -46,6 +44,8 @@ export default async function SeasonPage({
   if (!session?.user) redirect("/login");
 
   const { tab } = await searchParams;
+  // Season bills live on the one Payments page with every other payment.
+  if (tab === "payments") redirect("/payments");
 
   const season = await getActiveSubscriptionSeason();
   if (!season) {
@@ -79,7 +79,7 @@ export default async function SeasonPage({
   const pid = playerId == null ? null : Number(playerId);
   const activeTab =
     tab === "automation" && isAdmin ? "automation" :
-      tab === "payments" || tab === "multisport" || tab === "fund" ? tab : "overview";
+      tab === "multisport" || tab === "fund" ? tab : "overview";
   const automationData = activeTab === "automation" ? await Promise.all([
     getAutomation(season.id), listAutomationOccurrences(season.id), getAutomationAudit(season.id),
     getSeasonRates(season.id), getSeasonGoLiveChecklist(season.id), listSubscribers(season.id),
@@ -87,15 +87,11 @@ export default async function SeasonPage({
 
   const mine = pid == null ? null : await getSubscription(season.id, pid);
   const isSubscriber = mine?.status === "active";
-  const forMe = isSubscriber && pid != null;
 
   // Each tab fetches only what it renders. Loading every tab's data on every
   // tab made switching feel like a page load.
   const [
     subscribers,
-    invoices,
-    paymentDetails,
-    uncredited,
     scans,
     playedRows,
     fund,
@@ -103,21 +99,6 @@ export default async function SeasonPage({
   ] =
     await Promise.all([
       activeTab === "overview" ? listSubscribers(season.id) : Promise.resolve([]),
-      activeTab === "payments" && forMe
-        ? listPlayerInvoices(season.id, pid)
-        : Promise.resolve([]),
-      activeTab === "payments"
-        ? getPaymentDetails(season.id)
-        : Promise.resolve({
-            paymentName: "",
-            paymentAccount: "",
-            paymentMethod: "",
-            paymentNote: "",
-            payLink: "",
-          }),
-      activeTab === "payments" && forMe
-        ? uncreditedTotalMinor(pid)
-        : Promise.resolve(0),
       activeTab === "multisport" && pid != null ? listPlayerScans(pid) : Promise.resolve([]),
       // Core players can report every match; non-core players only matches
       // under the new rules, where a scan comes off that session's fee (P2.2).
@@ -162,7 +143,7 @@ export default async function SeasonPage({
 
   const sectionItems = [
     { href: "/season", label: "Overview" },
-    { href: "/season?tab=payments", label: "Payments" },
+    { href: "/payments", label: "Payments" },
     { href: "/season?tab=multisport", label: "MultiSport" },
     { href: "/season?tab=fund", label: "Group fund" },
     ...(isAdmin ? [{ href: "/season?tab=automation", label: "Automation" }] : []),
@@ -207,22 +188,6 @@ export default async function SeasonPage({
           config={automationData[0]} occurrences={automationData[1]} audit={automationData[2]}
           baseRate={automationData[3]?.dayRateMinor ?? 0} extensionRate={automationData[3]?.extensionCostMinor ?? 0}
           ready={automationData[4]?.complete === true} isSuper={session.user.role === "super"} serverNow={new Date().getTime()} />
-      ) : tab === "payments" ? (
-        isSubscriber && pid != null ? (
-          <div className="mt-5">
-            <PaymentsTab
-              seasonId={season.id}
-              invoices={invoices}
-              details={paymentDetails}
-              playerName={session.user.name ?? "Player"}
-              uncreditedMinor={uncredited}
-            />
-          </div>
-        ) : (
-          <p className="mt-5 rounded-xl bg-neutral-50 px-4 py-6 text-sm text-neutral-500 dark:bg-neutral-900">
-            Subscription bills apply to the core group only.
-          </p>
-        )
       ) : tab === "multisport" ? (
         <section className="mt-5 rounded-2xl border border-black/10 p-5 dark:border-white/10">
           <h2 className="text-xs font-semibold uppercase tracking-widest text-neutral-500">
