@@ -187,3 +187,21 @@ export const APPLY_SCANS_TO_CHARGES_SQL = `
   UPDATE multisport_scans ms SET settled_at = CURRENT_TIMESTAMP, settled_as = 'fee'
     FROM eligible e WHERE ms.id = e.scan_id
   RETURNING ms.id`;
+
+/**
+ * P3.3: the fund from the ledger (`fund_entries`, 0039), per kind, `$1` =
+ * season id. The balance is the sum; FUND_BALANCE_SQL is kept to reconcile.
+ */
+export const FUND_LEDGER_SQL = `SELECT
+   COALESCE(SUM(amount_minor) FILTER (WHERE kind = 'rounding'), 0)::int AS rounding,
+   COALESCE(SUM(amount_minor) FILTER (WHERE kind = 'session_fee'), 0)::int AS fees_paid,
+   COALESCE(-SUM(amount_minor) FILTER (WHERE kind = 'extension'), 0)::int AS extensions,
+   COALESCE(SUM(amount_minor) FILTER (WHERE kind = 'adjustment'), 0)::int AS adjustments,
+   COALESCE(SUM(amount_minor) FILTER (WHERE kind = 'facility_payment'), 0)::int AS facility_difference,
+   COALESCE(SUM(amount_minor), 0)::int AS balance
+  FROM fund_entries WHERE season_id = $1`;
+
+/** P3.3: newest fund entries first (`$1` season, `$2` limit). */
+export const FUND_ENTRIES_SQL = `SELECT entry_key, kind, amount_minor, occurred_at::text AS occurred_at, match_id, note
+  FROM fund_entries WHERE season_id = $1
+ ORDER BY occurred_at DESC, entry_key LIMIT $2`;

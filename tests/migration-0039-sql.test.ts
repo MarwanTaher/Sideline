@@ -191,3 +191,22 @@ test("0039 deleting a match cascades its dues", async () => {
     await db.close();
   }
 });
+
+test("fund ledger query: per-kind totals and balance match the entries", async () => {
+  const { FUND_LEDGER_SQL } = await import("../src/lib/season-fund-sql");
+  const db = new PGlite();
+  try {
+    await db.exec(BEFORE_0039);
+    await migrate(db);
+    await db.exec(`
+      UPDATE guest_charges SET paid_at = now() WHERE id = 1;
+      UPDATE matches SET extended = true, extension_cost_minor = 10000 WHERE id = 20;
+      INSERT INTO fund_adjustments(season_id, amount_minor, note) VALUES (1, 500, 'Gift');
+    `);
+    const r = (await db.query<Record<string, number>>(FUND_LEDGER_SQL, [1])).rows[0];
+    assert.deepEqual(r, { rounding: 0, fees_paid: 3600, extensions: 10000, adjustments: 500,
+      facility_difference: 0, balance: -5900 });
+  } finally {
+    await db.close();
+  }
+});

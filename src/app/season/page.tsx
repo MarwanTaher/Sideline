@@ -146,6 +146,7 @@ export default async function SeasonPage({
             adjustmentsMinor: 0,
             facilityDifferenceMinor: 0,
             balanceMinor: 0,
+            derivedBalanceMinor: 0,
           }),
       activeTab === "overview" && pid != null
         ? getSeasonWaitlistPosition(season.id, pid)

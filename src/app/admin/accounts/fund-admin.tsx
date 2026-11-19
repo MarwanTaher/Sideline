@@ -2,7 +2,8 @@
 
 import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import type { FundBalance, FundAdjustment } from "@/lib/season-fund";
+import type { FundBalance, FundAdjustment, FundEntry } from "@/lib/season-fund";
+import { fmtDate } from "@/lib/format";
 import type { RoundingLine } from "@/lib/season-billing";
 import { formatMinor } from "@/lib/format-money";
 import {
@@ -23,11 +24,14 @@ export default function FundAdmin({
   balance,
   adjustments,
   roundingLines,
+  entries = [],
 }: {
   seasonId: number;
   balance: FundBalance;
   adjustments: FundAdjustment[];
   roundingLines: RoundingLine[];
+  /** P3.3: the fund ledger, newest first. */
+  entries?: FundEntry[];
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(addAdjustmentAction, INITIAL);
@@ -63,6 +67,38 @@ export default function FundAdmin({
         ) : null}
         <Line label="Manual adjustments" value={balance.adjustmentsMinor} />
       </ul>
+
+      {balance.derivedBalanceMinor !== balance.balanceMinor ? (
+        <p role="status" className="mt-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          The ledger says {formatMinor(balance.balanceMinor)}; recomputing from today&apos;s rates
+          gives {formatMinor(balance.derivedBalanceMinor)}. The ledger keeps amounts as they were
+          recorded (e.g. an extension confirmed before its rate changed), so it is the one to trust;
+          check the history below if the difference is unexpected.
+        </p>
+      ) : null}
+
+      {entries.length > 0 ? (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wider text-neutral-500">
+            Fund history ({entries.length})
+          </summary>
+          <ul className="mt-2 divide-y divide-black/5 text-sm dark:divide-white/10">
+            {entries.map((e) => (
+              <li key={e.key} className="flex justify-between gap-3 py-1.5">
+                <span className="min-w-0 truncate">
+                  <span className="text-neutral-500 tabular-nums">{fmtDate(e.occurredAt.slice(0, 10))}</span>{" "}
+                  {FUND_KIND[e.kind]}
+                  {e.note && e.kind === "adjustment" ? ` · ${e.note}` : ""}
+                </span>
+                <span className={`shrink-0 tabular-nums ${e.amountMinor < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                  {e.amountMinor > 0 ? "+" : ""}
+                  {formatMinor(e.amountMinor)}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      ) : null}
 
       {balance.guestFeesOutstandingMinor > 0 ? (
         <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
@@ -185,3 +221,11 @@ function AdjustmentRow({ adjustment }: { adjustment: FundAdjustment }) {
     </li>
   );
 }
+
+const FUND_KIND: Record<FundEntry["kind"], string> = {
+  rounding: "Rounding on a paid bill",
+  session_fee: "Session fee",
+  extension: "Pitch extension",
+  facility_payment: "Facility bill vs expected",
+  adjustment: "Adjustment",
+};

@@ -12,6 +12,8 @@ import {
   DELETE_STALE_CHARGES_SQL,
   EXPECTED_FACILITY_BILL_SQL,
   FUND_BALANCE_SQL,
+  FUND_ENTRIES_SQL,
+  FUND_LEDGER_SQL,
   RECORD_SETTLEMENT_SQL,
   PLAYER_CHARGES_SQL,
 } from "./season-fund-sql";
@@ -445,46 +447,67 @@ export type FundBalance = {
   adjustmentsMinor: number;
   /** P2.3: expected facility bills minus what was actually paid. */
   facilityDifferenceMinor: number;
+  /** P3.3: SUM(fund_entries), the ledger balance. */
   balanceMinor: number;
+  /** The old derived formula, for reconciliation. */
+  derivedBalanceMinor: number;
 };
 
 /**
- * Derived from the underlying rows rather than stored, so the balance can never
- * disagree with what was actually charged and collected.
+ * P3.3: the balance is the sum of the season's fund entries (one per money
+ * event, kept by triggers). The old derived formula is read alongside so a
+ * disagreement is visible instead of silent: it can only differ for
+ * extensions confirmed before 0038 whose rate changed later (the ledger keeps
+ * the amount first recorded).
  */
 export async function getFundBalance(seasonId: number): Promise<FundBalance> {
-  // One round trip rather than four: the Neon HTTP driver has no connection to
-  // reuse, so each separate query costs a full request.
-  const rows = (await sqlClient.query(
-    FUND_BALANCE_SQL,
-    [seasonId],
-  )) as Array<{
-    rounding: number;
-    fees_paid: number;
-    fees_outstanding: number;
-    extensions: number;
-    adjustments: number;
-    facility_difference: number;
-  }>;
-
-  const r = rows[0];
-  const roundingMinor = Number(r?.rounding ?? 0);
-  const guestFeesMinor = Number(r?.fees_paid ?? 0);
-  const extensionCostMinor = Number(r?.extensions ?? 0);
-  const adjustmentsMinor = Number(r?.adjustments ?? 0);
-  const facilityDifferenceMinor = Number(r?.facility_difference ?? 0);
-
+  const [ledgerRows, derivedRows] = (await sqlClient.transaction([
+    sqlClient.query(FUND_LEDGER_SQL, [seasonId]),
+    sqlClient.query(FUND_BALANCE_SQL, [seasonId]),
+  ])) as unknown as [Array<Record<string, number>>, Array<Record<string, number>>];
+  const l = ledgerRows[0] ?? {};
+  const d = derivedRows[0] ?? {};
+  const n = (v: unknown) => Number(v ?? 0);
   return {
-    roundingMinor,
-    guestFeesMinor,
-    guestFeesOutstandingMinor: Number(r?.fees_outstanding ?? 0),
-    extensionCostMinor,
-    adjustmentsMinor,
-    facilityDifferenceMinor,
-    balanceMinor:
-      roundingMinor + guestFeesMinor - extensionCostMinor + adjustmentsMinor +
-      facilityDifferenceMinor,
+    roundingMinor: n(l.rounding),
+    guestFeesMinor: n(l.fees_paid),
+    guestFeesOutstandingMinor: n(d.fees_outstanding),
+    extensionCostMinor: n(l.extensions),
+    adjustmentsMinor: n(l.adjustments),
+    facilityDifferenceMinor: n(l.facility_difference),
+    balanceMinor: n(l.balance),
+    derivedBalanceMinor:
+      n(d.rounding) + n(d.fees_paid) - n(d.extensions) + n(d.adjustments) + n(d.facility_difference),
   };
+}
+
+export type FundEntry = {
+  key: string;
+  kind: "rounding" | "session_fee" | "extension" | "facility_payment" | "adjustment";
+  amountMinor: number;
+  occurredAt: string;
+  matchId: number | null;
+  note: string;
+};
+
+/** P3.3: the fund's history, newest first. */
+export async function listFundEntries(seasonId: number, limit = 50): Promise<FundEntry[]> {
+  const rows = (await sqlClient.query(FUND_ENTRIES_SQL, [seasonId, limit])) as Array<{
+    entry_key: string;
+    kind: FundEntry["kind"];
+    amount_minor: number;
+    occurred_at: string;
+    match_id: number | null;
+    note: string;
+  }>;
+  return rows.map((r) => ({
+    key: String(r.entry_key),
+    kind: r.kind,
+    amountMinor: Number(r.amount_minor),
+    occurredAt: String(r.occurred_at),
+    matchId: r.match_id == null ? null : Number(r.match_id),
+    note: String(r.note ?? ""),
+  }));
 }
 
 export type FundAdjustment = {
