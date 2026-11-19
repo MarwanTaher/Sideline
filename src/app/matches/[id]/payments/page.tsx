@@ -10,6 +10,7 @@ import {
   getPlayerPaymentForMatch,
   getTotalPaymentChange,
   isPaymentsActive,
+  isSeasonMatch,
 } from "@/lib/payments";
 import { listGuests } from "@/lib/guests";
 import { PaymentsAdmin } from "./payments-admin";
@@ -49,10 +50,11 @@ export default async function MatchPaymentsPage({
   const matchId = Number(id);
   if (!Number.isFinite(matchId)) notFound();
 
-  const [match, detail, lockEnabled] = await Promise.all([
+  const [match, detail, lockEnabled, seasonMatch] = await Promise.all([
     getAvailabilityMatch(matchId),
     getMatchDetail(matchId),
     isAvailabilityLockEnabled(),
+    isSeasonMatch(matchId),
   ]);
   if (!match || !detail) notFound();
 
@@ -79,12 +81,35 @@ export default async function MatchPaymentsPage({
       {isAdmin ? (
         <>
           <SessionChargesSection matchId={matchId} playedOn={match.playedOn} />
-          <AdminSection matchId={matchId} />
+          {seasonMatch ? <SeasonPotNotice admin /> : <AdminSection matchId={matchId} />}
         </>
+      ) : seasonMatch ? (
+        <SeasonPotNotice matchId={matchId} />
       ) : (
         <PlayerSection matchId={matchId} playerId={session.user.playerId} />
       )}
     </main>
+  );
+}
+
+/**
+ * Season matches have no per-match pot: core seats are covered by the monthly
+ * season invoice and everyone else owes a session charge. Hiding the pot here
+ * removes the risk of subscribers being asked to pay twice.
+ */
+function SeasonPotNotice({ admin = false, matchId }: { admin?: boolean; matchId?: number }) {
+  return (
+    <p className="mt-6 rounded-xl border border-black/10 p-4 text-sm text-neutral-500 dark:border-white/10">
+      {admin
+        ? "This is a season match, so there is no per-match pot. Subscribers pay through the monthly season invoice; other players and guests owe the session charges above."
+        : "This is a season match. Subscribers pay through the monthly season invoice, so there is no per-match payment here."}
+      {!admin && matchId != null ? (
+        <MessageAdminLink
+          matchId={matchId}
+          reason="I have a question about payments for this season match."
+        />
+      ) : null}
+    </p>
   );
 }
 

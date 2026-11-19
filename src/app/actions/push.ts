@@ -19,7 +19,7 @@ import {
   getNotificationType,
   type AudienceMode,
 } from "@/lib/notification-types";
-import { getUnpaidPlayerIds, isPaymentsActive } from "@/lib/payments";
+import { getUnpaidPlayerIds, isPaymentsActive, isSeasonMatch } from "@/lib/payments";
 
 async function requireAdmin(): Promise<boolean> {
   const session = await auth();
@@ -86,6 +86,11 @@ export async function sendPaymentReminderAction(
   matchId: number,
 ): Promise<{ ok: boolean; message: string }> {
   if (!(await requireAdmin())) return { ok: false, message: "Not authorized." };
+
+  // Season matches have no pot: subscribers are on the monthly invoice.
+  if (await isSeasonMatch(matchId)) {
+    return { ok: false, message: "Season matches have no pot to remind about." };
+  }
 
   // Players can only see and act on payments once they are open, so don't
   // remind about something they can't reach.

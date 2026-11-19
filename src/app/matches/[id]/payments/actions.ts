@@ -11,6 +11,7 @@ import {
   setPaymentsActive,
   setPlayerAndGuestsPaid,
   isPaymentsActive,
+  isSeasonMatch,
   isPlayerInMatch,
   playerHostsGuest,
 } from "@/lib/payments";
@@ -28,6 +29,14 @@ async function requireAdmin(): Promise<void> {
   if (role !== "admin" && role !== "super") {
     throw new Error("Not authorized");
   }
+}
+
+const SEASON_POT_MESSAGE =
+  "This is a season match: subscribers pay by invoice and others by session charge, so the pot is not used.";
+
+/** The pot is for normal matches only; refuse admin pot edits on season matches. */
+async function requireNormalMatch(matchId: number): Promise<void> {
+  if (await isSeasonMatch(matchId)) throw new Error(SEASON_POT_MESSAGE);
 }
 
 const matchIdSchema = z.coerce.number().int().positive();
@@ -49,6 +58,7 @@ export async function saveTotalAction(
   try {
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
+    await requireNormalMatch(matchId);
     const total = totalSchema.parse(formData.get("total"));
     await savePaymentTotal(matchId, total);
     revalidatePath(`/matches/${matchId}/payments`);
@@ -65,6 +75,7 @@ export async function saveDetailsAction(
   try {
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
+    await requireNormalMatch(matchId);
     const currency = String(formData.get("currency") ?? DEFAULT_CURRENCY);
     if (!isPaymentCurrency(currency)) {
       return { ok: false, message: "Pick a currency from the list." };
@@ -91,6 +102,7 @@ export async function togglePaidAction(
   try {
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
+    await requireNormalMatch(matchId);
     const playerId = playerIdSchema.parse(formData.get("playerId"));
     const paid = formData.get("paid") === "1";
     await setPaid(matchId, playerId, paid);
@@ -108,6 +120,7 @@ export async function toggleGuestPaidAction(
   try {
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
+    await requireNormalMatch(matchId);
     const guestId = guestIdSchema.parse(formData.get("guestId"));
     const paid = formData.get("paid") === "1";
     await setGuestPaid(matchId, guestId, paid);
@@ -125,6 +138,7 @@ export async function resetUnpaidAction(
   try {
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
+    await requireNormalMatch(matchId);
     await resetAllUnpaid(matchId);
     revalidatePath(`/matches/${matchId}/payments`);
     return { ok: true, message: "All players marked unpaid for this match." };
@@ -141,6 +155,7 @@ export async function setPaymentsActiveAction(
   try {
     await requireAdmin();
     const matchId = matchIdSchema.parse(formData.get("matchId"));
+    await requireNormalMatch(matchId);
     const active = formData.get("active") === "1";
     await setPaymentsActive(matchId, active);
     revalidatePath(`/matches/${matchId}/payments`);

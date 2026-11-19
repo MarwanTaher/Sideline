@@ -1,6 +1,7 @@
 import { sqlClient } from "@/lib/db";
 import { fmtDate } from "@/lib/matches";
 import { normCurrency, type PaymentCurrency } from "@/lib/currency";
+import { POT_STATE_SQL, SEASON_MATCH_SQL } from "@/lib/payments-sql";
 
 export interface PaymentMeta {
   id: number;
@@ -165,7 +166,8 @@ export async function getTotalPaymentChange(): Promise<number> {
                LEFT JOIN payments pay ON pay.match_id = mp2.match_id AND pay.player_id = mp2.player_id
              WHERE mp2.match_id = m.id AND COALESCE(pay.paid, 0) = 1) AS paid_players,
             (SELECT COUNT(*) FROM match_guests g2 WHERE g2.match_id = m.id AND g2.paid = 1 AND g2.status = 'approved') AS paid_guests
-     FROM matches m`,
+     FROM matches m
+     WHERE NOT ${SEASON_MATCH_SQL}`,
   )) as unknown as Array<{
     total_payment: number | string;
     player_heads: number | string;
@@ -269,13 +271,31 @@ export async function setPaymentsActive(matchId: number, active: boolean): Promi
   ]);
 }
 
-/** Whether self-service payments are currently open for a match. */
+async function getPotState(matchId: number): Promise<{ active: boolean; season: boolean }> {
+  const rows = (await sqlClient.query(POT_STATE_SQL, [matchId])) as unknown as {
+    active: boolean;
+    season: boolean;
+  }[];
+  return { active: Boolean(rows[0]?.active), season: Boolean(rows[0]?.season) };
+}
+
+/**
+ * Whether the match belongs to a subscription season. The pot never applies
+ * there: core seats are on the monthly invoice and everyone else pays a
+ * session charge.
+ */
+export async function isSeasonMatch(matchId: number): Promise<boolean> {
+  return (await getPotState(matchId)).season;
+}
+
+/**
+ * Whether self-service pot payments are currently open for a match. Always
+ * false on season matches, even if `payments_active` was set before the match
+ * joined the season, so players are never asked to pay twice.
+ */
 export async function isPaymentsActive(matchId: number): Promise<boolean> {
-  const rows = (await sqlClient.query(
-    `SELECT COALESCE(payments_active, 0) AS a FROM matches WHERE id = $1`,
-    [matchId],
-  )) as unknown as { a: number }[];
-  return Number(rows[0]?.a ?? 0) === 1;
+  const { active, season } = await getPotState(matchId);
+  return active && !season;
 }
 
 /** Is the player on the confirmed roster for a match? */
