@@ -51,6 +51,8 @@ tracked as a focused issue with its own implementation and tests.
 
 ### Multi-Club Support
 
+Detailed milestone plan: [docs/platform/00-OVERVIEW.md](docs/platform/00-OVERVIEW.md).
+
 - [ ] Introduce clubs and memberships with club-scoped organiser roles and an explicit active-club switcher.
 - [ ] Scope database access, server actions, caches, uploaded files, and notification recipients to the active club; add cross-club isolation tests before public onboarding.
 - [ ] Provide self-service club creation and invitation management, with club-specific scheduling, scoring, and billing settings.
