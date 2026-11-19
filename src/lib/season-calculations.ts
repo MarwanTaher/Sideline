@@ -1,5 +1,6 @@
 /** Pure calendar and amount calculations for season billing. */
 import { calendarDates } from "./match-recurrence";
+import { invoiceAmountMinor, roundUpToPlnMinor } from "./format-money";
 
 export const SEASON_PAYMENT_REMINDER_COPY = {
   threeDays: "Your season invoice is due in 3 days. Check the amount and payment details.",
@@ -71,4 +72,50 @@ export function seasonReminderDueDates(now: Date): { today: string; threeDays: s
     String(plusThree.getUTCDate()).padStart(2, "0"),
   ].join("-");
   return { today, threeDays };
+}
+
+export type SeatCapGap = {
+  period: string;
+  subscriberCap: number;
+  activeSubscribers: number;
+  emptySeats: number;
+  playingDays: number;
+  /** Pitch cost for the month. */
+  costMinor: number;
+  /** What the active subscribers' invoices raise (each rounded up to whole PLN). */
+  invoicedMinor: number;
+  /** Cost the invoices leave uncovered; positive means the fund has to cover it. */
+  gapMinor: number;
+};
+
+/**
+ * With the season split by seat cap (decision 5), each subscriber pays
+ * cost ÷ cap, so every empty seat leaves part of the pitch cost uncovered.
+ * Returns null when every seat is taken or the month has no playing days.
+ */
+export function seatCapGap(input: {
+  period: string;
+  subscriberCap: number;
+  activeSubscribers: number;
+  playingDays: number;
+  dayRateMinor: number;
+}): SeatCapGap | null {
+  const cap = Math.max(0, Math.trunc(input.subscriberCap));
+  const active = Math.max(0, Math.trunc(input.activeSubscribers));
+  if (cap === 0 || active >= cap || input.playingDays <= 0) return null;
+  const costMinor = input.playingDays * input.dayRateMinor;
+  const perSeat = roundUpToPlnMinor(
+    invoiceAmountMinor(input.playingDays, input.dayRateMinor, cap),
+  );
+  const invoicedMinor = active * perSeat;
+  return {
+    period: input.period,
+    subscriberCap: cap,
+    activeSubscribers: active,
+    emptySeats: cap - active,
+    playingDays: input.playingDays,
+    costMinor,
+    invoicedMinor,
+    gapMinor: costMinor - invoicedMinor,
+  };
 }

@@ -156,7 +156,7 @@ Based on the group's written rules (season 08/11/2026 – 30/03/2027).
 | FR-SE-1 | Super-admin creates seasons (name, start, end). | M | Done |
 | FR-SE-2 | Season visibility toggle `visible_to_players` (default **off**); when off, players see no Season menu, dashboard card or `/season` page; admins see a "draft" banner. | M | Done |
 | FR-SE-3 | Players vote on the season terms and join a subscription; **14 core seats**, numbered, capped atomically (no overbooking under concurrency). | M | Done |
-| FR-SE-4 | Monthly invoices per subscriber: pitch cost (default 500 PLN / Sunday) split across core seats, minus approved MultiSport credits. | M | Done |
+| FR-SE-4 | Monthly invoices per subscriber: pitch cost (default 500 PLN / Sunday) split across core seats, minus approved MultiSport credits. When fewer subscribers than seats are active, Admin ▸ Billing warns how much of the month's pitch cost is uncovered and whether the group fund covers it. | M | Done |
 | FR-SE-5 | Money is computed in integer grosz; charged amount is rounded **up** to whole PLN; the rounding surplus goes to the group fund. Invoice inputs are snapshotted. | M | Done |
 | FR-SE-6 | Payment due on the **3rd** of the month (configurable); countdown, transfer details and a copyable reference `Sideline YYYY-MM Name`. | M | Done |
 | FR-SE-7 | Player can declare "I've sent it"; only an admin confirms payment. | M | Done |

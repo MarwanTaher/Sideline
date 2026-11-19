@@ -2,10 +2,16 @@ import "server-only";
 import { z } from "zod";
 import { sqlClient } from "./db";
 import { invoiceAmountMinor, roundUpToPlnMinor } from "./format-money";
-import { dueDateFor, playingDaysInPeriod } from "./season-calculations";
+import {
+  dueDateFor,
+  playingDaysInPeriod,
+  seatCapGap,
+  type SeatCapGap,
+} from "./season-calculations";
 
 export { formatMinor, invoiceAmountMinor, roundUpToPlnMinor } from "./format-money";
 export { dueDateFor, playingDaysInPeriod } from "./season-calculations";
+export type { SeatCapGap } from "./season-calculations";
 
 /**
  * Season billing — the monthly subscription from the winter contract.
@@ -489,6 +495,55 @@ export type GenerateResult = {
   amountMinor: number;
 };
 
+/** Playing days billed for a month, following the season's match automation. */
+async function seasonPlayingDays(
+  seasonId: number,
+  season: { start_date: string; end_date: string | null },
+  period: string,
+): Promise<number> {
+  const configs = await sqlClient.query(`SELECT weekday,scheduled_dates FROM season_match_automation WHERE season_id=$1 AND (enabled OR activated_at IS NOT NULL)`, [seasonId]);
+  const waived = configs.length ? await sqlClient.query(`SELECT local_date::text AS date FROM season_match_occurrences WHERE season_id=$1 AND waive_cost`, [seasonId]) : [];
+  return playingDaysInPeriod(
+    period,
+    String(season.start_date),
+    season.end_date == null ? null : String(season.end_date),
+    configs.length ? { weekday: Number(configs[0].weekday), waivedDates: waived.map((row) => String(row.date)),
+      scheduledDates: configs[0].scheduled_dates == null ? undefined : z.array(z.string()).parse(configs[0].scheduled_dates) } : undefined,
+  );
+}
+
+/**
+ * Seat-cap gap for a month (decision 5): how much of the pitch cost the
+ * active subscribers' invoices leave uncovered. Null when every seat is taken.
+ */
+export async function getSeatCapGap(
+  seasonId: number,
+  period: string,
+): Promise<SeatCapGap | null> {
+  const rows = (await sqlClient.query(
+    `SELECT s.start_date, s.end_date, s.subscriber_cap, s.day_rate_minor,
+            (SELECT COUNT(*) FROM season_subscriptions ss
+              WHERE ss.season_id = s.id AND ss.status = 'active')::int AS active
+       FROM seasons s WHERE s.id = $1`,
+    [seasonId],
+  )) as Array<{
+    start_date: string;
+    end_date: string | null;
+    subscriber_cap: number;
+    day_rate_minor: number;
+    active: number;
+  }>;
+  const season = rows[0];
+  if (!season) return null;
+  return seatCapGap({
+    period,
+    subscriberCap: Number(season.subscriber_cap),
+    activeSubscribers: Number(season.active),
+    playingDays: await seasonPlayingDays(seasonId, season, period),
+    dayRateMinor: Number(season.day_rate_minor),
+  });
+}
+
 /**
  * Raise the month's bills for every active subscriber.
  *
@@ -518,15 +573,7 @@ export async function generateInvoices(
   }
   const season = seasonRows[0];
 
-  const configs = await sqlClient.query(`SELECT weekday,scheduled_dates FROM season_match_automation WHERE season_id=$1 AND (enabled OR activated_at IS NOT NULL)`, [seasonId]);
-  const waived = configs.length ? await sqlClient.query(`SELECT local_date::text AS date FROM season_match_occurrences WHERE season_id=$1 AND waive_cost`, [seasonId]) : [];
-  const playingDays = playingDaysInPeriod(
-    period,
-    String(season.start_date),
-    season.end_date == null ? null : String(season.end_date),
-    configs.length ? { weekday: Number(configs[0].weekday), waivedDates: waived.map((row) => String(row.date)),
-      scheduledDates: configs[0].scheduled_dates == null ? undefined : z.array(z.string()).parse(configs[0].scheduled_dates) } : undefined,
-  );
+  const playingDays = await seasonPlayingDays(seasonId, season, period);
   const splitBetween = Number(season.subscriber_cap);
   const dayRate = Number(season.day_rate_minor);
   const gross = invoiceAmountMinor(playingDays, dayRate, splitBetween);

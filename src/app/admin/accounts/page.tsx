@@ -19,6 +19,7 @@ import {
   getRoundingLedger,
   getSeasonRates,
   getPaymentDetails,
+  getSeatCapGap,
   getSeasonGoLiveChecklist,
   listOutstandingInvoices,
   listWithdrawnWithOpenInvoices,
@@ -115,6 +116,7 @@ export default async function AccountsPage({
             outstandingInvoices,
             withdrawnWarnings,
             leftoverCredits,
+            seatGap,
           ] =
             await Promise.all([
               listInvoices(subscriptionSeason.id, period),
@@ -128,6 +130,7 @@ export default async function AccountsPage({
               listOutstandingInvoices(subscriptionSeason.id),
               listWithdrawnWithOpenInvoices(subscriptionSeason.id),
               listLeftoverCredits(subscriptionSeason.id),
+              getSeatCapGap(subscriptionSeason.id, period),
             ]);
           return {
             periods,
@@ -143,6 +146,7 @@ export default async function AccountsPage({
             outstandingInvoices,
             withdrawnWarnings,
             leftoverCredits,
+            seatGap,
           };
         })()
       : null;
@@ -226,6 +230,8 @@ export default async function AccountsPage({
             outstandingInvoices={billing.outstandingInvoices}
             withdrawnWarnings={billing.withdrawnWarnings}
             leftoverCredits={billing.leftoverCredits}
+            seatGap={billing.seatGap}
+            fundBalanceMinor={billing.fund.balanceMinor}
             seasonEndDate={subscriptionSeason.endDate}
             fund={
               <FundAdmin

@@ -7,6 +7,7 @@ import type {
   SeasonBillingSummary,
   SeasonRates,
   SeasonPaymentDetails,
+  SeatCapGap,
   WithdrawnInvoiceWarning,
 } from "@/lib/season-billing";
 import type { LeftoverCredit, MultisportScan } from "@/lib/multisport";
@@ -50,6 +51,8 @@ export default function BillingAdmin({
   withdrawnWarnings,
   leftoverCredits,
   seasonEndDate,
+  seatGap,
+  fundBalanceMinor,
   fund,
 }: {
   seasonId: number;
@@ -65,6 +68,9 @@ export default function BillingAdmin({
   withdrawnWarnings: WithdrawnInvoiceWarning[];
   leftoverCredits: LeftoverCredit[];
   seasonEndDate: string | null;
+  /** Uncovered pitch cost for the period when seats are empty (decision 5). */
+  seatGap: SeatCapGap | null;
+  fundBalanceMinor: number;
   /** Group fund panel; below the billing card, or in the right column on xl+. */
   fund?: React.ReactNode;
 }) {
@@ -100,6 +106,10 @@ export default function BillingAdmin({
         across the core group, due on the contract day. Core players owe this
         whether they play or not.
       </p>
+
+      {seatGap && seatGap.gapMinor > 0 ? (
+        <SeatGapWarning gap={seatGap} fundBalanceMinor={fundBalanceMinor} />
+      ) : null}
 
       <div className="xl:hidden">
         <RatesForm seasonId={seasonId} rates={rates} />
@@ -747,5 +757,34 @@ function ScanRow({ scan }: { scan: MultisportScan }) {
         </form>
       </div>
     </li>
+  );
+}
+
+function SeatGapWarning({
+  gap,
+  fundBalanceMinor,
+}: {
+  gap: SeatCapGap;
+  fundBalanceMinor: number;
+}) {
+  const covered = fundBalanceMinor >= gap.gapMinor;
+  return (
+    <div
+      role="status"
+      className="mt-3 rounded-xl border border-amber-500/40 bg-amber-50/60 p-3 text-sm dark:bg-amber-950/20"
+    >
+      <p className="font-semibold">
+        {gap.emptySeats} empty seat{gap.emptySeats === 1 ? "" : "s"} →{" "}
+        {formatMinor(gap.gapMinor)} uncovered for {gap.period}
+      </p>
+      <p className="mt-1 text-xs text-neutral-600 dark:text-neutral-300">
+        {gap.activeSubscribers} of {gap.subscriberCap} subscribers raise{" "}
+        {formatMinor(gap.invoicedMinor)} towards the {formatMinor(gap.costMinor)} pitch
+        cost ({gap.playingDays} playing day{gap.playingDays === 1 ? "" : "s"}). Session
+        fees from non-core players go to the fund, which is currently{" "}
+        {formatMinor(fundBalanceMinor)}
+        {covered ? " and covers the gap." : " — not enough to cover the gap yet."}
+      </p>
+    </div>
   );
 }
