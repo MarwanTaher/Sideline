@@ -1,6 +1,7 @@
 // Data for the phase-aware Home screen: the one match a player should care
 // about right now, already joined with their own status and team.
 
+import { HOME_ADMIN_COUNTS_SQL } from "./dues-sql";
 import { sqlClient } from "@/lib/db";
 import { kickoffAtSql } from "@/lib/kickoff-sql";
 import type { AvailabilityStatus, MatchdayStatus } from "@/lib/availability";
@@ -202,20 +203,13 @@ export interface HomeAdminCounts {
   unpaidCharges: number;
 }
 
-/** Things waiting on an admin, in one round trip. */
+/** Things waiting on an admin, in one round trip (payments from the dues ledger). */
 export async function getHomeAdminCounts(
   matchId: number | null,
   seasonId: number | null,
 ): Promise<HomeAdminCounts> {
   const rows = (await sqlClient.query(
-    `SELECT
-       (SELECT COUNT(*) FROM match_guests WHERE match_id = $1 AND status = 'pending') AS guests,
-       (SELECT COUNT(*) FROM season_invoices
-         WHERE season_id = $2 AND paid_at IS NULL AND declared_paid_at IS NOT NULL
-           AND hidden_at IS NULL) AS payments,
-       (SELECT COUNT(*) FROM multisport_scans WHERE status = 'pending') AS scans,
-       (SELECT COUNT(*) FROM guest_charges gc JOIN matches m ON m.id = gc.match_id
-         WHERE m.season_id = $2 AND gc.paid_at IS NULL) AS charges`,
+    HOME_ADMIN_COUNTS_SQL,
     [matchId ?? -1, seasonId ?? -1],
   )) as Array<{
     guests: number;

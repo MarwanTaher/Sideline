@@ -105,7 +105,7 @@ function InboxRow({ due, mode }: { due: Due; mode: "confirm" | "overdue" | "open
       </Button>
     </form>,
   ];
-  if (mode === "confirm" && isInvoice) {
+  if (mode === "confirm" && (isInvoice || due.source === "session_fee" || due.source === "replacement")) {
     buttons.push(
       <form key="reject" action={rejectAction}>
         <input type="hidden" name="key" value={due.key} />

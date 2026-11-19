@@ -5,6 +5,7 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { logAppError } from "@/lib/error-log";
 import { parseDueKey, type DueRef } from "@/lib/dues-summary";
+import { rejectChargeDeclaration } from "@/lib/dues";
 import { clearInvoiceDeclaration, setInvoicePaid } from "@/lib/season-billing";
 import { setChargePaid } from "@/lib/season-fund";
 import { isSeasonMatch, setPaid } from "@/lib/payments";
@@ -90,14 +91,18 @@ export async function rejectDeclarationAction(
   formData: FormData,
 ): Promise<InboxActionState> {
   if (!(await requireAdmin())) return { ok: false, message: "Not authorized." };
-  const ref = parseDueKey(String(formData.get("key") ?? ""));
-  if (ref?.kind !== "invoice") return { ok: false, message: "Only season bills can be rejected." };
+  const key = String(formData.get("key") ?? "");
+  const ref = parseDueKey(key);
+  if (ref?.kind !== "invoice" && ref?.kind !== "charge") {
+    return { ok: false, message: "Only season bills and session charges can be rejected." };
+  }
 
-  const changed = await clearInvoiceDeclaration(ref.id);
+  const changed =
+    ref.kind === "invoice" ? await clearInvoiceDeclaration(ref.id) : await rejectChargeDeclaration(key);
   revalidateAll([ref]);
   return changed
     ? { ok: true, message: "Sent back to the player as unpaid." }
-    : { ok: false, message: "This bill is no longer waiting for confirmation." };
+    : { ok: false, message: "This is no longer waiting for confirmation." };
 }
 
 /** Push a reminder for an overdue season bill (same as Admin ▸ Billing). */
