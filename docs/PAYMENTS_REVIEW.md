@@ -449,12 +449,21 @@ date. Re-running stays safe because generation already skips existing invoices.
 
 ### 9.1 Working agreement
 
-1. `git pull` on `ai_dev` before starting an item.
-2. One local branch per item, cut from `ai_dev`: `feature/pay-<id>` (e.g. `feature/pay-p0.1`).
-3. Implement, run the gates (§9.3), test on localhost against the Preview database.
-4. **Commit only after the organiser accepts the change** — one commit per accepted item.
-5. The organiser fast-forwards local `ai_dev` and pushes it; production goes out by the
-   organiser's PR from `ai_dev` to `main`. Claude never pushes.
+1. `git pull` on `ai_dev` before starting a phase.
+2. One local branch per phase, cut from `ai_dev`: `feature/pay-phase<n>` (e.g. `feature/pay-phase0`).
+3. **Work one complete phase at a time**, not item by item: implement every item of the
+   phase, run the gates (§9.3) and test on localhost against the Preview database.
+4. **Commit locally as the work goes.** A phase can have many commits, as long as each
+   commit covers **one topic** (normally one item ID, with its tests and requirement
+   updates) so the organiser can review it and `git revert` it on its own. Commit
+   subjects start with the item ID (e.g. `P0.1: Hide the pot on season matches`).
+5. Open questions during a phase are answered by following this plan (§5–§8); the
+   choice made is noted in the commit message and the phase summary instead of
+   stopping the work.
+6. The organiser reviews **phase by phase**. Review fixes are new topic commits on the
+   same branch.
+7. **Claude never pushes.** The organiser fast-forwards local `ai_dev` and pushes it
+   manually; production goes out by the organiser's PR from `ai_dev` to `main`.
 
 ### 9.2 Prerequisites
 
