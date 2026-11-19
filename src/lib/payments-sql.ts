@@ -19,3 +19,18 @@ export const POT_STATE_SQL = `SELECT COALESCE(m.payments_active, 0) = 1 AS activ
         ${SEASON_MATCH_SQL} AS season
    FROM matches m
   WHERE m.id = $1`;
+
+/**
+ * The most recent match whose pot payment details were filled in, used to
+ * prefill a new match so the admin doesn't retype them every week. Season
+ * matches usually leave these blank (no pot), so "has details" rather than
+ * "latest match" is the test. Use as a CTE: `WITH prev_payment AS (...)`.
+ */
+export const PREV_PAYMENT_DETAILS_SQL = `SELECT payment_name, payment_mobile, payment_method,
+        payment_note, pay_link
+   FROM matches
+  WHERE btrim(COALESCE(payment_name, '')) <> ''
+     OR btrim(COALESCE(payment_mobile, '')) <> ''
+     OR btrim(COALESCE(pay_link, '')) <> ''
+  ORDER BY id DESC
+  LIMIT 1`;

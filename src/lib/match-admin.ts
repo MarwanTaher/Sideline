@@ -8,6 +8,7 @@ import { digestPushBody } from "@/lib/digest-push";
 import { logAppError } from "@/lib/error-log";
 import { generateNextAutomatedMatch, processMatchAutomation } from "./match-automation";
 import { publicSignupSql } from "./availability-policy-sql";
+import { PREV_PAYMENT_DETAILS_SQL } from "./payments-sql";
 import { getAutomation } from "./match-automation";
 import { calendarDates, occurrenceTimes } from "./match-recurrence";
 import { getSubscriptionSeason } from "./season-subscriptions";
@@ -169,14 +170,21 @@ export async function getMatchAdmin(matchId: number): Promise<MatchAdmin | null>
 export async function createMatch(input: CreateMatchInput): Promise<number> {
   const [rows] = (await sqlClient.transaction([
     sqlClient.query(
-      `WITH created AS (
+      `WITH prev_payment AS (${PREV_PAYMENT_DETAILS_SQL}),
+       created AS (
          INSERT INTO matches
            (played_on, match_time, kickoff_at, num_teams, team_size, total_payment,
             stats_scoring_enabled, status, location_name, location_lat, location_lng,
-            venue, season_id, payment_currency)
+            venue, season_id, payment_currency,
+            payment_name, payment_mobile, payment_method, payment_note, pay_link)
          VALUES ($1, $2, ${KICKOFF_FROM_LOCAL}, $3, 0, 0, $4, 'open',
                  $5, $6, $7, $8, $9,
-                 COALESCE((SELECT payment_currency FROM matches ORDER BY id DESC LIMIT 1), 'PLN'))
+                 COALESCE((SELECT payment_currency FROM matches ORDER BY id DESC LIMIT 1), 'PLN'),
+                 COALESCE((SELECT payment_name FROM prev_payment), ''),
+                 COALESCE((SELECT payment_mobile FROM prev_payment), ''),
+                 COALESCE((SELECT payment_method FROM prev_payment), ''),
+                 COALESCE((SELECT payment_note FROM prev_payment), ''),
+                 COALESCE((SELECT pay_link FROM prev_payment), ''))
          RETURNING id
        ),
        auto_in AS (
