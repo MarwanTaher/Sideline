@@ -163,6 +163,14 @@ export default function AccountMenu({
             >
               Profile
             </Link>
+            <Link
+              href="/payments"
+              role="menuitem"
+              onClick={() => setOpen(false)}
+              className={`${tileCls} text-center`}
+            >
+              Payments
+            </Link>
             {hasSeason ? (
               <Link
                 href="/season"

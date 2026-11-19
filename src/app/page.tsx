@@ -12,10 +12,8 @@ import {
   countActiveSubscribers,
   getSubscriberIdsForMatch,
 } from "@/lib/season-subscriptions";
-import { listPlayerInvoices } from "@/lib/season-billing";
-import { listPlayerCharges } from "@/lib/season-fund";
-import { monthLabel, summarizePlayerInvoices } from "@/lib/season-payment-summary";
-import { formatMinor } from "@/lib/format-money";
+import { listPlayerDues } from "@/lib/dues";
+import { bucketDues, clubToday, dueTitle, duePayeeLabel, formatOwed } from "@/lib/dues-summary";
 import { getPlayerRank } from "@/lib/leaderboard";
 import { CountUp } from "@/components/count-up";
 import { getLeaderboardMovement } from "@/lib/score-snapshots";
@@ -83,20 +81,17 @@ export default async function Home() {
   const rankDelta = playerId != null ? (movement?.get(playerId)?.rankDelta ?? null) : null;
 
   const seasonVisible = season != null && (season.visibleToPlayers || isAdmin);
-  const [subscriberIds, mySubscription, takenSeats, invoices, adminCounts, statsCounts, playersAdmin, unpaidCharges] =
+  const [subscriberIds, mySubscription, takenSeats, adminCounts, statsCounts, playersAdmin, myDues] =
     await Promise.all([
       match && (phase === "open" || phase === "locked")
         ? getSubscriberIdsForMatch(match.id)
         : Promise.resolve(new Set<number>()),
       seasonVisible && playerId != null ? getSubscription(season.id, playerId) : Promise.resolve(null),
       seasonVisible && season.signupOpen ? countActiveSubscribers(season.id) : Promise.resolve(0),
-      seasonVisible && playerId != null ? listPlayerInvoices(season.id, playerId) : Promise.resolve([]),
       isAdmin ? getHomeAdminCounts(match?.id ?? null, seasonVisible ? season.id : null) : Promise.resolve(null),
       statsCountsP,
       playersAdminP,
-      playerId != null
-        ? listPlayerCharges(Number(playerId), { unpaidOnly: true })
-        : Promise.resolve([]),
+      playerId != null ? listPlayerDues(Number(playerId)) : Promise.resolve([]),
     ]);
 
   // ── To do: at most three things the player actually has to act on. ──
@@ -110,32 +105,20 @@ export default async function Home() {
       tone: "emerald",
     });
   }
-  const seasonDue = summarizePlayerInvoices(invoices);
-  if (seasonDue.toSend.length > 0) {
-    const first = seasonDue.toSend[0];
+  // One card for everything the player owes: pot shares, season bills and
+  // session charges (My payments, review §5.3).
+  const duesNow = bucketDues(myDues, clubToday());
+  if (duesNow.toPay.length > 0) {
+    const first = duesNow.toPay[0];
+    const overdue = duesNow.overdue.length;
     todos.push({
-      key: "invoice",
-      href: "/season?tab=payments",
-      title: `Season payment · ${formatMinor(seasonDue.toSendMinor)}`,
-      sub: `For ${seasonDue.toSend.map((i) => monthLabel(i.period)).join(", ")}, due ${fmtDate(first.dueDate)}.`,
-      tone: "amber",
-    });
-  }
-  if (unpaidCharges.length > 0) {
-    // Newest first, so the link opens the most recent match with a charge.
-    const owedMinor = unpaidCharges.reduce((sum, c) => sum + c.amountMinor, 0);
-    const payees = [
-      ...new Set(
-        unpaidCharges.map((c) =>
-          c.kind === "replacement" ? (c.owedToName ?? "a subscriber") : "the group",
-        ),
-      ),
-    ];
-    todos.push({
-      key: "charges",
-      href: `/matches/${unpaidCharges[0].matchId}/payments`,
-      title: `Session charges · ${formatMinor(owedMinor)}`,
-      sub: `For ${[...new Set(unpaidCharges.map((c) => matchLabel(c.playedOn)))].join(", ")} · pay ${payees.join(" and ")}.`,
+      key: "payments",
+      href: "/payments",
+      title: `Payments · ${formatOwed(duesNow.owedByCurrency)}`,
+      sub:
+        duesNow.toPay.length === 1
+          ? `${dueTitle(first)} · ${duePayeeLabel(first)}.`
+          : `${duesNow.toPay.length} to pay${overdue > 0 ? `, ${overdue} overdue` : ""} · earliest due ${fmtDate(first.dueOn)}.`,
       tone: "amber",
     });
   }
