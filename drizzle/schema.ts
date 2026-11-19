@@ -37,6 +37,8 @@ export const matches = pgTable("matches", {
 	baseMinutes: integer("base_minutes").default(90).notNull(),
 	extensionMinutes: integer("extension_minutes").default(30).notNull(),
 	extensionThreshold: integer("extension_threshold"),
+	extensionCostMinor: integer("extension_cost_minor"),
+	shareMinor: integer("share_minor"),
 }, (table) => [
 	index("idx_matches_status_played_on").using("btree", table.status.asc().nullsLast().op("text_ops"), table.playedOn.asc().nullsLast().op("text_ops")),
 	check("matches_num_teams_check", sql`num_teams >= 2 AND num_teams <= 5`),
@@ -587,7 +589,10 @@ export const seasons = pgTable("seasons", {
 	termsFinalAt: timestamp("terms_final_at", { withTimezone: true, mode: "string" }),
 	testInvoiceCompletedAt: timestamp("test_invoice_completed_at", { withTimezone: true, mode: "string" }),
 	reminderTextReviewedAt: timestamp("reminder_text_reviewed_at", { withTimezone: true, mode: "string" }),
+	newRulesFrom: text("new_rules_from"),
+	splitMode: text("split_mode").default("cap").notNull(),
 }, (table) => [
+	check("seasons_split_mode_check", sql`${table.splitMode} = ANY (ARRAY['cap'::text, 'active'::text])`),
 	check("seasons_status_check", sql`${table.status} = ANY (ARRAY['active'::text, 'archived'::text])`),
 	check("seasons_reset_mode_check", sql`${table.resetMode} = ANY (ARRAY['soft'::text, 'hard'::text])`),
 ]);
@@ -796,7 +801,7 @@ export const multisportScans = pgTable("multisport_scans", {
 	unique("multisport_scans_unique").on(table.matchId, table.playerId),
 	index("multisport_scans_pending_idx").on(table.status, table.playerId),
 	check("multisport_scans_status_check", sql`status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text])`),
-	check("multisport_scans_settled_check", sql`((settled_at IS NULL) AND (settled_as IS NULL)) OR ((settled_at IS NOT NULL) AND (settled_as = ANY (ARRAY['refunded'::text, 'fund'::text])) AND (applied_invoice_id IS NULL) AND (status = 'approved'::text))`),
+	check("multisport_scans_settled_check", sql`((settled_at IS NULL) AND (settled_as IS NULL)) OR ((settled_at IS NOT NULL) AND (settled_as = ANY (ARRAY['refunded'::text, 'fund'::text, 'fee'::text])) AND (applied_invoice_id IS NULL) AND (status = 'approved'::text))`),
 ]);
 
 export const guestCharges = pgTable("guest_charges", {
@@ -809,12 +814,49 @@ export const guestCharges = pgTable("guest_charges", {
 	owedToPlayerId: integer("owed_to_player_id").references(() => players.id, { onDelete: "set null" }),
 	paidAt: timestamp("paid_at", { withTimezone: true, mode: "string" }),
 	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	scanCreditMinor: integer("scan_credit_minor").default(0).notNull(),
+	scanRefundedAt: timestamp("scan_refunded_at", { withTimezone: true, mode: "string" }),
 }, (table) => [
+	check("guest_charges_scan_credit_check", sql`scan_credit_minor >= 0 AND scan_credit_minor <= amount_minor`),
 	uniqueIndex("guest_charges_player_idx").on(table.matchId, table.playerId).where(sql`player_id IS NOT NULL`),
 	uniqueIndex("guest_charges_guest_idx").on(table.matchId, table.guestId).where(sql`guest_id IS NOT NULL`),
 	check("guest_charges_kind_check", sql`kind = ANY (ARRAY['extra'::text, 'replacement'::text])`),
 	check("guest_charges_who_check", sql`(player_id IS NOT NULL) <> (guest_id IS NOT NULL)`),
 	check("guest_charges_owed_check", sql`(kind = 'replacement') = (owed_to_player_id IS NOT NULL)`),
+]);
+
+export const seasonCredits = pgTable("season_credits", {
+	id: integer().primaryKey().generatedByDefaultAsIdentity(),
+	seasonId: integer("season_id").notNull().references(() => seasons.id, { onDelete: "cascade" }),
+	playerId: integer("player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
+	source: text().default("replacement").notNull(),
+	guestChargeId: integer("guest_charge_id").references(() => guestCharges.id, { onDelete: "set null" }),
+	matchId: integer("match_id").references(() => matches.id, { onDelete: "set null" }),
+	creditMinor: integer("credit_minor").notNull(),
+	appliedInvoiceId: integer("applied_invoice_id").references(() => seasonInvoices.id, { onDelete: "set null" }),
+	settledAt: timestamp("settled_at", { withTimezone: true, mode: "string" }),
+	settledAs: text("settled_as"),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	uniqueIndex("season_credits_charge_idx").on(table.guestChargeId).where(sql`guest_charge_id IS NOT NULL`),
+	index("season_credits_open_idx").on(table.playerId).where(sql`applied_invoice_id IS NULL AND settled_at IS NULL`),
+	check("season_credits_credit_check", sql`credit_minor > 0`),
+	check("season_credits_source_check", sql`source = ANY (ARRAY['replacement'::text])`),
+	check("season_credits_settled_check", sql`((settled_at IS NULL) AND (settled_as IS NULL)) OR ((settled_at IS NOT NULL) AND (settled_as = ANY (ARRAY['refunded'::text, 'fund'::text])) AND (applied_invoice_id IS NULL))`),
+]);
+
+export const matchdaySettlements = pgTable("matchday_settlements", {
+	matchId: integer("match_id").primaryKey().references(() => matches.id, { onDelete: "cascade" }),
+	expectedMinor: integer("expected_minor").notNull(),
+	paidMinor: integer("paid_minor").notNull(),
+	approvedScans: integer("approved_scans").default(0).notNull(),
+	facilityScans: integer("facility_scans"),
+	note: text().default("").notNull(),
+	recordedBy: text("recorded_by").default("").notNull(),
+	recordedAt: timestamp("recorded_at", { withTimezone: true, mode: "string" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, () => [
+	check("matchday_settlements_paid_check", sql`paid_minor >= 0`),
+	check("matchday_settlements_scans_check", sql`facility_scans IS NULL OR facility_scans >= 0`),
 ]);
 
 export const fundAdjustments = pgTable("fund_adjustments", {
