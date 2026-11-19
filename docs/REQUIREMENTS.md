@@ -184,6 +184,7 @@ Based on the group's written rules (season 08/11/2026 – 30/03/2027).
 | FR-AD-1 | Tabbed Admin control: **Admins · Seasons · Billing · Other** (mobile bottom bar + Home). | M | Done |
 | FR-AD-2 | Diagnostics page for data-integrity checks. | S | Done |
 | FR-AD-3 | Feature settings stored in `app_settings`. | M | Done |
+| FR-AD-4 | Admin Home lists what needs attention: guest requests, no reply yet, stats to review, season payments to confirm, **unpaid session charges** (linking to the oldest match with one), MultiSport scans and password resets. | S | Local |
 
 ### 4.12 Navigation
 

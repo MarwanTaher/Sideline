@@ -161,6 +161,13 @@ export default async function Home() {
     if (statsCounts) adminItems.push({ href: "/stats", label: "Stats to review", count: statsCounts.pending });
     if (adminCounts) {
       adminItems.push({ href: "/admin/accounts?tab=billing", label: "Payments to confirm", count: adminCounts.paymentsToConfirm });
+      adminItems.push({
+        href: adminCounts.unpaidChargesMatchId != null
+          ? `/matches/${adminCounts.unpaidChargesMatchId}/payments`
+          : "/admin/accounts?tab=billing",
+        label: "Unpaid session charges",
+        count: adminCounts.unpaidCharges,
+      });
       adminItems.push({ href: "/season?tab=multisport", label: "MultiSport scans", count: adminCounts.multisportPending });
     }
     if (playersAdmin) adminItems.push({ href: "/players", label: "Password resets", count: playersAdmin.resetRequests.length });
