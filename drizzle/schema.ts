@@ -780,6 +780,7 @@ export const seasonInvoices = pgTable("season_invoices", {
 	declaredPaidAt: timestamp("declared_paid_at", { withTimezone: true, mode: "string" }),
 	declaredNote: text("declared_note").default("").notNull(),
 	hiddenAt: timestamp("hidden_at", { withTimezone: true, mode: "string" }),
+	isDraft: boolean("is_draft").default(false).notNull(),
 }, (table) => [
 	unique("season_invoices_unique").on(table.seasonId, table.playerId, table.period),
 	index("season_invoices_period_idx").on(table.seasonId, table.period),
@@ -857,6 +858,51 @@ export const matchdaySettlements = pgTable("matchday_settlements", {
 }, () => [
 	check("matchday_settlements_paid_check", sql`paid_minor >= 0`),
 	check("matchday_settlements_scans_check", sql`facility_scans IS NULL OR facility_scans >= 0`),
+]);
+
+/** 0039: every amount someone owes, kept in sync by triggers (sideline_dues_source). */
+export const dues = pgTable("dues", {
+	dueKey: text("due_key").primaryKey(),
+	source: text().notNull(),
+	sourceId: integer("source_id").notNull(),
+	payerPlayerId: integer("payer_player_id").notNull().references(() => players.id, { onDelete: "cascade" }),
+	guestId: integer("guest_id"),
+	payee: text().notNull(),
+	payeePlayerId: integer("payee_player_id").references(() => players.id, { onDelete: "set null" }),
+	matchId: integer("match_id").references(() => matches.id, { onDelete: "cascade" }),
+	seasonId: integer("season_id").references(() => seasons.id, { onDelete: "cascade" }),
+	period: text(),
+	amountMinor: integer("amount_minor").notNull(),
+	currency: text().default("PLN").notNull(),
+	status: text().notNull(),
+	dueOn: text("due_on").default("").notNull(),
+	declaredAt: timestamp("declared_at", { withTimezone: true, mode: "string" }),
+	declaredNote: text("declared_note").default("").notNull(),
+	confirmedAt: timestamp("confirmed_at", { withTimezone: true, mode: "string" }),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+	updatedAt: timestamp("updated_at", { withTimezone: true, mode: "string" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	index("dues_payer_idx").on(table.payerPlayerId),
+	index("dues_unconfirmed_idx").on(table.status, table.dueOn).where(sql`status <> 'confirmed'`),
+	index("dues_match_idx").on(table.matchId).where(sql`match_id IS NOT NULL`),
+	check("dues_source_check", sql`source = ANY (ARRAY['match_share'::text, 'season_invoice'::text, 'session_fee'::text, 'replacement'::text])`),
+	check("dues_payee_check", sql`payee = ANY (ARRAY['group'::text, 'player'::text])`),
+	check("dues_status_check", sql`status = ANY (ARRAY['open'::text, 'declared'::text, 'confirmed'::text])`),
+]);
+
+/** 0039: one row per group-fund money event, kept in sync by triggers (sideline_fund_source). */
+export const fundEntries = pgTable("fund_entries", {
+	entryKey: text("entry_key").primaryKey(),
+	seasonId: integer("season_id").notNull().references(() => seasons.id, { onDelete: "cascade" }),
+	kind: text().notNull(),
+	amountMinor: integer("amount_minor").notNull(),
+	occurredAt: timestamp("occurred_at", { withTimezone: true, mode: "string" }).notNull(),
+	matchId: integer("match_id").references(() => matches.id, { onDelete: "set null" }),
+	note: text().default("").notNull(),
+	createdAt: timestamp("created_at", { withTimezone: true, mode: "string" }).default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (table) => [
+	index("fund_entries_season_idx").on(table.seasonId, table.occurredAt),
+	check("fund_entries_kind_check", sql`kind = ANY (ARRAY['rounding'::text, 'session_fee'::text, 'extension'::text, 'facility_payment'::text, 'adjustment'::text])`),
 ]);
 
 export const fundAdjustments = pgTable("fund_adjustments", {
