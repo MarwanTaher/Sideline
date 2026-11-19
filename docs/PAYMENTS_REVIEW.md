@@ -472,7 +472,7 @@ date. Re-running stays safe because generation already skips existing invoices.
 | Baseline gates (`test:unit`, `lint`, `build`) green on `ai_dev` @ `f68714d` | ✅ verified 2026-11-17 |
 | `.env.local` → Preview database; `scripts/db-guard.mjs` approves the host | ✅ |
 | Local server (`npm run build && npm run start`, `AUTH_TRUST_HOST=true`) | ✅ |
-| Next migration number | `0039` (`0038` written in Phase 2, **not applied yet**; last applied: `0037`) |
+| Next migration number | `0040` (`0039` written for Phases 3–4, **not applied yet**; last applied: `0038` on Preview) |
 | Decisions 1–6 | ✅ all made (§7) |
 
 ### 9.3 Gates and tests for every item
@@ -531,28 +531,47 @@ P0.1 → P0.2 → P0.4 → P0.6 → P0.3 → P0.5 → P0.7 → Phase 1 → Phase
 
 ### 9.8 Cleanup backlog (collected during implementation)
 
-Small leftovers noticed while building a phase. They are done in P4.3 unless a
-later item touches the same code first. Tick them off here when removed.
+Small leftovers noticed while building a phase. ~~Struck~~ items are done.
 
 | Found in | Item |
 |---|---|
-| P0.4 | `getSubscriptionSeasonForDate` (`src/lib/season-subscriptions.ts`) has no callers left; remove it |
-| P0.1 | Unused `fmtDate` import in `src/lib/payments.ts` (lint warning, older than P0.1) |
+| P0.4 | ~~`getSubscriptionSeasonForDate` has no callers left~~ — removed in P4.3 |
+| P0.1 | ~~Unused `fmtDate` import in `src/lib/payments.ts`~~ — removed in P4.3 |
 | P0.3 | `sideline_generate_match` does not copy pot payment details; fine while automated matches are season-only, revisit if automation creates normal matches |
-| P0.5 | The admin Home unpaid-charges count in `getHomeAdminCounts` has no PGlite test; move its SQL to a `*-sql.ts` module and test it |
-| P1.1 | `listDues` reads season invoices regardless of `seasons.visible_to_players`; the old Home invoice to-do checked it. Fine while drafts use `hidden_at` (P4.1); add the check if a hidden season can have visible invoices |
-| P1.2 | The "Your session charges" box on Match ▸ Payments (P0.2) and `listPlayerCharges` overlap with My payments; fold them into a `dues` filter when P3.2 switches reads |
-| P1.2 | Session and replacement charges can't be declared by the player yet (no `declared` state on `guest_charges`); comes with the `dues` table in P3 |
-| P1.3 | ~~The admin mobile tab bar has no Payments inbox tab~~ — done: Payments is in the main navigation and opens the inbox in admin view |
-| P1.3 | "Confirm all" marks dues paid one query per due; batch it once writes go through `dues` (P3.2) |
-| Status | Phase 0 accepted by the organiser on 2026-11-19 (tested locally) |
-| P2.1 | `generateInvoices`' credit CTE is still inline in `season-billing.ts` (the reallocation SQL moved to `season-billing-sql.ts` and is tested); move it too and test it in PGlite |
+| P0.5 | ~~Home unpaid-charges count has no PGlite test~~ — `HOME_ADMIN_COUNTS_SQL`, tested (P3.2) |
+| P1.1 | Dues include season invoices regardless of `seasons.visible_to_players`; fine while drafts use `hidden_at` (P4.1); add the check if a hidden season can have visible invoices |
+| P1.2 | ~~The P0.2 charges box overlaps My payments~~ — removed; players have one Payments page |
+| P1.2 | ~~Players can't declare session charges~~ — done on the `dues` ledger (P3.2) |
+| P1.3 | ~~No mobile Payments tab~~ — Payments is in the main navigation |
+| P1.3 | "Confirm all" still marks dues paid one query per due; batch it if it gets slow |
+| P2.1 | ~~`generateInvoices` credit SQL inline and untested~~ — `GENERATE_INVOICE_SQL`, tested (P4.1) |
 | P2.2 | Scans for guests without an account (reported by the host, §8.4) are not supported; `multisport_scans` has no `guest_id` |
-| P2.2 | A scan refund (`refundDueMinor`) is not a due in the inbox / My payments yet; it shows on the charge rows only. Add it with the `dues` table (P3) |
+| P2.2 | A scan refund is not a due in Payments yet; it shows as a note to the player and a Refunded button on the admin's charge row |
 | P2.3 | The matchday settlement is per match; a facility invoice covering several Sundays has to be split by hand |
-| P2.5 | The player view of a finalized share doesn't say it's finalized |
-| Status | Phase 1 accepted by the organiser on 2026-11-19 (tested locally); Payments tab moved into the main navigation |
-| Status | Phase 2 implemented 2026-11-19, waiting for review; migration `0038` not applied to Preview or production |
+| P2.5 | ~~The player view doesn't say a share is finalized~~ — "share fixed by the admin" on Payments |
+| P4.3 | One **payment profile** (group default, optional per-season / per-match override, §5.4) is not built: the season transfer details (Season billing) and a normal match's pot details (Matches tab) are still two forms |
+| P3.4 | Retire the old status/amount columns — **only after production runs the ledger code**, as a separate migration; the `sideline_dues_source` / `sideline_fund_source` views read them and must be updated first |
+| Status | Phases 0, 1 and 2 accepted by the organiser on 2026-11-19 (tested locally; `0038` applied to Preview) |
+| Status | Phases 3 and 4 (minus P3.4) plus one Payments page per role implemented 2026-11-19, waiting for review; migration `0039` not applied to Preview or production |
+
+### 9.9 Ledger design (Phases 3–4, as built)
+
+- `dues` and `fund_entries` are maintained by **database triggers** on the source
+  tables (`payments`, `match_players`, `match_guests`, `guest_charges`,
+  `matchday_settlements`, `season_invoices`, `fund_adjustments`, `matches`,
+  `seasons`). The rules live once, in the views `sideline_dues_source` and
+  `sideline_fund_source`; `sideline_sync_dues` / `sideline_sync_fund` upsert from
+  them. This is the "dual write" of P3.2 without any code path having to
+  remember it, and it keeps the ledger correct while production and the deployed
+  previews still run older code.
+- History: a confirmed due keeps the amount that was paid and stays when the pot
+  closes; fund amounts never change with rates (only facility payments and
+  adjustments, which admins correct, update).
+- The only state that lives in the ledger alone is a player's "I've paid" on a
+  session/replacement charge (`dues.declared_at`).
+- One page per role: players `/payments`, admins `/admin/payments` (Inbox ·
+  Matches · Season billing & fund). Season ▸ Payments, Admin ▸ Billing and every
+  match's Payments tab redirect there.
 
 ## Appendix — files involved
 

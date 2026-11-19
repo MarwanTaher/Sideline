@@ -184,7 +184,7 @@ PGlite tests execute the migration in isolated memory without deployment writes.
 | Teams & play | `draft`, `matchday`, `results` | match_players, match_rounds, round_goals, match_scorekeepers, admin_tab_locks |
 | Rating | `voting`, `vote-admin`, `stats`, `scoring`, `scoring-config`, `score-breakdown`, `leaderboard`, `score-snapshots` | votes, vote_skips, vote_audit, stats, player_stats_submissions, player_goals_claims, legacy_* |
 | Recognition | `awards`, `achievements`, `motm`, `kudos`, `reactions`, `chemistry`, `player-trends` | award_overrides, player_achievements, match_motm_votes, player_kudos, match_reactions |
-| Money | `payments`, `seasons`, `season-subscriptions`, `season-billing`, `season-scans`, `season-fund`, `multisport` | payments, seasons, season_subscriptions, season_invoices, multisport_scans, guest_charges, fund_adjustments |
+| Money | `payments`, `seasons`, `season-subscriptions`, `season-billing`, `season-scans`, `season-fund`, `multisport`, `dues` | payments, seasons, season_subscriptions, season_invoices, multisport_scans, guest_charges, season_credits, matchday_settlements, fund_adjustments; ledger `dues` + `fund_entries` (0039, trigger-maintained — see docs/PAYMENTS_REVIEW.md §9.9) |
 | Messaging | `push`, `notification-types`, `match-digest` | push_subscriptions, push_preferences |
 | Config | `feature-settings` | app_settings |
 
