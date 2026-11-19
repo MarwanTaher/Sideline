@@ -22,7 +22,6 @@ import {
   listPlayerCharges,
 } from "@/lib/season-fund";
 import {
-  getSubscriptionSeasonForDate,
   getSubscriptionSeasonForMatch,
   listSubscribers,
 } from "@/lib/season-subscriptions";
@@ -84,7 +83,7 @@ export default async function MatchPaymentsPage({
 
       {isAdmin ? (
         <>
-          <SessionChargesSection matchId={matchId} playedOn={match.playedOn} />
+          <SessionChargesSection matchId={matchId} />
           {seasonMatch ? <SeasonPotNotice admin /> : <AdminSection matchId={matchId} />}
         </>
       ) : (
@@ -124,15 +123,12 @@ function SeasonPotNotice({ admin = false, matchId }: { admin?: boolean; matchId?
   );
 }
 
-/** Only meaningful inside a subscription season; silent everywhere else. */
-async function SessionChargesSection({
-  matchId,
-  playedOn,
-}: {
-  matchId: number;
-  playedOn: string;
-}) {
-  const season = await getSubscriptionSeasonForDate(playedOn);
+/**
+ * Only meaningful on a match linked to a subscription season (`season_id`),
+ * the same test the charges and the pot use; silent everywhere else.
+ */
+async function SessionChargesSection({ matchId }: { matchId: number }) {
+  const season = await getSubscriptionSeasonForMatch(matchId);
   if (!season) return null;
 
   const [context, charges, subscribers] = await Promise.all([
