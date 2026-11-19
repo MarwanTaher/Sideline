@@ -24,7 +24,8 @@ export type MultisportScan = {
   reportedAt: string;
   applied: boolean;
   /** Leftover credit an admin refunded or moved to the group fund. */
-  settledAs: ScanSettlement | null;
+  /** 'fee' = used on a non-core player's session fee (P2.2). */
+  settledAs: ScanSettlement | "fee" | null;
 };
 
 type ScanRow = {
@@ -53,7 +54,10 @@ function toScan(r: ScanRow): MultisportScan {
     reportedAt:
       r.reported_at instanceof Date ? r.reported_at.toISOString() : String(r.reported_at),
     applied: r.applied_invoice_id != null,
-    settledAs: r.settled_as === "refunded" || r.settled_as === "fund" ? r.settled_as : null,
+    settledAs:
+      r.settled_as === "refunded" || r.settled_as === "fund" || r.settled_as === "fee"
+        ? r.settled_as
+        : null,
   };
 }
 
@@ -121,17 +125,20 @@ export async function withdrawScan(matchId: number, playerId: number): Promise<v
   );
 }
 
+/** Approve or reject a scan. Returns its match, so callers can apply it to that fee (P2.2). */
 export async function reviewScan(
   scanId: number,
   approve: boolean,
   actor: string,
-): Promise<void> {
-  await sqlClient.query(
+): Promise<{ matchId: number } | null> {
+  const rows = (await sqlClient.query(
     `UPDATE multisport_scans
         SET status = $1, reviewed_at = CURRENT_TIMESTAMP, reviewed_by = $2
-      WHERE id = $3 AND applied_invoice_id IS NULL AND settled_at IS NULL`,
+      WHERE id = $3 AND applied_invoice_id IS NULL AND settled_at IS NULL
+      RETURNING match_id`,
     [approve ? "approved" : "rejected", actor, scanId],
-  );
+  )) as Array<{ match_id: number }>;
+  return rows[0] ? { matchId: Number(rows[0].match_id) } : null;
 }
 
 /** Approved scans a player has not yet been credited for. */

@@ -148,3 +148,51 @@ test("leftover credit: scans and replacement credits listed and settled together
     await db.close();
   }
 });
+
+test("scan on the fee: new-rules non-core scans reduce that fee once; old rules wait", async () => {
+  const { APPLY_SCANS_TO_CHARGES_SQL } = await import("../src/lib/season-fund-sql");
+  const db = await fixture();
+  try {
+    await db.exec(`
+      -- Cara: extra on 11 (new rules, paid) and 10 (old rules).
+      INSERT INTO guest_charges(id, match_id, player_id, amount_minor, kind, paid_at) VALUES
+        (5, 10, 3, 3600, 'extra', NULL);
+      INSERT INTO multisport_scans(id, match_id, player_id, status, credit_minor) VALUES
+        (1, 11, 3, 'approved', 1500),
+        (2, 10, 3, 'approved', 1500),
+        (3, 12, 2, 'pending', 1500),
+        (4, 11, 1, 'approved', 1500);   -- core subscriber: no charge, stays for the invoice
+    `);
+    const run = async (m: number) => (await db.query(APPLY_SCANS_TO_CHARGES_SQL, [m])).rows.length;
+    assert.equal(await run(11), 1);
+    assert.equal(await run(11), 0); // idempotent
+    assert.equal(await run(10), 0); // before the cutover
+    assert.equal(await run(12), 0); // not approved
+
+    const scans = (await db.query<{ id: number; settled_as: string | null }>(
+      `SELECT id, settled_as FROM multisport_scans ORDER BY id`)).rows;
+    assert.deepEqual(scans.map((r) => [r.id, r.settled_as]), [[1, "fee"], [2, null], [3, null], [4, null]]);
+    const credit = (await db.query<{ scan_credit_minor: number }>(
+      `SELECT scan_credit_minor FROM guest_charges WHERE id = 4`)).rows[0];
+    assert.equal(credit.scan_credit_minor, 1500);
+
+    // My payments shows the reduced fee.
+    const dues = (await db.query<DueRow>(PLAYER_DUES_SQL, [3])).rows.map(toDue);
+    assert.deepEqual(dues.map((d) => [d.key, d.amountMinor]), [["charge:4", 2100], ["charge:5", 3600]]);
+  } finally {
+    await db.close();
+  }
+});
+
+test("charge scan fields: payable amount and refund after an early payment", async () => {
+  const { chargeScanFields } = await import("../src/lib/charge-scan");
+  const base = { amountMinor: 3600, scanCreditMinor: 1500, scanRefundedAt: null };
+  assert.deepEqual(chargeScanFields({ ...base, paidAt: null, scanSettledAt: "2026-12-07T10:00:00Z" }),
+    { scanCreditMinor: 1500, payableMinor: 2100, refundDueMinor: 0 });
+  // Paid 36 on Sunday, scan approved Monday → 15 back.
+  assert.equal(chargeScanFields({ ...base, paidAt: "2026-12-06T20:00:00Z", scanSettledAt: "2026-12-07T10:00:00Z" }).refundDueMinor, 1500);
+  // Paid after the credit was on the fee → paid 21, nothing back.
+  assert.equal(chargeScanFields({ ...base, paidAt: "2026-12-08T10:00:00Z", scanSettledAt: "2026-12-07T10:00:00Z" }).refundDueMinor, 0);
+  assert.equal(chargeScanFields({ ...base, paidAt: "2026-12-06T20:00:00Z", scanSettledAt: "2026-12-07T10:00:00Z", scanRefundedAt: "2026-12-09" }).refundDueMinor, 0);
+  assert.equal(chargeScanFields({ ...base, scanCreditMinor: 9999, paidAt: null, scanSettledAt: null }).payableMinor, 0);
+});

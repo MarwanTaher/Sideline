@@ -2,11 +2,13 @@ import "server-only";
 import { sqlClient } from "./db";
 import { getSubscriptionSeasonForMatch, listSubscribers } from "./season-subscriptions";
 import { reallocateCreditQueries } from "./season-billing";
+import { chargeScanFields } from "./charge-scan";
 import {
   newRulesSql,
   CHARGE_CREDIT_STATE_SQL,
   CHARGE_SELECT_SQL,
   CREATE_REPLACEMENT_CREDIT_SQL,
+  APPLY_SCANS_TO_CHARGES_SQL,
   DELETE_STALE_CHARGES_SQL,
   EXPECTED_FACILITY_BILL_SQL,
   FUND_BALANCE_SQL,
@@ -44,6 +46,12 @@ export type GuestCharge = {
    * subscriber it covers is credited on their next invoice.
    */
   newRules: boolean;
+  /** P2.2: MultiSport scan credit off this fee. */
+  scanCreditMinor: number;
+  /** What the payer actually pays: amount less scan credit. */
+  payableMinor: number;
+  /** P2.2: the scan was approved after the fee was paid; hand this back. */
+  refundDueMinor: number;
 };
 
 type ChargeRow = {
@@ -58,7 +66,11 @@ type ChargeRow = {
   owed_to_name: string | null;
   paid_at: string | Date | null;
   new_rules?: boolean | null;
+  scan_credit_minor?: number | null;
+  scan_refunded_at?: string | Date | null;
+  scan_settled_at?: string | Date | null;
 };
+
 
 function toCharge(r: ChargeRow): GuestCharge {
   return {
@@ -78,8 +90,16 @@ function toCharge(r: ChargeRow): GuestCharge {
           ? r.paid_at.toISOString()
           : String(r.paid_at),
     newRules: Boolean(r.new_rules),
+    ...chargeScanFields({
+      amountMinor: Number(r.amount_minor),
+      scanCreditMinor: Number(r.scan_credit_minor ?? 0),
+      paidAt: r.paid_at,
+      scanSettledAt: r.scan_settled_at ?? null,
+      scanRefundedAt: r.scan_refunded_at ?? null,
+    }),
   };
 }
+
 
 export async function listGuestCharges(matchId: number): Promise<GuestCharge[]> {
   const rows = (await sqlClient.query(
@@ -250,7 +270,28 @@ export async function syncGuestCharges(
   ])) as Array<{ id: number }>;
 
   const created = await generateGuestCharges(matchId);
+  await applyScanCreditsToCharges(matchId);
   return { created, removed: removedRows.length };
+}
+
+/**
+ * P2.2: put approved scans of non-core players on that match's fee (new
+ * rules only). Safe to call repeatedly; returns how many scans were used.
+ */
+export async function applyScanCreditsToCharges(matchId: number): Promise<number> {
+  const rows = (await sqlClient.query(APPLY_SCANS_TO_CHARGES_SQL, [matchId])) as unknown[];
+  return rows.length;
+}
+
+/** P2.2: the admin handed back the scan credit on a fee that was paid in full. */
+export async function markScanRefunded(chargeId: number): Promise<boolean> {
+  const rows = (await sqlClient.query(
+    `UPDATE guest_charges SET scan_refunded_at = CURRENT_TIMESTAMP
+      WHERE id = $1 AND scan_credit_minor > 0 AND paid_at IS NOT NULL AND scan_refunded_at IS NULL
+      RETURNING id`,
+    [chargeId],
+  )) as unknown[];
+  return rows.length > 0;
 }
 
 /**

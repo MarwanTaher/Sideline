@@ -46,7 +46,14 @@ export function PlayerCharges({
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <span className="font-semibold tabular-nums">{formatMinor(c.amountMinor)}</span>
+              <span className="font-semibold tabular-nums">
+                {formatMinor(c.payableMinor)}
+                {c.scanCreditMinor > 0 ? (
+                  <span className="ml-1 text-xs font-normal text-neutral-500">
+                    (MultiSport −{formatMinor(c.scanCreditMinor)})
+                  </span>
+                ) : null}
+              </span>
               <span
                 className={`rounded-full px-2 py-0.5 text-xs font-medium ${
                   c.paidAt
@@ -60,6 +67,12 @@ export function PlayerCharges({
           </li>
         ))}
       </ul>
+      {charges.some((c) => c.refundDueMinor > 0) ? (
+        <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">
+          Your MultiSport scan was approved after you paid, so{" "}
+          {formatMinor(charges.reduce((sum, c) => sum + c.refundDueMinor, 0))} is coming back to you.
+        </p>
+      ) : null}
       {hasGroupCharge ? (
         <p className="mt-2 text-xs text-neutral-500">
           {groupPayee

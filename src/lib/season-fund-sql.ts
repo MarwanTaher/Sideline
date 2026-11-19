@@ -14,14 +14,20 @@ export function newRulesSql(match = "m", season = "s"): string {
 
 /**
  * Charge rows with what the UI needs. `new_rules` = a replacement pays the
- * group and the subscriber is credited on the next invoice (P2.1).
+ * group and the subscriber is credited on the next invoice (P2.1);
+ * `scan_credit_minor` comes off the fee (P2.2) and `scan_settled_at` says
+ * when, so a fee paid before that is owed a refund.
  */
 export const CHARGE_SELECT_SQL = `
   SELECT gc.id, gc.match_id, m.played_on, gc.player_id, gc.guest_id,
          COALESCE(p.name, mg.name) AS name,
          gc.amount_minor, gc.kind, gc.owed_to_player_id,
          owed.name AS owed_to_name, gc.paid_at,
-         COALESCE(${newRulesSql()}, false) AS new_rules
+         COALESCE(${newRulesSql()}, false) AS new_rules,
+         gc.scan_credit_minor, gc.scan_refunded_at,
+         (SELECT ms.settled_at FROM multisport_scans ms
+           WHERE ms.match_id = gc.match_id AND ms.player_id = gc.player_id
+             AND ms.settled_as = 'fee') AS scan_settled_at
     FROM guest_charges gc
     JOIN matches m ON m.id = gc.match_id
     LEFT JOIN seasons s ON s.id = m.season_id
@@ -100,7 +106,9 @@ export const FUND_BALANCE_SQL = `SELECT
    (SELECT COALESCE(SUM(CASE WHEN gc.paid_at IS NOT NULL THEN gc.amount_minor ELSE 0 END), 0)
       FROM guest_charges gc JOIN matches m ON m.id = gc.match_id
      WHERE gc.kind = 'extra' AND m.season_id = $1)::int AS fees_paid,
-   (SELECT COALESCE(SUM(CASE WHEN gc.paid_at IS NULL THEN gc.amount_minor ELSE 0 END), 0)
+   -- Still to collect: the fee less any scan credit (P2.2). Paid fees count
+   -- in full above, because the facility bill drops by the same scan credit.
+   (SELECT COALESCE(SUM(CASE WHEN gc.paid_at IS NULL THEN gc.amount_minor - gc.scan_credit_minor ELSE 0 END), 0)
       FROM guest_charges gc JOIN matches m ON m.id = gc.match_id
      WHERE gc.kind = 'extra' AND m.season_id = $1)::int AS fees_outstanding,
    (SELECT COALESCE(SUM(COALESCE(m.extension_cost_minor, s.extension_cost_minor)), 0)
@@ -149,3 +157,33 @@ export const RECORD_SETTLEMENT_SQL = `
          approved_scans = EXCLUDED.approved_scans, facility_scans = EXCLUDED.facility_scans,
          note = EXCLUDED.note, recorded_by = EXCLUDED.recorded_by, recorded_at = CURRENT_TIMESTAMP
   RETURNING expected_minor, paid_minor, approved_scans, facility_scans`;
+
+/**
+ * P2.2: an approved MultiSport scan by a non-core player on a new-rules
+ * match comes off that session's fee (36 → 21) instead of waiting as
+ * leftover credit. The scan is settled as 'fee' so it is never also put on
+ * an invoice. Only charges with no scan credit yet are touched, so it is
+ * safe to re-run. `$1` = match id. Returns one row per scan used.
+ */
+export const APPLY_SCANS_TO_CHARGES_SQL = `
+  WITH eligible AS MATERIALIZED (
+    SELECT ms.id AS scan_id, gc.id AS charge_id,
+           LEAST(ms.credit_minor, gc.amount_minor) AS credit
+      FROM multisport_scans ms
+      JOIN guest_charges gc ON gc.match_id = ms.match_id AND gc.player_id = ms.player_id
+      JOIN matches m ON m.id = ms.match_id
+      JOIN seasons s ON s.id = m.season_id
+     WHERE ms.match_id = $1 AND ms.status = 'approved'
+       AND ms.applied_invoice_id IS NULL AND ms.settled_at IS NULL
+       AND gc.scan_credit_minor = 0
+       AND ${newRulesSql()}
+     FOR UPDATE OF ms, gc
+  ),
+  charged AS (
+    UPDATE guest_charges gc SET scan_credit_minor = e.credit
+      FROM eligible e WHERE gc.id = e.charge_id
+    RETURNING gc.id
+  )
+  UPDATE multisport_scans ms SET settled_at = CURRENT_TIMESTAMP, settled_as = 'fee'
+    FROM eligible e WHERE ms.id = e.scan_id
+  RETURNING ms.id`;

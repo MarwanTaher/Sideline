@@ -18,6 +18,7 @@ import { formatMinor } from "@/lib/format-money";
 import { getSubscriptionSeason } from "@/lib/season-subscriptions";
 import { sqlClient } from "@/lib/db";
 import { sendSeasonInvoiceReminder } from "@/lib/season-reminders";
+import { applyScanCreditsToCharges } from "@/lib/season-fund";
 import { logAppError } from "@/lib/error-log";
 
 export type BillingActionState = { ok: boolean; message: string };
@@ -323,9 +324,22 @@ export async function reviewScanAction(
   if (!Number.isInteger(scanId)) return { ok: false, message: "Invalid scan." };
   const approve = formData.get("approve") === "true";
 
-  await reviewScan(scanId, approve, await actorName());
+  const reviewed = await reviewScan(scanId, approve, await actorName());
+  // New rules: a non-core player's scan comes off that session's fee (P2.2).
+  const onFee = approve && reviewed ? await applyScanCreditsToCharges(reviewed.matchId) : 0;
   revalidateBilling();
-  return { ok: true, message: approve ? "Scan approved." : "Scan rejected." };
+  if (reviewed) {
+    revalidatePath(`/matches/${reviewed.matchId}/payments`);
+    revalidatePath("/payments");
+  }
+  return {
+    ok: true,
+    message: approve
+      ? onFee > 0
+        ? "Scan approved and taken off that session's fee."
+        : "Scan approved."
+      : "Scan rejected.",
+  };
 }
 
 /** Admin: settle a player's leftover MultiSport credit (refunded, or to the fund). */

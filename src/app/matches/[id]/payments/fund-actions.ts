@@ -12,6 +12,7 @@ import {
   setChargePaid,
   setMatchExtended,
   recordMatchdaySettlement,
+  markScanRefunded,
 } from "@/lib/season-fund";
 
 export type FundActionState = { ok: boolean; message: string };
@@ -223,4 +224,22 @@ export async function recordSettlementAction(
   if (!saved) return { ok: false, message: "Only season matches have a facility settlement." };
   revalidateMatch(matchId);
   return { ok: true, message: "Facility payment recorded." };
+}
+
+/** P2.2: the scan credit on an already-paid fee was handed back to the player. */
+export async function markScanRefundedAction(
+  _prev: FundActionState,
+  formData: FormData,
+): Promise<FundActionState> {
+  const denied = await requireAdmin();
+  if (denied) return { ok: false, message: denied };
+  const chargeId = Number(formData.get("chargeId"));
+  const matchId = Number(formData.get("matchId"));
+  if (!Number.isInteger(chargeId)) return { ok: false, message: "Invalid charge." };
+  const done = await markScanRefunded(chargeId);
+  revalidateMatch(matchId);
+  revalidatePath("/payments");
+  return done
+    ? { ok: true, message: "Refund recorded." }
+    : { ok: false, message: "Nothing to refund on this charge." };
 }

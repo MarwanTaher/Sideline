@@ -37,6 +37,7 @@ export function MultisportReporter({
         rest comes off the one after. The discount is yours alone — it is never
         shared with the group. If no bill is left (you withdrew or the season
         ended), an admin refunds it or, if you agree, adds it to the group fund.
+        Not on a core seat? Your scan comes off that session&apos;s fee instead.
       </p>
       <ul className="mt-3 divide-y divide-black/5 dark:divide-white/10">
         {matches.map((m) => (
@@ -76,6 +77,8 @@ function ScanRow({
       ? { text: "refunded", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" }
       : scan?.settledAs === "fund"
         ? { text: "to group fund", cls: "bg-sky-100 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300" }
+        : scan?.settledAs === "fee"
+          ? { text: "off session fee", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" }
         : scan?.status === "approved"
       ? { text: scan.applied ? "credited" : "approved", cls: "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300" }
       : scan?.status === "rejected"

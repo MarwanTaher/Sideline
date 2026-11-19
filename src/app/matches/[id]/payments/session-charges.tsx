@@ -10,6 +10,7 @@ import {
   setChargePaidAction,
   setChargeKindAction,
   deleteChargeAction,
+  markScanRefundedAction,
   type FundActionState,
 } from "./fund-actions";
 import { Button } from "@/components/ui/button";
@@ -164,10 +165,11 @@ function ChargeRow({
   const [paidState, paidAction, paidPending] = useActionState(setChargePaidAction, INITIAL);
   const [kindState, kindAction, kindPending] = useActionState(setChargeKindAction, INITIAL);
   const [delState, delAction, delPending] = useActionState(deleteChargeAction, INITIAL);
+  const [refundState, refundAction, refundPending] = useActionState(markScanRefundedAction, INITIAL);
 
   useEffect(() => {
-    if (paidState.ok || kindState.ok || delState.ok) router.refresh();
-  }, [paidState, kindState, delState, router]);
+    if (paidState.ok || kindState.ok || delState.ok || refundState.ok) router.refresh();
+  }, [paidState, kindState, delState, refundState, router]);
 
   return (
     <li className="py-2.5 text-sm">
@@ -189,7 +191,12 @@ function ChargeRow({
         </div>
         <div className="flex items-center gap-2">
           <span className="font-semibold tabular-nums">
-            {formatMinor(charge.amountMinor)}
+            {formatMinor(charge.payableMinor)}
+            {charge.scanCreditMinor > 0 ? (
+              <span className="ml-1 text-xs font-normal text-neutral-500">
+                (MultiSport −{formatMinor(charge.scanCreditMinor)})
+              </span>
+            ) : null}
           </span>
           <form action={paidAction}>
             <input type="hidden" name="chargeId" value={charge.id} />
@@ -259,7 +266,22 @@ function ChargeRow({
         </div>
       ) : null}
 
+      {charge.refundDueMinor > 0 ? (
+        <form action={refundAction} className="mt-2 flex flex-wrap items-center gap-2 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/30 dark:text-amber-200">
+          <input type="hidden" name="chargeId" value={charge.id} />
+          <input type="hidden" name="matchId" value={matchId} />
+          <span>
+            Paid in full before the MultiSport scan was approved: refund{" "}
+            {formatMinor(charge.refundDueMinor)} to {charge.name}.
+          </span>
+          <Button type="submit" size="sm" variant="secondary" pending={refundPending} pendingLabel="…">
+            Refunded
+          </Button>
+        </form>
+      ) : null}
       <FeedbackMessage ok={kindState.ok} message={kindState.message} className="mt-1" />
+      <FeedbackMessage ok={paidState.ok} message={paidState.ok ? "" : paidState.message} className="mt-1" />
+      <FeedbackMessage ok={refundState.ok} message={refundState.message} className="mt-1" />
     </li>
   );
 }

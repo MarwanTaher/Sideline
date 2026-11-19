@@ -86,7 +86,7 @@ SELECT 'charge:' || gc.id,
             THEN 'player' ELSE 'group' END,
        gc.owed_to_player_id, owed.name,
        gc.match_id, m.played_on, m.season_id, NULL::text,
-       gc.amount_minor, 'PLN',
+       gc.amount_minor - gc.scan_credit_minor, 'PLN',  -- P2.2: scan comes off the fee
        CASE WHEN gc.paid_at IS NOT NULL THEN 'confirmed' ELSE 'open' END,
        NULL::text, gc.paid_at::text,
        m.played_on

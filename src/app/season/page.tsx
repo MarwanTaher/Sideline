@@ -14,6 +14,7 @@ import { SectionIcon } from "@/components/section-icon";
 import { listPlayerInvoices, getPaymentDetails } from "@/lib/season-billing";
 import { listPlayerScans, uncreditedTotalMinor } from "@/lib/multisport";
 import { getFundBalance } from "@/lib/season-fund";
+import { newRulesSql } from "@/lib/season-fund-sql";
 import { formatMinor } from "@/lib/format-money";
 import { SubNav } from "@/components/ui/sub-nav";
 import { SectionRail } from "@/components/ui/section-rail";
@@ -117,18 +118,22 @@ export default async function SeasonPage({
       activeTab === "payments" && forMe
         ? uncreditedTotalMinor(pid)
         : Promise.resolve(0),
-      activeTab === "multisport" && forMe ? listPlayerScans(pid) : Promise.resolve([]),
-      activeTab === "multisport" && forMe
+      activeTab === "multisport" && pid != null ? listPlayerScans(pid) : Promise.resolve([]),
+      // Core players can report every match; non-core players only matches
+      // under the new rules, where a scan comes off that session's fee (P2.2).
+      activeTab === "multisport" && pid != null
         ? (sqlClient.query(
             `SELECT m.id, m.played_on
                FROM matches m
+               JOIN seasons s ON s.id = m.season_id
                JOIN match_availability ma
                  ON ma.match_id = m.id AND ma.player_id = $1 AND ma.status = 'in'
               WHERE m.season_id = $2
                 AND (m.kickoff_at IS NULL OR m.kickoff_at <= NOW())
+                AND ($3::boolean OR ${newRulesSql()})
               ORDER BY m.played_on DESC
               LIMIT 12`,
-            [pid, season.id],
+            [pid, season.id, isSubscriber],
           ) as unknown as Promise<Array<{ id: number; played_on: string }>>)
         : Promise.resolve([]),
       activeTab === "fund"
@@ -223,7 +228,7 @@ export default async function SeasonPage({
             MultiSport
           </h2>
           <div className="mt-3">
-            {isSubscriber ? (
+            {isSubscriber || playedMatches.length > 0 || scans.length > 0 ? (
               <MultisportReporter
                 seasonId={season.id}
                 matches={playedMatches}
@@ -231,7 +236,8 @@ export default async function SeasonPage({
               />
             ) : (
               <p className="text-sm text-neutral-500">
-                MultiSport credits apply to the core group only.
+                MultiSport credits apply to the core group, and to non-core players from the
+                date the new season rules start (the scan comes off that session&apos;s fee).
               </p>
             )}
           </div>
