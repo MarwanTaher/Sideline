@@ -55,11 +55,13 @@ Group-owned tables get a `group_id`. Platform tables do not.
 | **Match children** | `match_availability`, `match_guests`, `match_players`, `match_rounds`, `round_goals`, `match_scorekeepers`, `match_waitlist`, `match_motm_votes`, `match_reactions`, `matchday_settlements`, `votes`, `vote_skips`, `vote_audit`, `stats`, `stats_audit`, `player_stats_submissions`, `player_goals_claims`, `predictions`, `payments`, `guest_charges`, `multisport_scans` | `group_id` + composite FKs to `matches(group_id,id)` and `players(group_id,id)` |
 | **Season children** | `season_subscriptions`, `season_invoices`, `season_credits`, `season_match_automation`, `season_match_occurrences`, `fund_adjustments`, `fund_entries`, `dues`, `match_automation_audit` | `group_id` + composite FKs to `seasons(group_id,id)` (and matches/players) |
 | **Player children** | `player_achievements`, `player_kudos`, `player_moments`, `story_reactions`, `story_views`, `seat_offer_requests`, `admin_tab_locks` | `group_id` + composite FK to `players(group_id,id)` (or `admins`) |
-| **Identity (becomes platform-level in M3)** | `player_credentials`, `player_access_tokens`, `password_reset_requests`, `password_reset_tokens`, `push_subscriptions`, `push_preferences`, `admin_sessions` | Add `group_id` now, derived from the player. M3 moves them to accounts. |
+| **Identity (becomes platform-level in M3)** | `player_credentials`, `player_access_tokens`, `password_reset_requests`, `password_reset_tokens`, `push_subscriptions`, `push_preferences` | Add `group_id` now, derived from the player. M3 moves them to accounts. |
+| **Unused** | `admin_sessions` (from the Streamlit admin login; no code in `src` uses it since Auth.js) | Not migrated. Drop it in the M3 contract step. |
 | **Platform** | `groups`, `app_errors` (gets a nullable `group_id` for diagnostics), `rate_limits` (created lazily by `rate-limit.ts`; buckets get a group prefix in M2) | No RLS |
 
-Before writing SQL, re-run the inventory script against all migrations. The list above comes
-from `CREATE TABLE`/`REFERENCES` in `0000`–`0039`, and new tables may have landed since.
+The authoritative list is `tests/helpers/tenancy-tables.ts`. `tests/tenancy-inventory.test.ts`
+fails when a migration (or a lazily created table in `src`) adds a table that isn't classified
+there, so every new table needs an explicit tenancy decision.
 
 ## 5. Migration plan (expand → backfill → contract)
 
@@ -190,8 +192,8 @@ manual, as today.
 
 ## 11. Slices (PR-sized)
 
-1. Inventory script + this classification committed as a test fixture
-2. `0040` groups + `group-context.ts`
+1. ✅ Inventory script + this classification committed as a test fixture
+2. ✅ `0040` groups + `group-constants.ts` / `group-context.ts` (not applied to any database yet)
 3. `0041` roots + per-group `app_settings` key + settings modules
 4. `0042` match children
 5. `0043` season/money/ledger (+ trigger updates)
