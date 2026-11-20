@@ -186,7 +186,8 @@ PGlite tests execute the migration in isolated memory without deployment writes.
 | Recognition | `awards`, `achievements`, `motm`, `kudos`, `reactions`, `chemistry`, `player-trends` | award_overrides, player_achievements, match_motm_votes, player_kudos, match_reactions |
 | Money | `payments`, `seasons`, `season-subscriptions`, `season-billing`, `season-scans`, `season-fund`, `multisport`, `dues` | payments, seasons, season_subscriptions, season_invoices, multisport_scans, guest_charges, season_credits, matchday_settlements, fund_adjustments; ledger `dues` + `fund_entries` (0039, trigger-maintained — see docs/PAYMENTS_REVIEW.md §9.9) |
 | Messaging | `push`, `notification-types`, `match-digest` | push_subscriptions, push_preferences |
-| Config | `feature-settings` | app_settings |
+| Config | `feature-settings` | app_settings (keyed per group) |
+| Tenancy | `group-constants` (client-safe), `group-context` | groups; `group_id` on every group-owned table (see §6.4) |
 
 ## 6. Data model
 
@@ -307,6 +308,38 @@ fund = Σ extra-player fees + Σ (charged − gross) rounding surplus
 
 `drizzle/00xx_*.sql` (applied in order) is authoritative. `drizzle/schema.ts` only types the
 tables from `0000`; newer tables are reached via raw SQL (see IMPROVEMENTS C-1).
+
+### 6.4 Tenancy: groups (migrations 0040–0047, M1 of the platform plan)
+
+Sideline is becoming a platform that hosts many **groups** (tenants); see
+[docs/platform/00-OVERVIEW.md](./platform/00-OVERVIEW.md). M1 laid the data foundation with no
+user-visible change:
+
+- `groups` holds one row per group (slug, name, timezone, currency, locale, status). Group #1 is
+  the founding group, Krakow Pyramids (`krakow-pyramids`).
+- Every group-owned table carries `group_id NOT NULL REFERENCES groups`. The classification of
+  all tables (group / identity / platform / unused) lives in `tests/helpers/tenancy-tables.ts`,
+  and `tests/tenancy-inventory.test.ts` fails when a new table is left unclassified.
+- **Composite foreign keys** `(group_id, <parent_id>) → parent (group_id, id)` sit next to the
+  original single-column keys on every child table, so a row can never reference a parent in
+  another group. `sideline_add_group_fk()` adds them `NOT VALID` then validates.
+- **`sideline_inherit_group_id()`**, a `BEFORE INSERT` trigger on every child table, copies
+  `group_id` from the parent row. Any writer, including the `0037`/`0038` automation functions
+  and the `0039` ledger sync, files rows under the right group without naming it.
+- Per-group uniqueness: `players (group_id, name)`, `admins (group_id, username)`,
+  `award_overrides (group_id, scope_key, award_type)`, `app_settings (group_id, key)`,
+  `score_cache_state (group_id)` (one revision per group), `score_cache_snapshots
+  (group_id, snapshot_key)`.
+- **Transitional scaffolding, removed in M2:** `DEFAULT 1` on every `group_id`, the old global
+  unique constraints and the `*_transitional` indexes (kept so the previously deployed code's
+  `ON CONFLICT` targets still resolve), the single-column foreign keys, and the legacy
+  `score_cache_state.id` column.
+- Row-level security is **not** enabled yet. The policy shape and the Neon mechanism
+  (`sql.transaction([set_config(...), query])`, no extra round trip) are proven in
+  `tests/rls-policy-sql.test.ts` and [docs/platform/M1-RLS-SPIKE.md](./platform/M1-RLS-SPIKE.md);
+  M2 rolls it out behind a non-owner `sideline_app` role.
+- Application code still serves group #1 only (`FOUNDING_GROUP` in `group-constants.ts`); all
+  `app_settings`, score-cache, player-import and award-override SQL names the group explicitly.
 
 ## 7. Key runtime flows
 

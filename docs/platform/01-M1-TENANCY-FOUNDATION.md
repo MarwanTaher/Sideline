@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | Proposal |
+| Status | **Implemented** on `platform/m1-tenancy-foundation` (migrations 0040–0047 applied to the approved development database on 2026-11-20; not yet to production). Results: [M1-RLS-SPIKE.md](./M1-RLS-SPIKE.md). |
 | Depends on | — |
 | Unlocks | [M2 Group-scoped app](./02-M2-GROUP-SCOPED-APP.md) |
 | User-visible change | **None** |
@@ -123,6 +123,11 @@ before it. Apply `0041` before deploying the M1.2 code.
 
 ## 8. RLS spike (prove it now, enable it in M2)
 
+✅ Done; answers and the role decision for M2 are in [M1-RLS-SPIKE.md](./M1-RLS-SPIKE.md).
+The policy uses `NULLIF(current_setting(...), '')::int` because the setting reads as `''` after
+a transaction. Direct login as a SQL-created role fails through Neon's pooler, so M2 switches
+role inside each batch (`SET LOCAL ROLE sideline_app`) instead.
+
 Goal: confirm, before M2 depends on it, that this pattern works with
 `@neondatabase/serverless` over HTTP and measure what it costs:
 
@@ -199,12 +204,14 @@ manual, as today.
 5. ✅ `0044` season/money/ledger (+ ledger view/function updates)
 6. ✅ `0045` social/identity
 7. ✅ `0046`/`0047` uniques + inherit/revision triggers + score-cache, player-import and award-override code
-8. RLS spike report (a markdown write-up in this folder; no production change)
+8. ✅ RLS spike report ([M1-RLS-SPIKE.md](./M1-RLS-SPIKE.md)) + `tests/rls-policy-sql.test.ts`; no production change
 
 ## 12. Exit criteria
 
-- [ ] Migrations `0040`–`0046` applied to Preview, verified, then applied to production
-- [ ] Catalog tests show full `group_id` and composite-FK coverage
-- [ ] Golden tests unchanged; `npm run build` and `npm run lint` pass
-- [ ] RLS spike answers all five questions, with measured latency
-- [ ] ARCHITECTURE.md §6 updated with the tenancy model
+- [x] Migrations `0040`–`0047` applied to the approved development database (56 tables with `group_id`, 96 validated composite FKs, 50 inherit triggers, 0 rows outside group 1)
+- [ ] Migrations `0040`–`0047` applied to production (manual, before deploying this branch)
+- [x] Catalog tests show full `group_id` and composite-FK coverage
+- [ ] Golden scoring/awards tests unchanged: run `npm run test:scoring` / `test:awards` with a pre-M1 local baseline (`tests/.local/`); not run on this machine (no baseline present)
+- [x] `npm run test:unit`, `npm run lint`, `tsc --noEmit` pass
+- [x] RLS spike answers all five questions, with measured latency
+- [x] ARCHITECTURE.md §5.2 and §6.4 updated with the tenancy model
