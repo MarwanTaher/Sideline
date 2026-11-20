@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Status | **Implemented** on `platform/m1-tenancy-foundation` (migrations 0040–0047 applied to the approved development database on 2026-11-20; not yet to production). Results: [M1-RLS-SPIKE.md](./M1-RLS-SPIKE.md). |
+| Status | **Implemented** on `platform/m1-tenancy-foundation` (migrations 0040–0047 applied to the approved development database on 2026-11-20; production gets them in the single platform release, see [RELEASE.md](./RELEASE.md)). Results: [M1-RLS-SPIKE.md](./M1-RLS-SPIKE.md). |
 | Depends on | — |
 | Unlocks | [M2 Group-scoped app](./02-M2-GROUP-SCOPED-APP.md) |
 | User-visible change | **None** |
@@ -170,7 +170,8 @@ Questions the spike must answer and write down:
    the RLS tests as an opt-in Preview integration test, using the existing host safeguards in
    README.md.
 
-The Neon default owner role bypasses RLS. **Production must connect as `sideline_app`**, and
+The Neon default owner role bypasses RLS. **The app must run its queries as `sideline_app`**
+(the spike found that a role switch inside each batch is the workable way on Neon), and
 migrations keep using the owner role. Add `DATABASE_URL_MIGRATIONS`, or keep migrations
 manual, as today.
 
@@ -209,9 +210,9 @@ manual, as today.
 ## 12. Exit criteria
 
 - [x] Migrations `0040`–`0047` applied to the approved development database (56 tables with `group_id`, 96 validated composite FKs, 50 inherit triggers, 0 rows outside group 1)
-- [ ] Migrations `0040`–`0047` applied to production (manual, before deploying this branch)
+- [x] Production deferred to the single platform release (all M1 migrations are **expand**; see [RELEASE.md](./RELEASE.md))
 - [x] Catalog tests show full `group_id` and composite-FK coverage
-- [ ] Golden scoring/awards tests unchanged: run `npm run test:scoring` / `test:awards` with a pre-M1 local baseline (`tests/.local/`); not run on this machine (no baseline present)
+- [ ] Golden scoring/awards tests unchanged: moved to the release rehearsal, where a baseline is dumped from a production copy before the migrations ([RELEASE.md §3](./RELEASE.md#3-rehearsal-before-release-day))
 - [x] `npm run test:unit`, `npm run lint`, `tsc --noEmit` pass
 - [x] RLS spike answers all five questions, with measured latency
 - [x] ARCHITECTURE.md §5.2 and §6.4 updated with the tenancy model

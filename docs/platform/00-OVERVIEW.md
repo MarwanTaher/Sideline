@@ -3,6 +3,7 @@
 | | |
 |---|---|
 | Status | Approved; M1 in progress on branch `platform/m1-tenancy-foundation`. No migration has been applied to any deployment database. |
+| Release (2026-11-21) | **One production release after M1–M5** are complete and tested on Preview; until then production runs today's code and schema. See [RELEASE.md](./RELEASE.md). |
 | Decisions (2026-11-19) | Founding group: **Krakow Pyramids** (`krakow-pyramids`). Example/test group: **Berlin Bears** (`berlin-bears`, Europe/Berlin, EUR), fictional, tests and Preview only. **No charging groups; stay within free tiers** (§6). |
 | Baseline | `ai_dev` @ `873736a`, schema through migration `0039` |
 | Related | [ARCHITECTURE.md](../ARCHITECTURE.md) · [REQUIREMENTS.md](../REQUIREMENTS.md) · [ROADMAP.md](../../ROADMAP.md) (Longer Term: Multi-Club Support) |
@@ -17,6 +18,7 @@
 | M4 | [04-M4-GROUP-CONFIGURATION-AND-MODULES.md](./04-M4-GROUP-CONFIGURATION-AND-MODULES.md) | Hardcoded rules become group settings; features become modules; presets | Yes (organisers) |
 | M5 | [05-M5-PLATFORM-OPERATIONS-AND-ONBOARDING.md](./05-M5-PLATFORM-OPERATIONS-AND-ONBOARDING.md) | Self-service groups, platform console, hosting upgrade, email, GDPR, quotas | Yes |
 | M6 | [06-M6-SPORT-PROFILES-AND-LOCALISATION.md](./06-M6-SPORT-PROFILES-AND-LOCALISATION.md) | Sports other than football, translations (later, optional) | Yes |
+| — | [RELEASE.md](./RELEASE.md) | Single production release after M1–M5: migration ledger (expand/contract), rehearsal, release day, rollback | — |
 
 ---
 
@@ -161,11 +163,12 @@ flowchart LR
 
 | Gate | Condition to pass |
 |---|---|
-| After M1 | Production migrated; golden scoring/awards tests unchanged; no user-visible change. |
-| After M2 | RLS enabled on every group table in production. The fictional Berlin Bears group in Preview passes the cross-group isolation suite. |
+| After M1 | ✅ Dev/Preview database migrated; unit gate green; no user-visible change. Golden tests run during the release rehearsal ([RELEASE.md §3](./RELEASE.md#3-rehearsal-before-release-day)). |
+| After M2 | RLS enabled on every group table on Preview. The fictional Berlin Bears group in Preview passes the cross-group isolation suite. |
 | After M3 (**pilot**) | Multi-membership proven end to end with the fictional Berlin Bears group on Preview. No real second group is waiting; a real one goes live in production only when one asks, invite-only and created by the platform admin. |
 | After M4 | Group #1 runs entirely on the `sideline-classic` preset with no hardcoded rules left. A second preset is in use by the pilot. |
-| After M5 | Invited groups can onboard themselves within free-tier quotas. Group export and deletion work. |
+| After M5 | Invited groups can onboard themselves within free-tier quotas (tested on Preview). Group export and deletion work. |
+| **Release** | Rehearsal on a production copy passes (golden tests, isolation suite, smoke test); then the single production release per [RELEASE.md](./RELEASE.md). |
 
 M3 and M4 can overlap once M2 is done. Do M3 first if a pilot group is waiting; do M4 first if
 the pilot needs a different timezone or currency.
@@ -207,12 +210,14 @@ they change over time, so this document doesn't repeat them.
 
 ## 7. How we work within current capacity
 
-- **Every slice is shippable.** Each milestone is a series of small PRs on feature branches cut
-  from `ai_dev`. Each PR merges to production with no behaviour change for group #1, or with an
-  intended change behind a flag.
-- **Migrations use expand → backfill → contract**, as separate reviewed SQL files. They go to
-  the Preview branch first and are applied to production manually, as today. With only one
-  group, backfill means `group_id = 1`.
+- **Every slice is testable on Preview.** Each milestone is a series of small commits on a
+  platform branch that you push to `ai_dev` for Preview. Production receives nothing until the
+  single release ([RELEASE.md](./RELEASE.md)), so slices may change behaviour on Preview, but
+  each one keeps the unit gate green.
+- **Migrations use expand → backfill → contract**, as separate reviewed SQL files, each tagged
+  in the [RELEASE.md](./RELEASE.md) ledger. They are applied to the dev/Preview database as they
+  land; production gets them all on release day (expand before the deploy, contract after).
+  With only one group, backfill means `group_id = 1`.
 - **Tests come first for isolation.** PGlite tests (already used for `0037`–`0039`) seed two
   groups and assert that nothing crosses between them. The golden tests guard group #1.
 - **Update [ARCHITECTURE.md](../ARCHITECTURE.md)** at the end of each milestone, not up front.

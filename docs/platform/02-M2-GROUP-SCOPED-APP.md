@@ -12,8 +12,8 @@
 
 Every request knows which group it serves. Every query runs inside that group under RLS.
 Caches, files, notifications, cron, rate limits, and exports are all per group. At the end,
-production still has one live group, and Preview has the fictional Berlin Bears group
-(`berlin-bears`) that proves isolation.
+Preview has two groups: Krakow Pyramids and the fictional Berlin Bears (`berlin-bears`), which
+proves isolation. Production is unchanged until the single release ([RELEASE.md](./RELEASE.md)).
 
 This is the largest milestone. It is mostly mechanical work across 57 files, done one domain
 area at a time.
@@ -122,13 +122,14 @@ Rules:
 
 Per area, once its code is converted:
 
-1. Enable RLS + the `group_isolation` policy on that area's tables. Do this on Preview first,
-   then production.
+1. Enable RLS + the `group_isolation` policy on that area's tables on Preview (production gets
+   it in the release).
 2. Remove the `DEFAULT 1` on `group_id` for those tables.
 3. Drop the old single-column FKs that the composite FKs have replaced.
 
-At the end, production's `DATABASE_URL` uses the `sideline_app` role (non-owner, no
-`BYPASSRLS`), and all group tables have `FORCE ROW LEVEL SECURITY`.
+At the end, every query on Preview runs as the `sideline_app` role (non-owner, no `BYPASSRLS`;
+how is decided in [M1-RLS-SPIKE.md](./M1-RLS-SPIKE.md)), and all group tables have
+`FORCE ROW LEVEL SECURITY`. Steps 2–3 are **contract** migrations in the release ledger.
 
 ### 5.3 Platform-level code
 
@@ -159,7 +160,7 @@ opportunity to start the ROADMAP item on deterministic demo data. Use it for:
 - manual exploratory testing of group switching by URL;
 - the per-group cron run.
 
-Production gets no second group until M3.
+Production gets no second group until after the release.
 
 ## 8. Tests
 
@@ -183,13 +184,13 @@ Production gets no second group until M3.
 14. Caches, Blob paths, rate limits, errors, exports
 15. Cron fan-out
 16. Berlin Bears group + isolation suite
-17. Production switch to the `sideline_app` role; RLS forced everywhere; defaults removed
+17. Preview switch to the `sideline_app` role; RLS forced everywhere; contract migrations (defaults, old constraints, transitional indexes) written and tagged in RELEASE.md
 
 ## 10. Exit criteria
 
 - [ ] All group pages are under `/g/[group]`; legacy links redirect
 - [ ] `sqlClient` allow-list contains only platform files
-- [ ] RLS enabled and forced on every group table in production; app connects as `sideline_app`
+- [ ] RLS enabled and forced on every group table on Preview; queries run as `sideline_app`
 - [ ] Isolation suite green against Berlin Bears on Preview
 - [ ] Golden tests unchanged; no regression in measured page latency beyond what the M1 spike predicted
 - [ ] ARCHITECTURE.md §5, §7.1, and §8 updated

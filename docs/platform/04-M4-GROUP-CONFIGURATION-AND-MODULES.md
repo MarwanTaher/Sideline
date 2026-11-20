@@ -130,7 +130,7 @@ restores everything.
 
 | Preset | Modules | Notable settings |
 |---|---|---|
-| `sideline-classic` | Everything group #1 uses today | Exact current values, captured by a script from production `app_settings` and season rows into a committed preset file. Reviewed by the owner. |
+| `sideline-classic` | Everything group #1 uses today | Exact current values, captured into a committed preset file from a read-only export of production `app_settings` and season rows that you run (production stays untouched until the release). Reviewed by the owner. |
 | `casual-pickup` | core, ratings, weather-location | No money modules; 24 h lock off; waitlist visible |
 | `paid-season` | core, ratings, recognition, season, season-billing, automation, match-payments | Manual payment instructions; due day 5 |
 
