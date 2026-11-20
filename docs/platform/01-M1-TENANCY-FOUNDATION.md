@@ -76,8 +76,8 @@ radius:
 | `0043_group_id_match_children.sql` | ✅ Match children: `group_id`, `(group_id,id)` on `match_guests`/`match_rounds`, 51 composite FKs via `sideline_add_group_fk()` (NOT VALID → VALIDATE; `SET NULL (col)` form, PG 15+). |
 | `0044_group_id_season_money.sql` | ✅ Season, money, and ledger tables; 27 composite FKs (helper gains `parent_col` + RESTRICT); `sideline_dues_source` / `sideline_fund_source` and both sync functions carry `group_id` from the source row. |
 | `0045_group_id_social_identity.sql` | ✅ Player children and identity tables; 19 composite FKs; `(group_id,id)` on `stories`. Every group-owned table now has `group_id`. |
-| `0046_group_scoped_uniques.sql` | Per-group uniques and singletons (§6) |
-| `0047_group_aware_triggers.sql` | Revision triggers and functions (§7) |
+| `0046_group_scoped_uniques.sql` | ✅ Per-group uniques (`players`, `admins`, `award_overrides`), `score_cache_state` keyed by `group_id`, `score_cache_snapshots` keyed by `(group_id, snapshot_key)`; old constraints kept as transitional until M2 (§6). |
+| `0047_group_aware_triggers.sql` | ✅ `sideline_inherit_group_id()` BEFORE INSERT trigger on every child table (group follows the parent row, so the 0037/0038 SQL functions and deployed code are correct without changes); score revision per group (§7). |
 
 Notes:
 
@@ -111,14 +111,13 @@ before it. Apply `0041` before deploying the M1.2 code.
 
 ## 7. Group-aware triggers and functions
 
-- **Score revision** (`0031`). Today it increments `score_cache_state` where `id = 1`. After the
-  change, it increments the row for `COALESCE(NEW.group_id, OLD.group_id)`. The
-  `app_settings` branch only fires for that group's scoring keys.
+- **Score revision** (`0031`). ✅ Increments the `score_cache_state` row of the changed row's
+  group, creating it on first use (0047). The legacy `id` column stays at 1 until M2.
 - **Ledger triggers** (`0039`). ✅ `dues` and `fund_entries` rows inherit `group_id` from the
   source row (0044).
-- **Automation and capacity functions** (`0037`). `sideline_public_signup_open` and the capacity
-  and queue functions already lock by match/season; they keep the group from the match row.
-  Leave the `'Europe/Warsaw'` literals alone in M1; M4 replaces them.
+- **Automation and capacity functions** (`0037`/`0038`). ✅ Unchanged: the rows they insert get
+  their group from `sideline_inherit_group_id()` (0047), a BEFORE INSERT trigger on every child
+  table that copies `group_id` from the parent row. The `'Europe/Warsaw'` literals stay until M4.
 - Add a test that **every** function body in `pg_proc` belonging to the app writes `group_id`
   whenever it inserts into a group table.
 
@@ -199,7 +198,7 @@ manual, as today.
 4. ✅ `0043` match children (+ `sideline_add_group_fk()` helper)
 5. ✅ `0044` season/money/ledger (+ ledger view/function updates)
 6. ✅ `0045` social/identity
-7. `0046`/`0047` uniques + revision triggers + score-cache code
+7. ✅ `0046`/`0047` uniques + inherit/revision triggers + score-cache, player-import and award-override code
 8. RLS spike report (a markdown write-up in this folder; no production change)
 
 ## 12. Exit criteria

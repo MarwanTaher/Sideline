@@ -13,6 +13,7 @@ export {
   SCORE_CACHE_MODEL_VERSION,
   SCORING_REVISION_TRIGGER_TABLES,
 } from "@/lib/score-cache-policy";
+import { FOUNDING_GROUP } from "@/lib/group-constants";
 
 export type PersistedScoreSnapshot = {
   revision: string;
@@ -85,13 +86,14 @@ export async function readCurrentScoreSnapshot(): Promise<{
     `WITH current_state AS (
        SELECT revision
          FROM score_cache_state
-        WHERE id = 1
+        WHERE group_id = $2
      ),
      current_snapshot AS (
        SELECT s.snapshot_key, s.revision, s.player_count, s.model_version
          FROM score_cache_snapshots s
          JOIN current_state cs ON cs.revision = s.revision
-        WHERE s.model_version = $1
+        WHERE s.group_id = $2
+          AND s.model_version = $1
         ORDER BY s.captured_at DESC
         LIMIT 1
      )
@@ -111,10 +113,11 @@ export async function readCurrentScoreSnapshot(): Promise<{
        LEFT JOIN current_snapshot snap ON true
        LEFT JOIN legacy_score_snapshots scores
          ON scores.snapshot_key = snap.snapshot_key
+        AND scores.group_id = $2
         AND scores.revision = snap.revision
         AND scores.model_version = 'leaderboard_v2'
       ORDER BY scores.player_id`,
-    [SCORE_CACHE_MODEL_VERSION],
+    [SCORE_CACHE_MODEL_VERSION, FOUNDING_GROUP.id],
   )) as SnapshotRow[];
 
   const state = rows[0];

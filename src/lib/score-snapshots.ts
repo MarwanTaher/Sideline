@@ -3,6 +3,7 @@ import { sqlClient } from "./db";
 import { getLeaderboard } from "./leaderboard";
 import { getPlayerScores, getScoringPolicy } from "./scoring";
 import { SCORE_CACHE_MODEL_VERSION } from "./score-cache";
+import { FOUNDING_GROUP } from "@/lib/group-constants";
 
 /**
  * Score snapshots power leaderboard "movement" (#4) and rating-change
@@ -46,7 +47,8 @@ export function snapshotKeyForMatch(matchId: number): string {
  */
 export async function captureScoreSnapshot(snapshotKey: string): Promise<boolean> {
   const beforeRows = (await sqlClient.query(
-    "SELECT revision::text AS revision FROM score_cache_state WHERE id = 1",
+    "SELECT revision::text AS revision FROM score_cache_state WHERE group_id = $1",
+    [FOUNDING_GROUP.id],
   )) as Array<{ revision: string }>;
   const revision = beforeRows[0]?.revision;
   if (!revision) throw new Error("Score cache revision is not initialized; deploy migration 0031.");
@@ -55,7 +57,8 @@ export async function captureScoreSnapshot(snapshotKey: string): Promise<boolean
   const scores = await getPlayerScores();
   const leaderboard = await getLeaderboard({ scorePayload: scores });
   const afterRows = (await sqlClient.query(
-    "SELECT revision::text AS revision FROM score_cache_state WHERE id = 1",
+    "SELECT revision::text AS revision FROM score_cache_state WHERE group_id = $1",
+    [FOUNDING_GROUP.id],
   )) as Array<{ revision: string }>;
   if (afterRows[0]?.revision !== revision) return false;
 
@@ -66,9 +69,9 @@ export async function captureScoreSnapshot(snapshotKey: string): Promise<boolean
   const existing = (await sqlClient.query(
     `SELECT revision::text AS revision, model_version
        FROM score_cache_snapshots
-      WHERE snapshot_key = $1
+      WHERE group_id = $1 AND snapshot_key = $2
       LIMIT 1`,
-    [snapshotKey],
+    [FOUNDING_GROUP.id, snapshotKey],
   )) as Array<{ revision: string; model_version: string }>;
   if (
     existing[0]?.revision === revision &&
@@ -99,7 +102,7 @@ export async function captureScoreSnapshot(snapshotKey: string): Promise<boolean
     return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9})`;
   });
   const writes = [
-    sqlClient.query("DELETE FROM legacy_score_snapshots WHERE snapshot_key = $1", [snapshotKey]),
+    sqlClient.query("DELETE FROM legacy_score_snapshots WHERE group_id = $1 AND snapshot_key = $2", [FOUNDING_GROUP.id, snapshotKey]),
   ];
   if (tuples.length > 0) {
     writes.push(sqlClient.query(
@@ -121,14 +124,14 @@ export async function captureScoreSnapshot(snapshotKey: string): Promise<boolean
 
   writes.push(sqlClient.query(
     `INSERT INTO score_cache_snapshots
-       (snapshot_key, revision, player_count, model_version)
-     VALUES ($1, $2, $3, $4)
-     ON CONFLICT (snapshot_key)
+       (group_id, snapshot_key, revision, player_count, model_version)
+     VALUES ($1, $2, $3, $4, $5)
+     ON CONFLICT (group_id, snapshot_key)
      DO UPDATE SET revision = EXCLUDED.revision,
                    player_count = EXCLUDED.player_count,
                    model_version = EXCLUDED.model_version,
                    captured_at = CURRENT_TIMESTAMP`,
-    [snapshotKey, revision, leaderboard.rows.length, snapshotModelVersion],
+    [FOUNDING_GROUP.id, snapshotKey, revision, leaderboard.rows.length, snapshotModelVersion],
   ));
   await sqlClient.transaction(writes);
   return true;
@@ -139,10 +142,11 @@ export async function getRecentSnapshotKeys(limit = 2): Promise<string[]> {
   const rows = (await sqlClient.query(
     `SELECT snapshot_key
        FROM legacy_score_snapshots
+      WHERE group_id = $2
       GROUP BY snapshot_key
       ORDER BY MAX(captured_at) DESC
       LIMIT $1`,
-    [limit],
+    [limit, FOUNDING_GROUP.id],
   )) as Array<{ snapshot_key: string }>;
   return rows.map((r) => r.snapshot_key);
 }
@@ -154,8 +158,8 @@ export async function getSnapshotEntries(
   const rows = (await sqlClient.query(
     `SELECT player_id, final, peer, stat, payload_json
        FROM legacy_score_snapshots
-      WHERE snapshot_key = $1`,
-    [snapshotKey],
+      WHERE group_id = $2 AND snapshot_key = $1`,
+    [snapshotKey, FOUNDING_GROUP.id],
   )) as Array<{
     player_id: number;
     final: number;

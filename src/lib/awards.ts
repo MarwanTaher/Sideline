@@ -768,15 +768,15 @@ export async function setAwardOverride(
 
   await sqlClient.query(
     `
-    INSERT INTO award_overrides(scope_key, scope_type, match_id, award_type, winner_player_ids, reason, overridden_by, created_at, updated_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    ON CONFLICT(scope_key, award_type) DO UPDATE SET
+    INSERT INTO award_overrides(group_id, scope_key, scope_type, match_id, award_type, winner_player_ids, reason, overridden_by, created_at, updated_at)
+    VALUES ($8, $1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT (group_id, scope_key, award_type) DO UPDATE SET
         winner_player_ids = excluded.winner_player_ids,
         reason = excluded.reason,
         overridden_by = excluded.overridden_by,
         updated_at = CURRENT_TIMESTAMP
     `,
-    [key, scopeType, mid, awardType, winnerJson, reason, actor],
+    [key, scopeType, mid, awardType, winnerJson, reason, actor, FOUNDING_GROUP.id],
   );
 }
 

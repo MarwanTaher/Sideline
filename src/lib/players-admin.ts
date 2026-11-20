@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import { sqlClient } from "./db";
 import { getActiveLinkCounts } from "./access-tokens";
+import { FOUNDING_GROUP } from "@/lib/group-constants";
 
 export const POSITIONS = ["GK", "DEF", "MID", "FWD"] as const;
 export type Position = (typeof POSITIONS)[number];
@@ -120,8 +121,8 @@ export async function createPlayer(name: string, position: string): Promise<void
   if (!trimmed) throw new Error("Player name is required.");
   const pos = isValidPosition(position) ? position : "MID";
   await sqlClient.query(
-    "INSERT INTO players (name, preferred_position, active) VALUES ($1, $2, 1)",
-    [trimmed, pos],
+    "INSERT INTO players (group_id, name, preferred_position, active) VALUES ($3, $1, $2, 1)",
+    [trimmed, pos, FOUNDING_GROUP.id],
   );
 }
 
@@ -155,8 +156,8 @@ export async function createSelfRegisteredPlayer(
 
   try {
     const rows = (await sqlClient.query(
-      "INSERT INTO players (name, preferred_position, active) VALUES ($1, $2, 0) RETURNING id",
-      [trimmed, pos],
+      "INSERT INTO players (group_id, name, preferred_position, active) VALUES ($3, $1, $2, 0) RETURNING id",
+      [trimmed, pos, FOUNDING_GROUP.id],
     )) as unknown as Array<{ id: number }>;
     return Number(rows[0].id);
   } catch (err) {
@@ -303,13 +304,13 @@ export async function importPlayers(rows: ImportPlayerRow[]): Promise<number> {
     const pos = isValidPosition(row.preferredPosition) ? row.preferredPosition : "MID";
     await sqlClient.query(
       `
-      INSERT INTO players (name, preferred_position, active)
-      VALUES ($1, $2, $3)
-      ON CONFLICT (name) DO UPDATE SET
+      INSERT INTO players (group_id, name, preferred_position, active)
+      VALUES ($4, $1, $2, $3)
+      ON CONFLICT (group_id, name) DO UPDATE SET
         preferred_position = EXCLUDED.preferred_position,
         active = EXCLUDED.active
       `,
-      [name, pos, row.active ? 1 : 0],
+      [name, pos, row.active ? 1 : 0, FOUNDING_GROUP.id],
     );
     count += 1;
   }
